@@ -1,0 +1,69 @@
+from scoring import *
+from dataclasses import dataclass
+
+NUM_CATEGORIES = 13
+
+ONES, TWOS, THREES, FOURS, FIVES, SIXES = range(6)
+THREE_KIND = 6
+FOUR_KIND = 7
+FULL_HOUSE = 8
+SMALL_STRAIGHT = 9
+LARGE_STRAIGHT = 10
+CHANCE = 11
+YAHTZEE = 12
+
+UPPER_BONUS_THRESHOLD = 63
+UPPER_BONUS = 35
+
+@dataclass(frozen=True, slots=True)
+class GameState:
+    filled_mask: int
+    upper_total: int
+    lower_total: int
+    num_yahtzees: int
+
+    def is_filled(self, category: int) -> bool:
+        return bool(self.filled_mask & (1 << category))
+    
+    def fill(self, category: int, dice_state: np.array) -> "GameState":
+        #TODO: finish this class
+        # fill in new value
+        # get list of possible successors given a dice_vec and a state
+        # handle multiple yahtzees with jokers
+
+
+
+@dataclass(frozen=True, slots=True)
+class GameState:
+    filled_mask: int
+    upper_total: int
+    lower_total: int
+
+    def is_filled(self, category: int) -> bool:
+        return bool(self.filled_mask & (1 << category))
+
+    def fill(self, category: int, points: int) -> "GameState":
+        if self.is_filled(category):
+            raise ValueError(f"Category {category} is already filled")
+
+        new_mask = self.filled_mask | (1 << category)
+
+        if category <= SIXES:
+            return GameState(
+                filled_mask=new_mask,
+                upper_total=self.upper_total + points,
+                lower_total=self.lower_total,
+            )
+        else:
+            return GameState(
+                filled_mask=new_mask,
+                upper_total=self.upper_total,
+                lower_total=self.lower_total + points,
+            )
+
+    def is_terminal(self) -> bool:
+        return self.filled_mask == (1 << NUM_CATEGORIES) - 1
+
+    def total_score(self) -> int:
+        bonus = UPPER_BONUS if self.upper_total >= UPPER_BONUS_THRESHOLD else 0
+        return self.upper_total + bonus + self.lower_total
