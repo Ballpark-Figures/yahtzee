@@ -1,20 +1,11 @@
 from scoring import *
+from constants import *
 from dataclasses import dataclass
 
-NUM_CATEGORIES = 13
-
-ONES, TWOS, THREES, FOURS, FIVES, SIXES = range(6)
-THREE_KIND = 6
-FOUR_KIND = 7
-FULL_HOUSE = 8
-SMALL_STRAIGHT = 9
-LARGE_STRAIGHT = 10
-CHANCE = 11
-YAHTZEE = 12
-
-UPPER_BONUS_THRESHOLD = 63
-UPPER_BONUS = 35
-EXTRA_YAHTZEE_BONUS = 100
+def yahtzee_face(dice_vec):
+    if dice_vec.max() == 5:
+        return int(np.argmax(dice_vec))
+    return None
 
 @dataclass(frozen=True, slots=True)
 class GameState:
@@ -46,6 +37,8 @@ class GameState:
                 new_yahtzees = self.num_yahtzees + 1
         else:
             new_points = SCORING_FUNCTIONS[category](dice_state)
+            if category == YAHTZEE and new_points == YAHTZEE_POINTS:
+                new_yahtzees = 1
 
 
         if category <= SIXES:
@@ -88,10 +81,18 @@ class GameState:
     def num_filled(self):
         return self.filled_mask.bit_count()
     
+    def legal_categories(self, dice_state):
+        # boolean representing whether it's a joker
+        if SCORING_FUNCTIONS[YAHTZEE](dice_state) > 0 and self.is_filled(YAHTZEE):
+            face = yahtzee_face(dice_state)
+            if not self.is_filled(face):
+                return (True, [face])
+            return (True, self.unused_categories())
+        return (False, self.unused_categories())
+    
     def get_successors(self, dice_state):
         successors = []
-        for category in self.unused_categories():
-            successors.append((category, self.fill(category=category, dice_state=dice_state)))
-            if self.is_filled(YAHTZEE) and SCORING_FUNCTIONS[YAHTZEE](dice_state) > 0:
-                successors.append((category, self.fill(category=category, dice_state=dice_state, is_joker=True)))
+        is_joker, categories = self.legal_categories(dice_state)
+        for category in categories:
+            successors.append((category, self.fill(category=category, dice_state=dice_state, is_joker=is_joker)))
         return successors

@@ -1,18 +1,5 @@
 import numpy as np
-
-ONES, TWOS, THREES, FOURS, FIVES, SIXES = range(6)
-THREE_KIND = 6
-FOUR_KIND = 7
-FULL_HOUSE = 8
-SMALL_STRAIGHT = 9
-LARGE_STRAIGHT = 10
-CHANCE = 11
-YAHTZEE = 12
-
-FULL_HOUSE_POINTS = 25
-SMALL_STRAIGHT_POINTS = 30
-LARGE_STRAIGHT_POINTS = 40
-YAHTZEE_POINTS = 50
+from constants import *
 
 def get_sum(dice_vec):
     return np.dot(dice_vec, np.arange(1, 7))
@@ -41,7 +28,7 @@ def chance_points(dice_vec):
 def yahtzee_points(dice_vec):
     return YAHTZEE_POINTS * (5 in dice_vec)
 
-SCORING_FUNCTIONS = [
+SCORING_FUNCTIONS = [None] + [
     lambda x, i=i: single_num_points(x, i) for i in range(1, 7)
 ] + [
     three_kind_points,

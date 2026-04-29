@@ -80,11 +80,3 @@ def get_reroll_results_for_all(n_dice=5, sides=6):
         )
         for dice_vec in dice_vecs
     }
-
-reroll_results = get_reroll_results_for_all()
-with open("data/reroll_results.pkl", "wb") as f:
-    pickle.dump(reroll_results, f)
-
-sub_vecs = get_sub_vecs_for_all()
-with open("data/sub_vecs.pkl", "wb") as f:
-    pickle.dump(sub_vecs, f)
