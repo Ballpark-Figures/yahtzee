@@ -26,7 +26,7 @@ class GameState:
     def is_filled(self, category: int) -> bool:
         return bool(self.filled_mask & (1 << category))
     
-    def fill(self, category: int, dice_state: np.array, is_joker: bool=False) -> "GameState":
+    def fill(self, category: int, dice_state: np.ndarray, is_joker: bool=False) -> "GameState":
         #TODO: finish this class
         # get list of possible successors given a dice_vec and a state
         # handle multiple yahtzees with jokers
@@ -70,3 +70,28 @@ class GameState:
         upper_bonus = UPPER_BONUS if self.upper_total >= UPPER_BONUS_THRESHOLD else 0
         yahtzee_bonus = EXTRA_YAHTZEE_BONUS * max(self.num_yahtzees - 1, 0)
         return self.upper_total + upper_bonus + self.lower_total + yahtzee_bonus
+
+    def unused_categories(self):
+        return [
+            category
+            for category in range(NUM_CATEGORIES)
+            if not self.is_filled(category)
+        ]
+    
+    def used_categories(self):
+        return [
+            category
+            for category in range(NUM_CATEGORIES)
+            if self.is_filled(category)
+        ]
+    
+    def num_filled(self):
+        return self.filled_mask.bit_count()
+    
+    def get_successors(self, dice_state):
+        successors = []
+        for category in self.unused_categories():
+            successors.append((category, self.fill(category=category, dice_state=dice_state)))
+            if self.is_filled(YAHTZEE) and SCORING_FUNCTIONS[YAHTZEE](dice_state) > 0:
+                successors.append((category, self.fill(category=category, dice_state=dice_state, is_joker=True)))
+        return successors
