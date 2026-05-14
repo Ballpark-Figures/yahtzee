@@ -9,6 +9,12 @@ LARGE_STRAIGHT = 10
 CHANCE = 11
 YAHTZEE = 12
 
+CATEGORY_NAMES = [
+    "Ones", "Twos", "Threes", "Fours", "Fives", "Sixes",
+    "3Kind", "4Kind", "FullHouse",
+    "SmStraight", "LgStraight", "Chance", "Yahtzee",
+]
+
 FULL_HOUSE_POINTS = 25
 SMALL_STRAIGHT_POINTS = 30
 LARGE_STRAIGHT_POINTS = 40

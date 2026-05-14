@@ -1,0 +1,4 @@
+math/data/
+**/__pycache__/
+*.pkl
+*.pyc

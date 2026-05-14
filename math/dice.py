@@ -14,26 +14,26 @@ def all_rolls(n_dice=5, sides=6):
     
     return np.indices((sides,) * n_dice).reshape(n_dice, -1).T + 1
 
-def dice_vec_freqs(n_dice=5, sides=6):
+def dice_state_freqs(n_dice=5, sides=6):
     rolls = all_rolls(n_dice=n_dice, sides=sides)
-    dice_vecs = np.array(
+    dice_states = np.array(
         [dice_values_to_vec(roll, sides=sides) for roll in rolls],
         dtype=int,
     )
-    return np.unique(dice_vecs, axis=0, return_counts=True)
+    return np.unique(dice_states, axis=0, return_counts=True)
 
 
-def get_all_sub_vecs(dice_vec):
-    dice_vec = np.asarray(dice_vec, dtype=int)
-    grids = np.indices(tuple(dice_vec + 1))
-    return grids.reshape(len(dice_vec), -1).T
+def get_all_sub_vecs(dice_state):
+    dice_state = np.asarray(dice_state, dtype=int)
+    grids = np.indices(tuple(dice_state + 1))
+    return grids.reshape(len(dice_state), -1).T
 
 def get_sub_vecs_for_all(n_dice=5, sides=6):
-    dice_vecs, _ = dice_vec_freqs(n_dice=n_dice, sides=sides)
+    dice_states, _ = dice_state_freqs(n_dice=n_dice, sides=sides)
 
     return {
-        vec_key(dice_vec): get_all_sub_vecs(dice_vec)
-        for dice_vec in dice_vecs
+        vec_key(dice_state): get_all_sub_vecs(dice_state)
+        for dice_state in dice_states
     }
 
 def get_reroll_results(keep_vec, total_dice=5, sides=6):
@@ -47,17 +47,17 @@ def get_reroll_results(keep_vec, total_dice=5, sides=6):
     if n_reroll < 0:
         raise ValueError("keep_vec contains more dice than total_dice")
 
-    reroll_vecs, freqs = dice_vec_freqs(n_dice=n_reroll, sides=sides)
+    reroll_vecs, freqs = dice_state_freqs(n_dice=n_reroll, sides=sides)
     final_vecs = reroll_vecs + keep_vec
 
     return final_vecs, freqs
 
 
-def get_all_reroll_results(dice_vec, total_dice=5, sides=6):
-    dice_vec = np.asarray(dice_vec, dtype=int)
+def get_all_reroll_results(dice_state, total_dice=5, sides=6):
+    dice_state = np.asarray(dice_state, dtype=int)
 
-    if len(dice_vec) != sides:
-        raise ValueError(f"dice_vec has length {len(dice_vec)}, expected {sides}")
+    if len(dice_state) != sides:
+        raise ValueError(f"dice_state has length {len(dice_state)}, expected {sides}")
 
     return {
         vec_key(keep_vec): get_reroll_results(
@@ -65,18 +65,18 @@ def get_all_reroll_results(dice_vec, total_dice=5, sides=6):
             total_dice=total_dice,
             sides=sides,
         )
-        for keep_vec in get_all_sub_vecs(dice_vec)
+        for keep_vec in get_all_sub_vecs(dice_state)
     }
 
 
 def get_reroll_results_for_all(n_dice=5, sides=6):
-    dice_vecs, _ = dice_vec_freqs(n_dice=n_dice, sides=sides)
+    dice_states, _ = dice_state_freqs(n_dice=n_dice, sides=sides)
 
     return {
-        vec_key(dice_vec): get_all_reroll_results(
-            dice_vec,
+        vec_key(dice_state): get_all_reroll_results(
+            dice_state,
             total_dice=n_dice,
             sides=sides,
         )
-        for dice_vec in dice_vecs
+        for dice_state in dice_states
     }

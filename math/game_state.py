@@ -1,27 +1,34 @@
 from scoring import *
 from constants import *
+from dice import *
 from dataclasses import dataclass
+
+ALL_DICE_STATES, ALL_DICE_FREQS = dice_state_freqs()
 
 def yahtzee_face(dice_vec):
     if dice_vec.max() == 5:
         return int(np.argmax(dice_vec))
     return None
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class GameState:
     filled_mask: int
     upper_total: int
     lower_total: int
     num_yahtzees: int
 
+    def __repr__(self) -> str:
+        filled = [CATEGORY_NAMES[c] for c in self.used_categories()]
+        return (
+            f"GameState(filled={filled}, "
+            f"upper={self.upper_total}, lower={self.lower_total}, "
+            f"yahtzees={self.num_yahtzees}"
+        )
+
     def is_filled(self, category: int) -> bool:
         return bool(self.filled_mask & (1 << category))
     
     def fill(self, category: int, dice_state: np.ndarray, is_joker: bool=False) -> "GameState":
-        #TODO: finish this class
-        # get list of possible successors given a dice_vec and a state
-        # handle multiple yahtzees with jokers
-
         if self.is_filled(category):
             raise ValueError(f"Category {category} is already filled")
         
@@ -85,9 +92,16 @@ class GameState:
         # boolean representing whether it's a joker
         if SCORING_FUNCTIONS[YAHTZEE](dice_state) > 0 and self.is_filled(YAHTZEE):
             face = yahtzee_face(dice_state)
+            # Tier 1: matching upper category, if open — forced
             if not self.is_filled(face):
                 return (True, [face])
-            return (True, self.unused_categories())
+            # Tier 2: any open lower category
+            open_lower = [c for c in range(THREE_KIND, NUM_CATEGORIES) if not self.is_filled(c)]
+            if open_lower:
+                return (True, open_lower)
+            # Tier 3: only open upper categories remain
+            open_upper = [c for c in range(ONES, SIXES + 1) if not self.is_filled(c)]
+            return (True, open_upper)
         return (False, self.unused_categories())
     
     def get_successors(self, dice_state):
@@ -96,3 +110,10 @@ class GameState:
         for category in categories:
             successors.append((category, self.fill(category=category, dice_state=dice_state, is_joker=is_joker)))
         return successors
+
+    def get_all_successors(self):
+        return list({
+            successor
+            for dice_state in ALL_DICE_STATES
+            for successor in self.get_successors(dice_state)
+        })
