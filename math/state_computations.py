@@ -18,6 +18,23 @@ def get_level_dir(level: int) -> str:
     return f"data/state_levels/level_{level:02d}"
 
 
+def get_completed_path(level: int) -> str:
+    return os.path.join(get_level_dir(level), 'completed.txt')
+
+
+def load_completed(level: int) -> set[int]:
+    path = get_completed_path(level)
+    if not os.path.exists(path):
+        return set()
+    with open(path, 'r') as f:
+        return {int(line.strip(), 2) for line in f if line.strip()}
+
+
+def mark_completed(level: int, filled_mask: int) -> None:
+    with open(get_completed_path(level), 'a') as f:
+        f.write(format(filled_mask, '013b') + '\n')
+
+
 def _worker_expand_mask(level: int, filled_mask: int) -> dict[int, set[GameState]]:
     path = os.path.join(get_level_dir(level), mask_to_filename(filled_mask))
     with open(path, 'rb') as f:
@@ -50,13 +67,16 @@ def enumerate_reachable_states(num_workers: int = None, start_level: int = 0) ->
         next_level_dir = get_level_dir(level + 1)
         os.makedirs(next_level_dir, exist_ok=True)
 
-        masks = [
+        all_masks = [
             filename_to_mask(f)
             for f in os.listdir(level_dir)
             if f.endswith('.pkl')
         ]
+        completed = load_completed(level)
+        masks = [m for m in all_masks if m not in completed]
 
-        print(f"level {level:2d} -> {level + 1:2d}: {len(masks)} masks")
+        print(f"level {level:2d} -> {level + 1:2d}: {len(all_masks)} masks "
+              f"({len(completed)} already done, {len(masks)} remaining)")
 
         next_level_counts = {}
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
@@ -65,12 +85,16 @@ def enumerate_reachable_states(num_workers: int = None, start_level: int = 0) ->
                 for mask in tqdm(masks)
             }
             for future in tqdm(as_completed(futures), total=len(futures)):
+                input_mask = futures[future]
                 for successor_mask, successor_states in future.result().items():
                     path = os.path.join(next_level_dir, mask_to_filename(successor_mask))
                     if os.path.exists(path):
-                        with open(path, 'rb') as f:
-                            existing = pickle.load(f)
-                        existing |= successor_states
+                        try:
+                            with open(path, 'rb') as f:
+                                existing = pickle.load(f)
+                            existing |= successor_states
+                        except EOFError:
+                            existing = successor_states
                         with open(path, 'wb') as f:
                             pickle.dump(existing, f, protocol=pickle.HIGHEST_PROTOCOL)
                         next_level_counts[successor_mask] = len(existing)
@@ -78,10 +102,11 @@ def enumerate_reachable_states(num_workers: int = None, start_level: int = 0) ->
                         with open(path, 'wb') as f:
                             pickle.dump(successor_states, f, protocol=pickle.HIGHEST_PROTOCOL)
                         next_level_counts[successor_mask] = len(successor_states)
+                mark_completed(level, input_mask)
 
         total = sum(next_level_counts.values())
         print(f"level {level + 1:2d}: {len(next_level_counts)} masks, {total:,} states")
 
 
 if __name__ == "__main__":
-    enumerate_reachable_states(start_level=0, num_workers=20)
+    enumerate_reachable_states(start_level=5)
