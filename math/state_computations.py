@@ -12,30 +12,30 @@ def _worker_enumerate_chunk(states_chunk):
             local.add(successor)
     return local
 
-def enumerate_reachable_states(num_workers=None, save_pickles: bool=False) -> list[set[GameState]]:
+def enumerate_reachable_states(num_workers=None, batch_size=10000, start_level=0, save_pickles=False) -> list[set[GameState]]:
     if num_workers is None:
         num_workers = os.cpu_count()
-    print("hello", num_workers)
-    
-    initial = GameState(filled_mask=0, upper_total=0, lower_total=0, num_yahtzees=0)
+
     states_by_level = [set() for _ in range(14)]
-    states_by_level[0].add(initial)
 
-    if save_pickles:
-        with open(f"data/state_levels/level_0.pkl", "wb") as f:
-            pickle.dump(states_by_level[0], f)
+    if start_level == 0:
+        states_by_level[0].add(GameState(filled_mask=0, upper_total=0, lower_total=0, num_yahtzees=0))
+        if save_pickles:
+            with open("data/state_levels/level_0.pkl", "wb") as f:
+                pickle.dump(states_by_level[0], f)
+    else:
+        with open(f"data/state_levels/level_{start_level}.pkl", "rb") as f:
+            states_by_level[start_level] = pickle.load(f)
 
-    for level in range(13):
+    for level in range(start_level, 13):
         current = list(states_by_level[level])
-        chunks = [current[i::num_workers] for i in range(num_workers)]
+        batches = [current[i:i + batch_size] for i in range(0, len(current), batch_size)]
 
-        next_level = states_by_level[level + 1]
-
-        print(level, len(current))
+        print(f"level {level:2d} -> {level + 1:2d}: {len(current):>9,} states, {len(batches)} batches")
 
         next_level = set()
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            futures = [executor.submit(_worker_enumerate_chunk, chunk) for chunk in tqdm(chunks, leave=False)]
+            futures = [executor.submit(_worker_enumerate_chunk, batch) for batch in batches]
             for future in tqdm(as_completed(futures), total=len(futures)):
                 next_level |= future.result()
 
@@ -44,9 +44,9 @@ def enumerate_reachable_states(num_workers=None, save_pickles: bool=False) -> li
         if save_pickles:
             with open(f"data/state_levels/level_{level + 1}.pkl", "wb") as f:
                 pickle.dump(next_level, f, protocol=pickle.HIGHEST_PROTOCOL)
-        
+
     print(13, len(states_by_level[-1]))
-    
+
     return states_by_level
 
 if __name__ == "__main__":
