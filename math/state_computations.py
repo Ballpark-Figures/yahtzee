@@ -84,4 +84,4 @@ def enumerate_reachable_states(num_workers: int = None, start_level: int = 0) ->
 
 
 if __name__ == "__main__":
-    enumerate_reachable_states(start_level=0, num_workers=8)
+    enumerate_reachable_states(start_level=0, num_workers=20)
