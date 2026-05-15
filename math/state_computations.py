@@ -35,7 +35,7 @@ def enumerate_reachable_states(num_workers=None, batch_size=10000, start_level=0
 
         next_level = set()
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            futures = [executor.submit(_worker_enumerate_chunk, batch) for batch in batches]
+            futures = [executor.submit(_worker_enumerate_chunk, batch) for batch in tqdm(batches)]
             for future in tqdm(as_completed(futures), total=len(futures)):
                 next_level |= future.result()
 
@@ -50,6 +50,6 @@ def enumerate_reachable_states(num_workers=None, batch_size=10000, start_level=0
     return states_by_level
 
 if __name__ == "__main__":
-    levels = enumerate_reachable_states(save_pickles=True)
+    levels = enumerate_reachable_states(save_pickles=True, start_level=4)
     total = sum(len(s) for s in levels)
     print(f"\ntotal reachable states: {total:,}")
