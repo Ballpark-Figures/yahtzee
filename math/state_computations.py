@@ -58,10 +58,11 @@ def enumerate_reachable_states(num_workers: int = None, start_level: int = 0) ->
 
         print(f"level {level:2d} -> {level + 1:2d}: {len(masks)} masks")
 
+        next_level_counts = {}
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
             futures = {
                 executor.submit(_worker_expand_mask, level, mask): mask
-                for mask in tqdm(masks)
+                for mask in masks
             }
             for future in tqdm(as_completed(futures), total=len(futures)):
                 for successor_mask, successor_states in future.result().items():
@@ -72,10 +73,15 @@ def enumerate_reachable_states(num_workers: int = None, start_level: int = 0) ->
                         existing |= successor_states
                         with open(path, 'wb') as f:
                             pickle.dump(existing, f, protocol=pickle.HIGHEST_PROTOCOL)
+                        next_level_counts[successor_mask] = len(existing)
                     else:
                         with open(path, 'wb') as f:
                             pickle.dump(successor_states, f, protocol=pickle.HIGHEST_PROTOCOL)
+                        next_level_counts[successor_mask] = len(successor_states)
+
+        total = sum(next_level_counts.values())
+        print(f"level {level + 1:2d}: {len(next_level_counts)} masks, {total:,} states")
 
 
 if __name__ == "__main__":
-    enumerate_reachable_states(start_level=0)
+    enumerate_reachable_states(start_level=0, num_workers=8)
