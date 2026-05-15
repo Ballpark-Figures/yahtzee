@@ -16,6 +16,8 @@ def enumerate_reachable_states(num_workers=None, batch_size=10000, start_level=0
     if num_workers is None:
         num_workers = os.cpu_count()
 
+    os.makedirs("data/state_levels/tmp", exist_ok=True)
+
     states_by_level = [set() for _ in range(14)]
 
     if start_level == 0:
@@ -33,11 +35,28 @@ def enumerate_reachable_states(num_workers=None, batch_size=10000, start_level=0
 
         print(f"level {level:2d} -> {level + 1:2d}: {len(current):>9,} states, {len(batches)} batches")
 
-        next_level = set()
+        # Free current level from memory before workers start
+        states_by_level[level] = set()
+
+        futures = {}
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            futures = [executor.submit(_worker_enumerate_chunk, batch) for batch in tqdm(batches)]
+            futures = {executor.submit(_worker_enumerate_chunk, batch): i
+                       for i, batch in enumerate(batches)}
             for future in tqdm(as_completed(futures), total=len(futures)):
-                next_level |= future.result()
+                i = futures[future]
+                chunk_result = future.result()
+                path = f"data/state_levels/tmp/level_{level}_batch_{i}.pkl"
+                with open(path, "wb") as f:
+                    pickle.dump(chunk_result, f, protocol=pickle.HIGHEST_PROTOCOL)
+                del chunk_result
+
+        print("merging...")
+        next_level = set()
+        for i in tqdm(range(len(batches))):
+            path = f"data/state_levels/tmp/level_{level}_batch_{i}.pkl"
+            with open(path, "rb") as f:
+                next_level |= pickle.load(f)
+            os.remove(path)
 
         states_by_level[level + 1] = next_level
 
@@ -50,6 +69,6 @@ def enumerate_reachable_states(num_workers=None, batch_size=10000, start_level=0
     return states_by_level
 
 if __name__ == "__main__":
-    levels = enumerate_reachable_states(save_pickles=True, start_level=5, num_workers=10)
+    levels = enumerate_reachable_states(save_pickles=True, start_level=5, num_workers=20)
     total = sum(len(s) for s in levels)
     print(f"\ntotal reachable states: {total:,}")
