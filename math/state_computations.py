@@ -50,6 +50,6 @@ def enumerate_reachable_states(num_workers=None, batch_size=10000, start_level=0
     return states_by_level
 
 if __name__ == "__main__":
-    levels = enumerate_reachable_states(save_pickles=True, start_level=5, num_workers=16)
+    levels = enumerate_reachable_states(save_pickles=True, start_level=5, num_workers=10)
     total = sum(len(s) for s in levels)
     print(f"\ntotal reachable states: {total:,}")
