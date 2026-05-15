@@ -41,7 +41,7 @@ def enumerate_reachable_states(num_workers=None, batch_size=10000, start_level=0
         futures = {}
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
             futures = {executor.submit(_worker_enumerate_chunk, batch): i
-                       for i, batch in enumerate(batches)}
+                       for i, batch in tqdm(enumerate(batches))}
             for future in tqdm(as_completed(futures), total=len(futures)):
                 i = futures[future]
                 chunk_result = future.result()
