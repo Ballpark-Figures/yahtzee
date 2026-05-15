@@ -41,7 +41,7 @@ def _worker_expand_mask(level: int, filled_mask: int) -> dict[int, set[GameState
         states = pickle.load(f)
 
     results = {}
-    for state in tqdm(states, leave=False):
+    for state in states:
         for _, successor in state.get_all_successors():
             mask = successor.filled_mask
             if mask not in results:
