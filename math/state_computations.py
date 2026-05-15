@@ -61,7 +61,7 @@ def enumerate_reachable_states(num_workers: int = None, start_level: int = 0) ->
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
             futures = {
                 executor.submit(_worker_expand_mask, level, mask): mask
-                for mask in masks
+                for mask in tqdm(masks)
             }
             for future in tqdm(as_completed(futures), total=len(futures)):
                 for successor_mask, successor_states in future.result().items():
