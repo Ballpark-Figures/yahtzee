@@ -13,7 +13,6 @@ def _worker_enumerate_chunk(states_chunk):
     return local
 
 def enumerate_reachable_states(num_workers=None, batch_size=10000, start_level=0, save_pickles=False) -> list[set[GameState]]:
-    # TODO: make sure I understand new changes here
     if num_workers is None:
         num_workers = os.cpu_count()
 
@@ -42,7 +41,7 @@ def enumerate_reachable_states(num_workers=None, batch_size=10000, start_level=0
         futures = {}
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
             futures = {executor.submit(_worker_enumerate_chunk, batch): i
-                       for i, batch in tqdm(enumerate(batches))}
+                       for i, batch in enumerate(batches)}
             for future in tqdm(as_completed(futures), total=len(futures)):
                 i = futures[future]
                 chunk_result = future.result()
@@ -70,6 +69,6 @@ def enumerate_reachable_states(num_workers=None, batch_size=10000, start_level=0
     return states_by_level
 
 if __name__ == "__main__":
-    levels = enumerate_reachable_states(save_pickles=True, start_level=5, num_workers=20)
+    levels = enumerate_reachable_states(save_pickles=True, start_level=5, num_workers=10)
     total = sum(len(s) for s in levels)
     print(f"\ntotal reachable states: {total:,}")
