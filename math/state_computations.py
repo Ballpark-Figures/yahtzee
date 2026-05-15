@@ -5,70 +5,77 @@ from tqdm import tqdm
 
 from game_state import GameState
 
-def _worker_enumerate_chunk(states_chunk):
-    local = set()
-    for state in tqdm(states_chunk, leave=False):
-        for _, successor in state.get_all_successors():
-            local.add(successor)
-    return local
 
-def enumerate_reachable_states(num_workers=None, batch_size=10000, start_level=0, save_pickles=False) -> list[set[GameState]]:
+def mask_to_filename(filled_mask: int) -> str:
+    return format(filled_mask, '013b') + '.pkl'
+
+
+def filename_to_mask(filename: str) -> int:
+    return int(os.path.splitext(filename)[0], 2)
+
+
+def get_level_dir(level: int) -> str:
+    return f"data/state_levels/level_{level:02d}"
+
+
+def _worker_expand_mask(level: int, filled_mask: int) -> dict[int, set[GameState]]:
+    path = os.path.join(get_level_dir(level), mask_to_filename(filled_mask))
+    with open(path, 'rb') as f:
+        states = pickle.load(f)
+
+    results = {}
+    for state in tqdm(states, leave=False):
+        for _, successor in state.get_all_successors():
+            mask = successor.filled_mask
+            if mask not in results:
+                results[mask] = set()
+            results[mask].add(successor)
+
+    return results
+
+
+def enumerate_reachable_states(num_workers: int = None, start_level: int = 0) -> None:
     if num_workers is None:
         num_workers = os.cpu_count()
 
-    os.makedirs("data/state_levels/tmp", exist_ok=True)
-
-    states_by_level = [set() for _ in range(14)]
-
     if start_level == 0:
-        states_by_level[0].add(GameState(filled_mask=0, upper_total=0, lower_total=0, num_yahtzees=0))
-        if save_pickles:
-            with open("data/state_levels/level_0.pkl", "wb") as f:
-                pickle.dump(states_by_level[0], f)
-    else:
-        with open(f"data/state_levels/level_{start_level}.pkl", "rb") as f:
-            states_by_level[start_level] = pickle.load(f)
+        level_dir = get_level_dir(0)
+        os.makedirs(level_dir, exist_ok=True)
+        initial = GameState(filled_mask=0, upper_total=0, lower_total=0, num_yahtzees=0)
+        with open(os.path.join(level_dir, mask_to_filename(0)), 'wb') as f:
+            pickle.dump({initial}, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     for level in range(start_level, 13):
-        current = list(states_by_level[level])
-        batches = [current[i:i + batch_size] for i in range(0, len(current), batch_size)]
+        level_dir = get_level_dir(level)
+        next_level_dir = get_level_dir(level + 1)
+        os.makedirs(next_level_dir, exist_ok=True)
 
-        print(f"level {level:2d} -> {level + 1:2d}: {len(current):>9,} states, {len(batches)} batches")
+        masks = [
+            filename_to_mask(f)
+            for f in os.listdir(level_dir)
+            if f.endswith('.pkl')
+        ]
 
-        # Free current level from memory before workers start
-        states_by_level[level] = set()
+        print(f"level {level:2d} -> {level + 1:2d}: {len(masks)} masks")
 
-        futures = {}
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            futures = {executor.submit(_worker_enumerate_chunk, batch): i
-                       for i, batch in tqdm(enumerate(batches))}
+            futures = {
+                executor.submit(_worker_expand_mask, level, mask): mask
+                for mask in masks
+            }
             for future in tqdm(as_completed(futures), total=len(futures)):
-                i = futures[future]
-                chunk_result = future.result()
-                path = f"data/state_levels/tmp/level_{level}_batch_{i}.pkl"
-                with open(path, "wb") as f:
-                    pickle.dump(chunk_result, f, protocol=pickle.HIGHEST_PROTOCOL)
-                del chunk_result
+                for successor_mask, successor_states in future.result().items():
+                    path = os.path.join(next_level_dir, mask_to_filename(successor_mask))
+                    if os.path.exists(path):
+                        with open(path, 'rb') as f:
+                            existing = pickle.load(f)
+                        existing |= successor_states
+                        with open(path, 'wb') as f:
+                            pickle.dump(existing, f, protocol=pickle.HIGHEST_PROTOCOL)
+                    else:
+                        with open(path, 'wb') as f:
+                            pickle.dump(successor_states, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-        print("merging...")
-        next_level = set()
-        for i in tqdm(range(len(batches))):
-            path = f"data/state_levels/tmp/level_{level}_batch_{i}.pkl"
-            with open(path, "rb") as f:
-                next_level |= pickle.load(f)
-            os.remove(path)
-
-        states_by_level[level + 1] = next_level
-
-        if save_pickles:
-            with open(f"data/state_levels/level_{level + 1}.pkl", "wb") as f:
-                pickle.dump(next_level, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-    print(13, len(states_by_level[-1]))
-
-    return states_by_level
 
 if __name__ == "__main__":
-    levels = enumerate_reachable_states(save_pickles=True, start_level=5, num_workers=20)
-    total = sum(len(s) for s in levels)
-    print(f"\ntotal reachable states: {total:,}")
+    enumerate_reachable_states(start_level=0)
