@@ -42,7 +42,7 @@ def _worker_expand_mask(level: int, filled_mask: int) -> dict[int, set[GameState
 
     results = {}
     for state in tqdm(states, leave=False):
-        for _, successor in state.get_all_successors():
+        for successor in state.get_all_successors():
             mask = successor.filled_mask
             if mask not in results:
                 results[mask] = set()
@@ -109,4 +109,4 @@ def enumerate_reachable_states(num_workers: int = None, start_level: int = 0) ->
 
 
 if __name__ == "__main__":
-    enumerate_reachable_states(start_level=6)
+    enumerate_reachable_states(start_level=0)
