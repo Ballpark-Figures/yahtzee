@@ -4,6 +4,7 @@ import numpy as np
 from scoring import *
 from constants import *
 from dice import *
+from precomputed import *
 
 ALL_DICE_STATES, ALL_DICE_FREQS = dice_state_freqs()
 
