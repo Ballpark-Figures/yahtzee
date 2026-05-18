@@ -4,7 +4,7 @@ import numpy as np
 from constants import *
 from precomputed import *
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class GameState:
     filled_mask: int
     upper_total: int
