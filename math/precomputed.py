@@ -144,7 +144,7 @@ def _load_or_build_transitions():
     if not force_rebuild and os.path.exists(TRANSITIONS_CACHE_PATH):
         with open(TRANSITIONS_CACHE_PATH, "rb") as f:
             return pickle.load(f)
-    print(f"Building TRANSITIONS table (~12s, one-time)...", flush=True)
+    print(f"Building TRANSITIONS table...", flush=True)
     table = _build_transitions()
     os.makedirs(os.path.dirname(TRANSITIONS_CACHE_PATH), exist_ok=True)
     with open(TRANSITIONS_CACHE_PATH, "wb") as f:
