@@ -61,3 +61,72 @@ def dice_values_to_idx(values) -> int:
 def dice_idx_to_values(idx: int) -> tuple:
     vec = ALL_DICE_STATES[idx]
     return tuple(face for face, count in enumerate(vec, start=1) for _ in range(int(count)))
+
+#HELLO
+
+# Per-(filled_mask, num_yahtzees) transition tables
+
+def _compute_mask_base(filled_mask):
+    def is_filled(c):
+        return bool(filled_mask & (1 << c))
+    yahtzee_filled = is_filled(YAHTZEE)
+
+    unused = [c for c in range(NUM_CATEGORIES) if not is_filled(c)]
+    open_upper = [c for c in range(ONES, SIXES + 1) if not is_filled(c)]
+    open_lower = [c for c in range(THREE_KIND, NUM_CATEGORIES) if not is_filled(c)]
+
+    base = []
+    for dice_idx in range(NUM_DICE_STATES):
+        if IS_YAHTZEE_T[dice_idx] and yahtzee_filled:
+            face = YAHTZEE_FACE_T[dice_idx]
+            if not is_filled(face):
+                cats = (face,)
+            elif open_lower:
+                cats = open_lower
+            else:
+                cats = open_upper
+            is_joker = True
+        else:
+            cats = unused
+            is_joker = False
+
+        for cat in cats:
+            if is_joker:
+                points = JOKER_SCORE_ROWS[dice_idx][cat]
+                ye_kind = 2
+            else:
+                points = SCORE_ROWS[dice_idx][cat]
+                ye_kind = 1 if (cat == YAHTZEE and points == YAHTZEE_POINTS) else 0
+            d_upper, d_lower = (points, 0) if cat <= SIXES else (0, points)
+            base.append((filled_mask (1 << cat), d_upper, d_lower, ye_kind))
+    return base
+
+def _transitions_for(base, num_yahtzees):
+    grouped = {}
+    for new_mask, d_upper, d_lower, ye_kind in base:
+        if ye_kind == 1:
+            new_y = 1
+        elif ye_kind == 2 and num_yahtzees > 0:
+            new_y = num_yahtzees + 1
+        else:
+            new_y = num_yahtzees
+        bucket = grouped.get(new_mask)
+        if bucket is None:
+            bucket = set()
+            grouped[new_mask] = bucket
+        bucket.add((d_upper, d_lower, new_y))
+    return tuple((nm, tuple(ts)) for nm, ts in grouped.items())
+
+def _build_transitions():
+    table = {}
+    for filled_mask in range(1 << NUM_CATEGORIES):
+        base = _compute_mask_base(filled_mask)
+        if filled_mask & (1 << YAHTZEE):
+            max_y = filled_mask.bit_count()
+            for y in range(max_y + 1):
+                table[(filled_mask, y)] = _transitions_for(base, y)
+        else:
+            table[(filled_mask, 0)] = _transitions_for(base, 0)
+    return table
+
+TRANSITIONS = _build_transitions()

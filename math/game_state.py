@@ -1,17 +1,8 @@
 from dataclasses import dataclass
 import numpy as np
 
-from scoring import *
 from constants import *
-from dice import *
 from precomputed import *
-
-ALL_DICE_STATES, ALL_DICE_FREQS = dice_state_freqs()
-
-def yahtzee_face(dice_vec):
-    if dice_vec.max() == 5:
-        return int(np.argmax(dice_vec))
-    return None
 
 @dataclass(frozen=True)
 class GameState:
@@ -104,26 +95,14 @@ class GameState:
         for category in categories:
             successors.append((category, self.fill_by_idx(category=category, dice_idx=dice_idx, is_joker=is_joker)))
         return successors
-
-    def get_all_successors(self):
-        yahtzee_filled = self.is_filled(YAHTZEE)
-        unused = self.unused_categories()
-        open_lower = [c for c in range(THREE_KIND, NUM_CATEGORIES) if not self.is_filled(c)]
-        open_upper = [c for c in range(ONES, SIXES + 1) if not self.is_filled(c)]
-
-        seen = set()
-        for dice_idx in range(NUM_DICE_STATES):
-            if IS_YAHTZEE_T[dice_idx] and yahtzee_filled:
-                face = YAHTZEE_FACE_T[dice_idx]
-                if not self.is_filled(face):
-                    is_joker, categories = True, (face,)
-                elif open_lower:
-                    is_joker, categories = True, open_lower
-                else:
-                    is_joker, categories = True, open_upper
-            else:
-                is_joker, categories = False, unused
-            
-            for category in categories:
-                seen.add(self.fill_by_idx(category, dice_idx, is_joker))
-        return seen
+    
+    def add_successors_to(self, results):
+        upper = self.upper_total
+        lower = self.lower_total
+        for new_mask, transitions in TRANSITIONS[(self.filled_mask, self.num_yahtzees)]:
+            bucket = results.get(new_mask)
+            if bucket is None:
+                bucket = set()
+                results[new_mask] = bucket
+            for d_upper, d_lower, new_y in transitions:
+                bucket.add(GameState(new_mask, upper + d_upper, lower + d_lower, new_y))

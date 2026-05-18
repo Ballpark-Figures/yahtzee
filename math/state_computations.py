@@ -42,11 +42,7 @@ def _worker_expand_mask(level: int, filled_mask: int) -> dict[int, set[GameState
 
     results = {}
     for state in tqdm(states, leave=False):
-        for successor in state.get_all_successors():
-            mask = successor.filled_mask
-            if mask not in results:
-                results[mask] = set()
-            results[mask].add(successor)
+        state.add_successors_to(results)
 
     return results
 
