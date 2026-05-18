@@ -98,7 +98,7 @@ def _compute_mask_base(filled_mask):
                 points = SCORE_ROWS[dice_idx][cat]
                 ye_kind = 1 if (cat == YAHTZEE and points == YAHTZEE_POINTS) else 0
             d_upper, d_lower = (points, 0) if cat <= SIXES else (0, points)
-            base.append((filled_mask (1 << cat), d_upper, d_lower, ye_kind))
+            base.append((filled_mask | (1 << cat), d_upper, d_lower, ye_kind))
     return base
 
 def _transitions_for(base, num_yahtzees):
