@@ -129,4 +129,28 @@ def _build_transitions():
             table[(filled_mask, 0)] = _transitions_for(base, 0)
     return table
 
-TRANSITIONS = _build_transitions()
+
+# Cache the TRANSITIONS table on disk so subsequent runs avoid the ~12s build.
+# If you change any scoring / joker / yahtzee-bonus logic above, delete the
+# pickle (or just run with TRANSITIONS_REBUILD=1 in the environment).
+import os
+import pickle
+
+TRANSITIONS_CACHE_PATH = os.path.join("data", "precomputed", "transitions.pkl")
+
+
+def _load_or_build_transitions():
+    force_rebuild = os.environ.get("TRANSITIONS_REBUILD") == "1"
+    if not force_rebuild and os.path.exists(TRANSITIONS_CACHE_PATH):
+        with open(TRANSITIONS_CACHE_PATH, "rb") as f:
+            return pickle.load(f)
+    print(f"Building TRANSITIONS table (~12s, one-time)...", flush=True)
+    table = _build_transitions()
+    os.makedirs(os.path.dirname(TRANSITIONS_CACHE_PATH), exist_ok=True)
+    with open(TRANSITIONS_CACHE_PATH, "wb") as f:
+        pickle.dump(table, f, protocol=pickle.HIGHEST_PROTOCOL)
+    print(f"  cached to {TRANSITIONS_CACHE_PATH}", flush=True)
+    return table
+
+
+TRANSITIONS = _load_or_build_transitions()
