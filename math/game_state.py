@@ -11,6 +11,9 @@ class GameState:
     lower_total: int
     num_yahtzees: int
 
+    def __reduce__(self):
+        return (GameState, (self.filled_mask, self.upper_total, self.lower_total, self.num_yahtzees))
+
     def __repr__(self) -> str:
         filled = [CATEGORY_NAMES[c] for c in self.used_categories()]
         return (
