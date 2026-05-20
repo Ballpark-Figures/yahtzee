@@ -12,7 +12,7 @@ For each level k -> k+1:
 """
 import os
 import pickle
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from tqdm import tqdm
 
@@ -27,10 +27,10 @@ def get_level_path(level: int) -> str:
     return os.path.join(REDUCED_LEVEL_DIR, f"level_{level:02d}.pkl")
 
 
-def _worker_expand(states):
+def _worker_expand(chunk):
     """Expand a list of states into the union of their successor states."""
     successors = set()
-    for state in states:
+    for state in tqdm(chunk, leave=False):
         for dice_idx in range(NUM_DICE_STATES):
             is_joker, categories = state.legal_categories_by_idx(dice_idx)
             for cat in categories:
@@ -78,12 +78,9 @@ def enumerate_reachable_reduced_states(num_workers: int = None, start_level: int
 
         merged = set()
         with ProcessPoolExecutor(max_workers=num_workers) as executor:
-            for result in tqdm(
-                executor.map(_worker_expand, chunks),
-                total=len(chunks),
-                leave=False,
-            ):
-                merged |= result
+            futures = [executor.submit(_worker_expand, chunk) for chunk in tqdm(chunks)]
+            for future in tqdm(as_completed(futures), total=len(futures)):
+                merged |= future.result()
 
         with open(path_out, "wb") as f:
             pickle.dump(merged, f, protocol=pickle.HIGHEST_PROTOCOL)
