@@ -1,31 +1,41 @@
 """
 Turn-level transition kernel under the already-computed optimal policy.
 
-For each reduced state row in a shard, compute the distribution over:
+For one reduced state row in one value-iteration shard, compute the compressed
+distribution over end-of-turn outcomes:
 
-    category, reward, next_upper, next_eligible
+    (category, box_points, reward, next_upper, next_eligible)
 
-after one full optimal turn.
+where:
 
-This intentionally does NOT expose intermediate first-roll / keep / reroll
-state. Most downstream forward/backward computations should only need this
-compressed end-of-turn distribution.
+    category      = box filled at the end of the turn
+    box_points    = points written in that box, excluding bonuses
+    reward        = immediate reduced reward:
+                    box_points
+                    + upper bonus if crossed this turn
+                    + extra Yahtzee bonus if earned this turn
+    next_upper    = capped upper total after the turn
+    next_eligible = whether future extra-Yahtzee bonuses are enabled
+
+This file intentionally hides the within-turn details: initial roll, first
+keep, first reroll, second keep, second reroll. The point is to expose a
+simple one-turn kernel that forward/backward analyses can consume.
 """
+
+from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-
-import numpy as np
+from typing import Iterable
 
 from constants import (
-    NUM_CATEGORIES,
+    CATEGORY_NAMES,
     SIXES,
     YAHTZEE,
     UPPER_BONUS,
     UPPER_BONUS_THRESHOLD,
     EXTRA_YAHTZEE_BONUS,
     YAHTZEE_POINTS,
-    CATEGORY_NAMES,
 )
 from precomputed import (
     NUM_DICE_STATES,
@@ -37,40 +47,67 @@ from precomputed import (
 )
 
 
+# All probability numerators are represented out of 7776.
+# A full turn consists of:
+#   initial roll numerator * first-reroll numerator * second-reroll numerator
 DENOM = 7776 ** 3
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TurnOutcome:
     category: int
+    box_points: int
     reward: int
     next_upper: int
     next_eligible: bool
     prob: float
 
+    @property
+    def next_eligible_idx(self) -> int:
+        return int(self.next_eligible)
+
+    @property
+    def category_name(self) -> str:
+        return CATEGORY_NAMES[self.category]
+
+
+def next_mask_from_outcome(mask: int, outcome: TurnOutcome) -> int:
+    return mask | (1 << outcome.category)
+
 
 def is_joker_roll(mask: int, dice_idx: int) -> bool:
-    """A roll is a joker iff it is a Yahtzee and the Yahtzee box is already filled."""
+    """A roll is a joker iff it is a Yahtzee and the Yahtzee box is filled."""
     return bool(IS_YAHTZEE_T[dice_idx] and (mask & (1 << YAHTZEE)))
 
 
-def immediate_transition(mask: int, upper: int, eligible: bool, dice_idx: int, category: int):
-    """Return (reward, next_upper, next_eligible) for filling category with dice_idx.
+def immediate_transition(
+    *,
+    mask: int,
+    upper: int,
+    eligible: bool,
+    dice_idx: int,
+    category: int,
+) -> tuple[int, int, int, bool]:
+    """Return (box_points, reward, next_upper, next_eligible).
 
-    This mirrors ReducedGameState.fill_by_idx but avoids constructing objects.
+    This mirrors ReducedGameState.fill_by_idx, but avoids constructing a
+    ReducedGameState object for each final dice/category outcome.
     """
     is_joker = is_joker_roll(mask, dice_idx)
 
     if is_joker:
-        points = JOKER_SCORE_ROWS[dice_idx][category]
+        box_points = int(JOKER_SCORE_ROWS[dice_idx][category])
     else:
-        points = SCORE_ROWS[dice_idx][category]
+        box_points = int(SCORE_ROWS[dice_idx][category])
 
-    reward = int(points)
+    reward = box_points
 
     if category <= SIXES:
-        next_upper = min(int(upper) + int(points), UPPER_BONUS_THRESHOLD)
-        if int(upper) < UPPER_BONUS_THRESHOLD and int(upper) + int(points) >= UPPER_BONUS_THRESHOLD:
+        old_upper = int(upper)
+        uncapped_upper = old_upper + box_points
+        next_upper = min(uncapped_upper, UPPER_BONUS_THRESHOLD)
+
+        if old_upper < UPPER_BONUS_THRESHOLD and uncapped_upper >= UPPER_BONUS_THRESHOLD:
             reward += UPPER_BONUS
     else:
         next_upper = int(upper)
@@ -78,18 +115,21 @@ def immediate_transition(mask: int, upper: int, eligible: bool, dice_idx: int, c
     if is_joker and eligible:
         reward += EXTRA_YAHTZEE_BONUS
 
-    if category == YAHTZEE and points == YAHTZEE_POINTS:
+    if category == YAHTZEE and box_points == YAHTZEE_POINTS:
         next_eligible = True
     else:
         next_eligible = bool(eligible)
 
-    return reward, next_upper, next_eligible
+    return box_points, reward, next_upper, next_eligible
 
 
 def row_turn_outcomes(mask: int, shard, row: int) -> list[TurnOutcome]:
-    """Compressed one-turn outcome distribution for one row of one shard.
+    """Return grouped one-turn outcomes for one row of one shard.
 
-    Output is grouped by (category, reward, next_upper, next_eligible).
+    The grouping key is:
+
+        (category, box_points, reward, next_upper, next_eligible)
+
     Probabilities should sum to 1, up to floating-point roundoff.
     """
     upper = int(shard["upper_total"][row])
@@ -99,27 +139,28 @@ def row_turn_outcomes(mask: int, shard, row: int) -> list[TurnOutcome]:
     dec_B = shard["decisions_B"][row]
     dec_C = shard["decisions_C"][row]
 
-    numerators = defaultdict(int)
+    numerators: dict[tuple[int, int, int, int, bool], int] = defaultdict(int)
 
-    # d0 = initial roll
+    # d0: initial roll.
     for d0 in range(NUM_DICE_STATES):
         n0 = int(ALL_DICE_FREQS[d0])
-        kA = int(dec_A[d0])
+        keep_A = int(dec_A[d0])
 
-        d1s, n1s = REROLL_OUTCOMES[(d0, kA)]
+        d1s, n1s = REROLL_OUTCOMES[(d0, keep_A)]
 
-        # d1 = roll after first keep/reroll
+        # d1: dice after the first keep/reroll.
         for d1, n1 in zip(d1s, n1s):
             d1 = int(d1)
-            kB = int(dec_B[d1])
+            keep_B = int(dec_B[d1])
 
-            d2s, n2s = REROLL_OUTCOMES[(d1, kB)]
+            d2s, n2s = REROLL_OUTCOMES[(d1, keep_B)]
 
-            # d2 = final dice
+            # d2: final dice after the second keep/reroll.
             for d2, n2 in zip(d2s, n2s):
                 d2 = int(d2)
                 category = int(dec_C[d2])
-                reward, next_upper, next_eligible = immediate_transition(
+
+                box_points, reward, next_upper, next_eligible = immediate_transition(
                     mask=mask,
                     upper=upper,
                     eligible=eligible,
@@ -127,34 +168,63 @@ def row_turn_outcomes(mask: int, shard, row: int) -> list[TurnOutcome]:
                     category=category,
                 )
 
-                key = (category, reward, next_upper, next_eligible)
+                key = (category, box_points, reward, next_upper, next_eligible)
                 numerators[key] += n0 * int(n1) * int(n2)
 
-    return [
+    outcomes = [
         TurnOutcome(
             category=category,
+            box_points=box_points,
             reward=reward,
             next_upper=next_upper,
             next_eligible=next_eligible,
-            prob=num / DENOM,
+            prob=numerator / DENOM,
         )
-        for (category, reward, next_upper, next_eligible), num in sorted(numerators.items())
+        for (category, box_points, reward, next_upper, next_eligible), numerator
+        in numerators.items()
     ]
+
+    # Stable, readable ordering for debugging.
+    outcomes.sort(
+        key=lambda o: (
+            o.category,
+            o.box_points,
+            o.reward,
+            o.next_upper,
+            o.next_eligible,
+        )
+    )
+    return outcomes
 
 
 def shard_turn_outcomes(mask: int, shard) -> list[list[TurnOutcome]]:
     """Return row_turn_outcomes(...) for every row in a shard."""
-    N = shard["upper_total"].shape[0]
-    return [row_turn_outcomes(mask, shard, row) for row in range(N)]
+    n_rows = shard["upper_total"].shape[0]
+    return [row_turn_outcomes(mask, shard, row) for row in range(n_rows)]
 
 
-def print_row_turn_outcomes(mask: int, shard, row: int, min_prob: float = 0.0) -> None:
+def probability_sum(outcomes: Iterable[TurnOutcome]) -> float:
+    return sum(o.prob for o in outcomes)
+
+
+def expected_immediate_reward(outcomes: Iterable[TurnOutcome]) -> float:
+    return sum(o.prob * o.reward for o in outcomes)
+
+
+def print_row_turn_outcomes(
+    mask: int,
+    shard,
+    row: int,
+    *,
+    min_prob: float = 0.0,
+) -> None:
     """Debug display for one state row."""
     outcomes = row_turn_outcomes(mask, shard, row)
-    total = sum(o.prob for o in outcomes)
+    total = probability_sum(outcomes)
 
     upper = int(shard["upper_total"][row])
     eligible = bool(shard["yahtzee_eligible"][row])
+
     print(f"mask={mask:013b}, row={row}, upper={upper}, eligible={eligible}")
     print(f"{len(outcomes)} grouped outcomes; total probability = {total:.12f}")
     print()
@@ -162,9 +232,11 @@ def print_row_turn_outcomes(mask: int, shard, row: int, min_prob: float = 0.0) -
     for o in outcomes:
         if o.prob < min_prob:
             continue
+
         print(
             f"{o.prob: .8f}  "
-            f"{CATEGORY_NAMES[o.category]:>10s}  "
+            f"{o.category_name:>10s}  "
+            f"box={o.box_points:3d}  "
             f"reward={o.reward:3d}  "
             f"next_upper={o.next_upper:2d}  "
             f"next_eligible={o.next_eligible}"
