@@ -83,7 +83,7 @@ def load_V_next(level):
 def process_mask(level, mask, states, V_next):
     """Compute and write per-mask payload for all states sharing this mask."""
     ss = sorted(states, key=lambda s: (s.upper_total, s.yahtzee_eligible))
-    results = [compute_state(s, V_next) for s in ss]
+    results = [compute_state(s, V_next) for s in tqdm(ss)]
     V, dA, dB, dC, eA, eB, eC = (np.array(x) for x in zip(*results))
     with open(mask_path(level, mask), "wb") as f:
         pickle.dump({
