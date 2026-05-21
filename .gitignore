@@ -2,3 +2,12 @@ math/data/
 **/__pycache__/
 *.pkl
 *.pyc
+
+# Keep selected Yahtzee generated data tracked
+!data/
+!data/values/
+!data/values/**
+!data/reduced_states/
+!data/reduced_states/**
+!data/precomputed/
+!data/precomputed/**
