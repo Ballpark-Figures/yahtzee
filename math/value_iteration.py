@@ -83,7 +83,7 @@ def load_V_next(level):
 def process_mask(level, mask, states, V_next):
     """Compute and write per-mask payload for all states sharing this mask."""
     ss = sorted(states, key=lambda s: (s.upper_total, s.yahtzee_eligible))
-    results = [compute_state(s, V_next) for s in tqdm(ss, leave=False)]
+    results = [compute_state(s, V_next) for s in ss]
     V, dA, dB, dC, eA, eB, eC = (np.array(x) for x in zip(*results))
     with open(mask_path(level, mask), "wb") as f:
         pickle.dump({
@@ -105,7 +105,7 @@ def _chunk(seq, n):
 def _worker_compute_masks(level, mask_groups):
     """One worker handles a chunk of (mask, states) pairs. V_next loaded once per worker."""
     V_next = load_V_next(level + 1)
-    for mask, states in mask_groups:
+    for mask, states in tqdm(mask_groups, leave=False):
         process_mask(level, mask, states, V_next)
 
 
@@ -122,7 +122,7 @@ def process_level(level, num_workers=None):
     chunks = _chunk(list(by_mask.items()), num_workers)
     print(f"level {level:2d}: {len(states):,} states, {len(by_mask)} masks in {len(chunks)} chunks")
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        futures = [executor.submit(_worker_compute_masks, level, chunk) for chunk in chunks]
+        futures = [executor.submit(_worker_compute_masks, level, chunk) for chunk in tqdm(chunks)]
         for fut in tqdm(as_completed(futures), total=len(futures)):
             fut.result()
 
