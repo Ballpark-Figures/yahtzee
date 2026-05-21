@@ -16,7 +16,7 @@ from constants import (
     NUM_CATEGORIES, SIXES, YAHTZEE, UPPER_BONUS, UPPER_BONUS_THRESHOLD,
     EXTRA_YAHTZEE_BONUS, YAHTZEE_POINTS,
 )
-from .framework import BackwardFunctional, ForwardFunctional, shift_right_per_row
+from framework import BackwardFunctional, ForwardFunctional, shift_right_per_row
 
 
 # Length covering the worst-case Yahtzee score: 215 upper (incl bonus)
