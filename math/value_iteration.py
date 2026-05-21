@@ -6,7 +6,7 @@ For each non-terminal state s, stores V(s) plus per-stage decisions and EVs:
   A: before 1st reroll, pick a keep.
 "No reroll" is encoded as keep == current dice (one outcome, numerator 7776).
 
-Output is sharded by mask: data/values/level_kk/<13-bit mask>.pkl.
+Output is sharded by mask: data/state_properties/level_kk/<13-bit mask>.npz.
 """
 import os
 import pickle
@@ -23,20 +23,16 @@ from precomputed import (
     NUM_DICE_STATES, ALL_DICE_FREQS, KEEPS_FOR_DICE, REROLL_OUTCOMES,
     SCORE_ROWS, JOKER_SCORE_ROWS, IS_YAHTZEE_T, YAHTZEE_FACE_T,
 )
+from state_properties import STATE_PROPERTIES_DIR, shard_path, save_shard
 
 
 REDUCED_DIR = "data/reduced_states"
-VALUES_DIR = "data/values"
 
 _ALL_DICE_FREQS_F = ALL_DICE_FREQS.astype(np.float64)
 _DICE_RANGE = np.arange(NUM_DICE_STATES)
 _UPPER_CAT_MASK = np.zeros(NUM_CATEGORIES, dtype=bool)
 _UPPER_CAT_MASK[: SIXES + 1] = True
 _TERMINAL_V = np.zeros((UPPER_BONUS_THRESHOLD + 1, 2), dtype=np.float32)
-
-
-def mask_path(level, mask):
-    return os.path.join(VALUES_DIR, f"level_{level:02d}", f"{mask:013b}.pkl")
 
 
 def _build_reroll_matrix():
@@ -131,18 +127,16 @@ def _stage_keep_batched(ev_in_batch):
 def load_V_next(level):
     """Read all per-mask files in `level` into dict[mask] -> (64, 2) float32 array."""
     out = {}
-    level_dir = os.path.join(VALUES_DIR, f"level_{level:02d}")
+    level_dir = os.path.join(STATE_PROPERTIES_DIR, f"level_{level:02d}")
     if not os.path.isdir(level_dir):
         return out
     for fn in os.listdir(level_dir):
-        if not fn.endswith(".pkl"):
+        if not fn.endswith(".npz"):
             continue
         mask = int(fn[:-4], 2)
-        with open(os.path.join(level_dir, fn), "rb") as f:
-            p = pickle.load(f)
-        arr = np.zeros((UPPER_BONUS_THRESHOLD + 1, 2), dtype=np.float32)
-        for (u, e), v in zip(p["indices"], p["V"]):
-            arr[u, int(e)] = v
+        with np.load(os.path.join(level_dir, fn)) as p:
+            arr = np.zeros((UPPER_BONUS_THRESHOLD + 1, 2), dtype=np.float32)
+            arr[p["upper_total"], p["yahtzee_eligible"].astype(np.int8)] = p["V"]
         out[mask] = arr
     return out
 
@@ -164,15 +158,19 @@ def process_mask(level, mask, states, V_next):
     dec_A, ev_A = _stage_keep_batched(ev_B)
     V = (ev_A @ _ALL_DICE_FREQS_F) / 7776.0
 
-    with open(mask_path(level, mask), "wb") as f:
-        pickle.dump({
-            "indices": [(s.upper_total, s.yahtzee_eligible) for s in ss],
-            "V": V.astype(np.float32),
-            "decisions_A": dec_A, "decisions_B": dec_B, "decisions_C": dec_C,
-            "ev_A": ev_A.astype(np.float32),
-            "ev_B": ev_B.astype(np.float32),
-            "ev_C": ev_C.astype(np.float32),
-        }, f, protocol=pickle.HIGHEST_PROTOCOL)
+    save_shard(
+        level, mask,
+        merge=False,
+        upper_total=np.array([s.upper_total for s in ss], dtype=np.uint8),
+        yahtzee_eligible=np.array([s.yahtzee_eligible for s in ss], dtype=bool),
+        V=V.astype(np.float32),
+        decisions_A=dec_A,
+        decisions_B=dec_B,
+        decisions_C=dec_C,
+        ev_A=ev_A.astype(np.float32),
+        ev_B=ev_B.astype(np.float32),
+        ev_C=ev_C.astype(np.float32),
+    )
 
 
 _WORKER_V_NEXT = None
@@ -195,7 +193,7 @@ def process_level(level, num_workers=None):
     by_mask = {}
     for s in states:
         by_mask.setdefault(s.filled_mask, []).append(s)
-    os.makedirs(os.path.join(VALUES_DIR, f"level_{level:02d}"), exist_ok=True)
+    os.makedirs(os.path.join(STATE_PROPERTIES_DIR, f"level_{level:02d}"), exist_ok=True)
 
     print(f"level {level:2d}: {len(states):,} states, {len(by_mask)} masks")
     with ProcessPoolExecutor(
@@ -214,8 +212,8 @@ def process_level(level, num_workers=None):
 def run_all(start_level=12, num_workers=None):
     for level in range(start_level, -1, -1):
         process_level(level, num_workers)
-    with open(mask_path(0, 0), "rb") as f:
-        print(f"V(initial state) = {float(pickle.load(f)['V'][0]):.4f}")
+    with np.load(shard_path(0, 0)) as p:
+        print(f"V(initial state) = {float(p['V'][0]):.4f}")
 
 
 if __name__ == "__main__":
