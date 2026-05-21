@@ -96,17 +96,16 @@ def process_mask(level, mask, states, V_next):
         }, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def _chunk(seq, n):
-    seq = list(seq)
-    size = (len(seq) + n - 1) // max(n, 1)
-    return [seq[i:i + size] for i in range(0, len(seq), size)]
+_WORKER_V_NEXT = None
 
 
-def _worker_compute_masks(level, mask_groups):
-    """One worker handles a chunk of (mask, states) pairs. V_next loaded once per worker."""
-    V_next = load_V_next(level + 1)
-    for mask, states in tqdm(mask_groups, leave=False):
-        process_mask(level, mask, states, V_next)
+def _worker_init(next_level):
+    global _WORKER_V_NEXT
+    _WORKER_V_NEXT = load_V_next(next_level)
+
+
+def _worker_compute_mask(level, mask, states):
+    process_mask(level, mask, states, _WORKER_V_NEXT)
 
 
 def process_level(level, num_workers=None):
@@ -119,10 +118,16 @@ def process_level(level, num_workers=None):
         by_mask.setdefault(s.filled_mask, []).append(s)
     os.makedirs(os.path.join(VALUES_DIR, f"level_{level:02d}"), exist_ok=True)
 
-    chunks = _chunk(list(by_mask.items()), num_workers)
-    print(f"level {level:2d}: {len(states):,} states, {len(by_mask)} masks in {len(chunks)} chunks")
-    with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        futures = [executor.submit(_worker_compute_masks, level, chunk) for chunk in tqdm(chunks)]
+    print(f"level {level:2d}: {len(states):,} states, {len(by_mask)} masks")
+    with ProcessPoolExecutor(
+        max_workers=num_workers,
+        initializer=_worker_init,
+        initargs=(level + 1,),
+    ) as executor:
+        futures = [
+            executor.submit(_worker_compute_mask, level, mask, ss)
+            for mask, ss in tqdm(by_mask.items())
+        ]
         for fut in tqdm(as_completed(futures), total=len(futures)):
             fut.result()
 
