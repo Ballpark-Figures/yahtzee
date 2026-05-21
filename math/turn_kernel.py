@@ -19,6 +19,10 @@ where:
 
 The saved turn-kernel files use a CSR-like layout:
     offsets[row] : offsets[row + 1] gives the outcome slice for that row.
+
+This version avoids enumerating d0 -> d1 -> d2 paths in Python. Instead it
+propagates the distribution over dice states through the two optimal keep
+decisions using dense transition matrices.
 """
 
 from __future__ import annotations
@@ -42,6 +46,7 @@ from constants import (
 from precomputed import (
     NUM_DICE_STATES,
     ALL_DICE_FREQS,
+    KEEPS_FOR_DICE,
     REROLL_OUTCOMES,
     SCORE_ROWS,
     JOKER_SCORE_ROWS,
@@ -55,6 +60,8 @@ TURN_KERNEL_DIR = "data/turn_kernels"
 # A full turn consists of:
 #   initial roll numerator * first-reroll numerator * second-reroll numerator
 DENOM = 7776 ** 3
+
+_DICE_RANGE = np.arange(NUM_DICE_STATES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +84,44 @@ class TurnOutcome:
     @property
     def category_name(self) -> str:
         return CATEGORY_NAMES[self.category]
+
+
+def _build_reroll_matrix_and_pair_table():
+    """Build dense reroll numerator matrix and (dice, keep) -> matrix-row table.
+
+    REROLL_MATRIX[pair_idx, final_dice_idx] is the numerator, out of 7776,
+    for the corresponding (current_dice, keep) pair.
+    """
+    num_pairs = sum(len(KEEPS_FOR_DICE[d]) for d in range(NUM_DICE_STATES))
+
+    reroll_matrix = np.zeros((num_pairs, NUM_DICE_STATES), dtype=np.int64)
+    pair_keeps = np.zeros(num_pairs, dtype=np.int32)
+    offsets = np.zeros(NUM_DICE_STATES + 1, dtype=np.int32)
+
+    idx = 0
+    for d in range(NUM_DICE_STATES):
+        offsets[d] = idx
+        for keep in KEEPS_FOR_DICE[d]:
+            finals, nums = REROLL_OUTCOMES[(d, keep)]
+            reroll_matrix[idx, np.asarray(finals, dtype=np.int32)] = np.asarray(nums, dtype=np.int64)
+            pair_keeps[idx] = int(keep)
+            idx += 1
+    offsets[-1] = idx
+
+    num_keeps = int(pair_keeps.max()) + 1
+    pair_table = np.full((NUM_DICE_STATES, num_keeps), -1, dtype=np.int32)
+
+    for d in range(NUM_DICE_STATES):
+        start = offsets[d]
+        end = offsets[d + 1]
+        for pair_idx in range(start, end):
+            pair_table[d, pair_keeps[pair_idx]] = pair_idx
+
+    return reroll_matrix, pair_table
+
+
+REROLL_MATRIX, PAIR_TABLE = _build_reroll_matrix_and_pair_table()
+INITIAL_ROLL_NUMS = ALL_DICE_FREQS.astype(np.int64)
 
 
 def turn_kernel_path(level: int, mask: int) -> str:
@@ -135,6 +180,24 @@ def immediate_transition(
     return box_points, reward, next_upper, next_eligible
 
 
+def final_dice_numerators_for_row(dec_A: np.ndarray, dec_B: np.ndarray) -> np.ndarray:
+    """Return final dice numerators for one row under the row's A/B policy.
+
+    Output has shape (252,), with denominator 7776**3.
+
+    This replaces the slow nested enumeration over d0 -> d1 -> d2.
+    """
+    pair_A = PAIR_TABLE[_DICE_RANGE, dec_A.astype(np.int32)]
+    trans_A = REROLL_MATRIX[pair_A]          # shape: (252, 252)
+    after_A = INITIAL_ROLL_NUMS @ trans_A    # denominator: 7776**2
+
+    pair_B = PAIR_TABLE[_DICE_RANGE, dec_B.astype(np.int32)]
+    trans_B = REROLL_MATRIX[pair_B]          # shape: (252, 252)
+    after_B = after_A @ trans_B              # denominator: 7776**3
+
+    return after_B
+
+
 def row_turn_outcomes(mask: int, shard, row: int) -> list[TurnOutcome]:
     """Return grouped one-turn outcomes for one row of one shard.
 
@@ -142,7 +205,7 @@ def row_turn_outcomes(mask: int, shard, row: int) -> list[TurnOutcome]:
 
         (category, box_points, reward, next_upper, next_eligible)
 
-    Probabilities should sum to 1, up to floating-point roundoff.
+    Probabilities should sum to 1 exactly at the numerator level.
     """
     upper = int(shard["upper_total"][row])
     eligible = bool(shard["yahtzee_eligible"][row])
@@ -151,37 +214,26 @@ def row_turn_outcomes(mask: int, shard, row: int) -> list[TurnOutcome]:
     dec_B = shard["decisions_B"][row]
     dec_C = shard["decisions_C"][row]
 
+    final_nums = final_dice_numerators_for_row(dec_A, dec_B)
+
     numerators: dict[tuple[int, int, int, int, bool], int] = defaultdict(int)
 
-    # d0: initial roll.
-    for d0 in range(NUM_DICE_STATES):
-        n0 = int(ALL_DICE_FREQS[d0])
-        keep_A = int(dec_A[d0])
+    for d2 in range(NUM_DICE_STATES):
+        numerator = int(final_nums[d2])
+        if numerator == 0:
+            continue
 
-        d1s, n1s = REROLL_OUTCOMES[(d0, keep_A)]
+        category = int(dec_C[d2])
+        box_points, reward, next_upper, next_eligible = immediate_transition(
+            mask=mask,
+            upper=upper,
+            eligible=eligible,
+            dice_idx=d2,
+            category=category,
+        )
 
-        # d1: dice after first keep/reroll.
-        for d1, n1 in zip(d1s, n1s):
-            d1 = int(d1)
-            keep_B = int(dec_B[d1])
-
-            d2s, n2s = REROLL_OUTCOMES[(d1, keep_B)]
-
-            # d2: final dice after second keep/reroll.
-            for d2, n2 in zip(d2s, n2s):
-                d2 = int(d2)
-                category = int(dec_C[d2])
-
-                box_points, reward, next_upper, next_eligible = immediate_transition(
-                    mask=mask,
-                    upper=upper,
-                    eligible=eligible,
-                    dice_idx=d2,
-                    category=category,
-                )
-
-                key = (category, box_points, reward, next_upper, next_eligible)
-                numerators[key] += n0 * int(n1) * int(n2)
+        key = (category, box_points, reward, next_upper, next_eligible)
+        numerators[key] += numerator
 
     outcomes = [
         TurnOutcome(
