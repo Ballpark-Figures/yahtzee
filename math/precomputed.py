@@ -3,9 +3,11 @@
 Built once at module load. Replaces per-call invocations of the scoring
 functions with O(1) array lookups indexed by (dice_state_idx, category).
 """
+import os
+import pickle
 import numpy as np
 from constants import *
-from dice import dice_state_freqs
+from dice import dice_state_freqs, get_all_sub_vecs, get_reroll_results
 from scoring import SCORING_FUNCTIONS
 
 # Canonical ordering of the 252 unique dice states (each a 6-vector of counts).
@@ -62,7 +64,66 @@ def dice_idx_to_values(idx: int) -> tuple:
     vec = ALL_DICE_STATES[idx]
     return tuple(face for face, count in enumerate(vec, start=1) for _ in range(int(count)))
 
-#HELLO
+# Keep tables and reroll-outcome distribution
+# -------------------------------------------
+# A "keep" is the 6-vector of dice you choose to retain before rerolling the
+# rest. Any nonneg 6-tuple summing to 0..5 is a valid keep (462 in total).
+#
+# Indexing mirrors DICE_IDX in style:
+#   ALL_KEEPS                : canonical ordering of the 462 keep vectors
+#   KEEP_IDX[vec]            : vec -> idx into ALL_KEEPS
+#   KEEPS_FOR_DICE[dice_idx] : tuple of keep_idxs valid from that dice state
+#   REROLL_OUTCOMES[(dice_idx, keep_idx)]
+#       = (final_idxs, numerators), where numerators are integers summing
+#         to 6**5 = 7776. The probability of reaching final_idxs[k] from
+#         dice_idx by holding keep_idx and rerolling the rest is
+#         numerators[k] / 7776.
+
+def _build_reroll_tables():
+    keep_set = set()
+    for dice_state in ALL_DICE_STATES:
+        for sub_vec in get_all_sub_vecs(dice_state):
+            keep_set.add(tuple(int(x) for x in sub_vec))
+    all_keeps = tuple(sorted(keep_set))
+    keep_idx = {v: i for i, v in enumerate(all_keeps)}
+
+    keeps_for_dice = tuple(
+        tuple(
+            keep_idx[tuple(int(x) for x in sub_vec)]
+            for sub_vec in get_all_sub_vecs(ALL_DICE_STATES[dice_idx])
+        )
+        for dice_idx in range(NUM_DICE_STATES)
+    )
+
+    reroll_outcomes = {}
+    for dice_index in range(NUM_DICE_STATES):
+        for sub_vec in get_all_sub_vecs(ALL_DICE_STATES[dice_index]):
+            sub_tup = tuple(int(x) for x in sub_vec)
+            ki = keep_idx[sub_tup]
+            final_vecs, freqs = get_reroll_results(sub_tup)
+            final_idxs = tuple(DICE_IDX[tuple(int(x) for x in final_vec)] for final_vec in final_vecs)
+            numerators = tuple(int(freq) for freq in freqs)
+            reroll_outcomes[(dice_index, ki)] = (final_idxs, numerators)
+
+    return all_keeps, keep_idx, keeps_for_dice, reroll_outcomes
+
+REROLL_TABLES_CACHE_PATH = os.path.join("data", "precomputed", "reroll_tables.pkl")
+
+def _load_or_build_reroll_tables():
+    force_rebuild = os.environ.get("REROLL_TABLES_REBUILD") == "1"
+    if not force_rebuild and os.path.exists(REROLL_TABLES_CACHE_PATH):
+        with open(REROLL_TABLES_CACHE_PATH, "rb") as f:
+            return pickle.load(f)
+    print("Building reroll tables...", flush=True)
+    bundle = _build_reroll_tables()
+    os.makedirs(os.path.dirname(REROLL_TABLES_CACHE_PATH), exist_ok=True)
+    with open(REROLL_TABLES_CACHE_PATH, "wb") as f:
+        pickle.dump(bundle, f, protocol=pickle.HIGHEST_PROTOCOL)
+    print(f"  cached to {REROLL_TABLES_CACHE_PATH}", flush=True)
+    return bundle
+
+ALL_KEEPS, KEEP_IDX, KEEPS_FOR_DICE, REROLL_OUTCOMES = _load_or_build_reroll_tables()
+NUM_KEEPS = len(ALL_KEEPS)
 
 # Per-(filled_mask, num_yahtzees) transition tables
 
@@ -133,8 +194,6 @@ def _build_transitions():
 # Cache the TRANSITIONS table on disk so subsequent runs avoid the ~12s build.
 # If you change any scoring / joker / yahtzee-bonus logic above, delete the
 # pickle (or just run with TRANSITIONS_REBUILD=1 in the environment).
-import os
-import pickle
 
 TRANSITIONS_CACHE_PATH = os.path.join("data", "precomputed", "transitions.pkl")
 

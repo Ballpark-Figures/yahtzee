@@ -41,14 +41,18 @@ def get_reroll_results(keep_vec, total_dice=5, sides=6):
 
     if len(keep_vec) != sides:
         raise ValueError(f"keep_vec has length {len(keep_vec)}, expected {sides}")
-
-    n_reroll = total_dice - int(keep_vec.sum())
+    
+    keep_sum = int(keep_vec.sum())
+    n_reroll = total_dice - keep_sum
 
     if n_reroll < 0:
         raise ValueError("keep_vec contains more dice than total_dice")
 
     reroll_vecs, freqs = dice_state_freqs(n_dice=n_reroll, sides=sides)
     final_vecs = reroll_vecs + keep_vec
+
+    # Want freqs to be out of a constant denominator of 6^5
+    freqs = freqs * (sides ** keep_sum)
 
     return final_vecs, freqs
 

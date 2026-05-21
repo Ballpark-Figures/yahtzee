@@ -22,8 +22,6 @@ joker_values_case4 = [
 UPPER_MASK = (1 << 6) - 1
 LOWER_MASK = ((1 << 7) - 1) << 6
 
-# HERE
-
 def count_states_for_mask(filled_mask: int) -> int:
     yahtzee_filled = bool(filled_mask & (1 << YAHTZEE))
     top_empty = (filled_mask & UPPER_MASK) == 0
