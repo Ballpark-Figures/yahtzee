@@ -10,8 +10,8 @@ The backward and forward passes are independent; you can run them in any
 order. Each pass adds named arrays to the existing shards at
 data/state_properties/level_kk/<mask>.npz via save_shard(..., merge=True).
 """
-from .framework import run_backward, run_forward
-from .properties import (
+from framework import run_backward, run_forward
+from properties import (
     ExpectedScoreAfter, ScoreDistAfter, BoxDistAfter, PTopBonusAfter,
     ScoreDistBefore, BoxDistBefore,
 )
