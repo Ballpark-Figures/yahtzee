@@ -17,16 +17,18 @@ where:
     next_upper    = capped upper total after the turn
     next_eligible = whether future extra-Yahtzee bonuses are enabled
 
-This file intentionally hides the within-turn details: initial roll, first
-keep, first reroll, second keep, second reroll. The point is to expose a
-simple one-turn kernel that forward/backward analyses can consume.
+The saved turn-kernel files use a CSR-like layout:
+    offsets[row] : offsets[row + 1] gives the outcome slice for that row.
 """
 
 from __future__ import annotations
 
+import os
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Iterable
+
+import numpy as np
 
 from constants import (
     CATEGORY_NAMES,
@@ -47,6 +49,8 @@ from precomputed import (
 )
 
 
+TURN_KERNEL_DIR = "data/turn_kernels"
+
 # All probability numerators are represented out of 7776.
 # A full turn consists of:
 #   initial roll numerator * first-reroll numerator * second-reroll numerator
@@ -60,7 +64,11 @@ class TurnOutcome:
     reward: int
     next_upper: int
     next_eligible: bool
-    prob: float
+    numerator: int
+
+    @property
+    def prob(self) -> float:
+        return self.numerator / DENOM
 
     @property
     def next_eligible_idx(self) -> int:
@@ -69,6 +77,10 @@ class TurnOutcome:
     @property
     def category_name(self) -> str:
         return CATEGORY_NAMES[self.category]
+
+
+def turn_kernel_path(level: int, mask: int) -> str:
+    return os.path.join(TURN_KERNEL_DIR, f"level_{level:02d}", f"{mask:013b}.npz")
 
 
 def next_mask_from_outcome(mask: int, outcome: TurnOutcome) -> int:
@@ -148,14 +160,14 @@ def row_turn_outcomes(mask: int, shard, row: int) -> list[TurnOutcome]:
 
         d1s, n1s = REROLL_OUTCOMES[(d0, keep_A)]
 
-        # d1: dice after the first keep/reroll.
+        # d1: dice after first keep/reroll.
         for d1, n1 in zip(d1s, n1s):
             d1 = int(d1)
             keep_B = int(dec_B[d1])
 
             d2s, n2s = REROLL_OUTCOMES[(d1, keep_B)]
 
-            # d2: final dice after the second keep/reroll.
+            # d2: final dice after second keep/reroll.
             for d2, n2 in zip(d2s, n2s):
                 d2 = int(d2)
                 category = int(dec_C[d2])
@@ -178,13 +190,12 @@ def row_turn_outcomes(mask: int, shard, row: int) -> list[TurnOutcome]:
             reward=reward,
             next_upper=next_upper,
             next_eligible=next_eligible,
-            prob=numerator / DENOM,
+            numerator=numerator,
         )
         for (category, box_points, reward, next_upper, next_eligible), numerator
         in numerators.items()
     ]
 
-    # Stable, readable ordering for debugging.
     outcomes.sort(
         key=lambda o: (
             o.category,
@@ -201,6 +212,69 @@ def shard_turn_outcomes(mask: int, shard) -> list[list[TurnOutcome]]:
     """Return row_turn_outcomes(...) for every row in a shard."""
     n_rows = shard["upper_total"].shape[0]
     return [row_turn_outcomes(mask, shard, row) for row in range(n_rows)]
+
+
+def outcomes_to_arrays(outcomes_by_row: list[list[TurnOutcome]]) -> dict[str, np.ndarray]:
+    """Convert variable-length per-row outcomes into flat CSR-style arrays."""
+    n_rows = len(outcomes_by_row)
+    lengths = np.array([len(outcomes) for outcomes in outcomes_by_row], dtype=np.int64)
+
+    offsets = np.empty(n_rows + 1, dtype=np.int64)
+    offsets[0] = 0
+    np.cumsum(lengths, out=offsets[1:])
+
+    total = int(offsets[-1])
+
+    category = np.empty(total, dtype=np.uint8)
+    box_points = np.empty(total, dtype=np.int16)
+    reward = np.empty(total, dtype=np.int16)
+    next_upper = np.empty(total, dtype=np.uint8)
+    next_eligible = np.empty(total, dtype=bool)
+    numerator = np.empty(total, dtype=np.int64)
+
+    pos = 0
+    for outcomes in outcomes_by_row:
+        for o in outcomes:
+            category[pos] = o.category
+            box_points[pos] = o.box_points
+            reward[pos] = o.reward
+            next_upper[pos] = o.next_upper
+            next_eligible[pos] = o.next_eligible
+            numerator[pos] = o.numerator
+            pos += 1
+
+    return {
+        "offsets": offsets,
+        "category": category,
+        "box_points": box_points,
+        "reward": reward,
+        "next_upper": next_upper,
+        "next_eligible": next_eligible,
+        "numerator": numerator,
+        "denom": np.array(DENOM, dtype=np.int64),
+    }
+
+
+def save_turn_kernel(level: int, mask: int, arrays: dict[str, np.ndarray]) -> None:
+    path = turn_kernel_path(level, mask)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    tmp = path + ".tmp.npz"
+    np.savez_compressed(tmp, **arrays)
+    os.replace(tmp, path)
+
+
+def load_turn_kernel(level: int, mask: int) -> np.lib.npyio.NpzFile:
+    path = turn_kernel_path(level, mask)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Missing turn kernel: {path}")
+    return np.load(path)
+
+
+def row_slice(kernel, row: int) -> slice:
+    start = int(kernel["offsets"][row])
+    end = int(kernel["offsets"][row + 1])
+    return slice(start, end)
 
 
 def probability_sum(outcomes: Iterable[TurnOutcome]) -> float:
