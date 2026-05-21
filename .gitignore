@@ -1,13 +1,14 @@
-math/data/
 **/__pycache__/
 *.pkl
 *.pyc
 
-# Keep selected Yahtzee generated data tracked
-!data/
-!data/values/
-!data/values/**
-!data/reduced_states/
-!data/reduced_states/**
-!data/precomputed/
-!data/precomputed/**
+# Ignore most generated math data
+/math/data/*
+
+# Re-include selected Yahtzee generated data
+!/math/data/values/
+!/math/data/values/**
+!/math/data/reduced_states/
+!/math/data/reduced_states/**
+!/math/data/precomputed/
+!/math/data/precomputed/**
