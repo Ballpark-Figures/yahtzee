@@ -1,14 +1,33 @@
+# Python/cache files
 **/__pycache__/
-*.pkl
 *.pyc
 
-# Ignore most generated math data
+# Virtual environments
+.venv/
+venv/
+
+# Ignore generated math data by default
 /math/data/*
 
-# Re-include selected Yahtzee generated data
-!/math/data/values/
-!/math/data/values/**
-!/math/data/reduced_states/
-!/math/data/reduced_states/**
+# Keep precomputed lookup/cache files needed for imports
 !/math/data/precomputed/
 !/math/data/precomputed/**
+
+# Keep reduced state files, useful for rebuilding/checking terminal shards
+!/math/data/reduced_states/
+!/math/data/reduced_states/**
+
+# Keep current value/policy/property shards
+!/math/data/state_properties/
+!/math/data/state_properties/**
+
+# Keep simplified one-turn transition kernels
+!/math/data/turn_kernels/
+!/math/data/turn_kernels/**
+
+# Optional: keep old value-iteration pickle outputs only if you still use them.
+# !/math/data/values/
+# !/math/data/values/**
+
+# Ignore notebook checkpoints
+**/.ipynb_checkpoints/
