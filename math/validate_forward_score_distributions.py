@@ -69,7 +69,7 @@ def validate_level(level: int) -> tuple[float, float, float, float]:
         )
 
         total_mass += float(row_mass.sum())
-        total_mean += float(dist @ scores).sum()
+        total_mean += float((dist @ scores).sum())
         total_reach += float(reach.sum())
         total_score_sum += float(score_sum.sum())
 
