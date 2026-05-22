@@ -1,8 +1,6 @@
 """
 Aggregate state properties using precomputed one-turn kernels.
 
-This file collects the main forward/backward property computations.
-
 Prerequisites:
     - data/state_properties/level_00 ... level_13 exist
     - data/turn_kernels/level_00 ... level_12 exist
@@ -15,12 +13,8 @@ Typical usage:
     python aggregate_properties.py backward-score-dist
     python aggregate_properties.py backward-box-dist --category FullHouse
     python aggregate_properties.py backward-box-dist --all
-
-The turn kernels contain the compressed end-of-turn distributions:
-
-    category, box_points, reward, next_upper, next_eligible, numerator
-
-so this file never needs to know about within-turn rerolls.
+    python aggregate_properties.py forward-box-dist --category FullHouse
+    python aggregate_properties.py forward-box-dist --all
 """
 
 from __future__ import annotations
@@ -39,10 +33,6 @@ from constants import (
 from state_properties import STATE_PROPERTIES_DIR, load_shard, save_shard
 from turn_kernel import DENOM, load_turn_kernel, row_slice
 
-
-# ---------------------------------------------------------------------
-# Shared constants / names
-# ---------------------------------------------------------------------
 
 FULL_MASK = (1 << NUM_CATEGORIES) - 1
 
@@ -65,6 +55,10 @@ N_BOX_BINS = MAX_BOX_POINTS + 1
 
 def box_after_name(category: int) -> str:
     return f"box_score_dist_after_{category:02d}"
+
+
+def box_before_name(category: int) -> str:
+    return f"box_score_dist_before_{category:02d}"
 
 
 def category_from_arg(arg: str) -> int:
@@ -106,7 +100,6 @@ def make_row_lookup(upper: np.ndarray, eligible: np.ndarray) -> np.ndarray:
 
 
 def load_level_metadata(level: int) -> dict[int, dict[str, np.ndarray]]:
-    """Load upper/eligible row metadata for all masks in a level."""
     out = {}
 
     for mask in list_masks_for_level(level):
@@ -667,12 +660,7 @@ def seed_backward_box_dist(category: int) -> None:
 
         dist = np.zeros((n_rows, N_BOX_BINS), dtype=np.float32)
 
-        save_shard(
-            level,
-            mask,
-            merge=True,
-            **{name: dist},
-        )
+        save_shard(level, mask, merge=True, **{name: dist})
 
 
 def load_backward_box_next_tables(level: int, category: int) -> dict[int, dict[str, np.ndarray]]:
@@ -768,12 +756,7 @@ def compute_backward_box_dist_level(level: int, category: int) -> None:
 
                         row_out += p * tables[name][next_row]
 
-        save_shard(
-            level,
-            mask,
-            merge=True,
-            **{name: out.astype(np.float32)},
-        )
+        save_shard(level, mask, merge=True, **{name: out.astype(np.float32)})
 
 
 def run_backward_box_dist(category: int) -> None:
@@ -784,6 +767,144 @@ def run_backward_box_dist(category: int) -> None:
         compute_backward_box_dist_level(level, category)
 
     print(f"Done. Wrote {box_after_name(category)}.")
+
+
+# ---------------------------------------------------------------------
+# Forward per-box distributions
+# ---------------------------------------------------------------------
+
+def seed_forward_box_dist(category: int) -> None:
+    """At the initial state, no boxes are filled, so before-distribution is zero."""
+    level = 0
+    name = box_before_name(category)
+
+    with load_shard(0, 0) as shard:
+        n_rows = int(shard["upper_total"].shape[0])
+
+    dist = np.zeros((n_rows, N_BOX_BINS), dtype=np.float32)
+
+    save_shard(level, 0, merge=True, **{name: dist})
+
+
+def load_forward_box_dist(level: int, mask: int, category: int) -> tuple[np.ndarray, np.ndarray]:
+    name = box_before_name(category)
+
+    with load_shard(level, mask) as shard:
+        if name not in shard.files:
+            raise KeyError(
+                f"Missing {name} in level={level}, mask={mask:013b}. "
+                "Run forward-box-dist from level 0."
+            )
+        if REACH_PROB not in shard.files:
+            raise KeyError(
+                f"Missing {REACH_PROB} in level={level}, mask={mask:013b}. "
+                "Run forward-scalars first."
+            )
+
+        dist = shard[name].astype(np.float32)
+        reach = shard[REACH_PROB].astype(np.float64)
+
+    return dist, reach
+
+
+def propagate_forward_box_dist_level(level: int, category: int) -> None:
+    """Propagate box_score_dist_before_{category} from level to level + 1.
+
+    Convention:
+        if category is unfilled in a state:
+            row distribution is all zeros
+
+        if category is filled in a state:
+            row distribution is unnormalized:
+                P(reach state and category has score x)
+    """
+    name = box_before_name(category)
+
+    current_masks = list_masks_for_level(level)
+    next_meta = load_level_metadata(level + 1)
+
+    if not current_masks:
+        raise FileNotFoundError(f"No state_properties shards found for level {level}")
+    if not next_meta:
+        raise FileNotFoundError(f"No state_properties shards found for level {level + 1}")
+
+    next_dist = {
+        mask: np.zeros((int(meta["n_rows"]), N_BOX_BINS), dtype=np.float32)
+        for mask, meta in next_meta.items()
+    }
+
+    for mask in tqdm(current_masks, desc=f"{name} L{level:02d}"):
+        current_dist, reach = load_forward_box_dist(level, mask, category)
+
+        with load_turn_kernel(level, mask) as kernel:
+            denom = float(int(kernel["denom"])) if "denom" in kernel.files else float(DENOM)
+
+            category_all = kernel["category"]
+            box_points_all = kernel["box_points"]
+            next_upper_all = kernel["next_upper"]
+            next_eligible_all = kernel["next_eligible"]
+            numerator_all = kernel["numerator"]
+
+            for row in range(current_dist.shape[0]):
+                row_reach = float(reach[row])
+                if row_reach == 0:
+                    continue
+
+                src = current_dist[row]
+                s = row_slice(kernel, row)
+
+                outcome_cat = category_all[s].astype(np.int64)
+                box_points = box_points_all[s].astype(np.int64)
+                next_upper = next_upper_all[s].astype(np.int64)
+                next_eligible = next_eligible_all[s].astype(np.int64)
+                prob = numerator_all[s].astype(np.float64) / denom
+
+                for i in range(len(prob)):
+                    p = float(prob[i])
+                    c = int(outcome_cat[i])
+
+                    next_mask = mask | (1 << c)
+                    meta = next_meta[next_mask]
+                    next_row = int(meta["row_for"][int(next_upper[i]), int(next_eligible[i])])
+
+                    if next_row < 0:
+                        raise KeyError(
+                            f"Missing successor row: level={level + 1}, "
+                            f"mask={next_mask:013b}, upper={int(next_upper[i])}, "
+                            f"eligible={bool(next_eligible[i])}"
+                        )
+
+                    if c == category:
+                        points = int(box_points[i])
+                        if not 0 <= points <= MAX_BOX_POINTS:
+                            raise ValueError(
+                                f"box_points={points} outside 0..{MAX_BOX_POINTS}"
+                            )
+
+                        # Target box is filled on this turn.
+                        next_dist[next_mask][next_row, points] += row_reach * p
+                    else:
+                        # Target box status does not change. If it was unfilled,
+                        # src is zero. If already filled, carry it forward.
+                        next_dist[next_mask][next_row] += p * src
+
+    for mask in sorted(next_meta):
+        save_shard(
+            level + 1,
+            mask,
+            merge=True,
+            **{name: next_dist[mask].astype(np.float32)},
+        )
+
+
+def run_forward_box_dist(category: int) -> None:
+    print(f"Computing before-distribution for {category}: {CATEGORY_NAMES[category]}")
+    seed_forward_box_dist(category)
+
+    for level in range(NUM_CATEGORIES):
+        propagate_forward_box_dist_level(level, category)
+
+    print(f"Done. Wrote {box_before_name(category)}.")
 
 
 # ---------------------------------------------------------------------
@@ -799,9 +920,13 @@ def main() -> None:
     sub.add_parser("forward-score-dist")
     sub.add_parser("backward-score-dist")
 
-    p_box = sub.add_parser("backward-box-dist")
-    p_box.add_argument("--category", type=str, default=None)
-    p_box.add_argument("--all", action="store_true")
+    p_box_after = sub.add_parser("backward-box-dist")
+    p_box_after.add_argument("--category", type=str, default=None)
+    p_box_after.add_argument("--all", action="store_true")
+
+    p_box_before = sub.add_parser("forward-box-dist")
+    p_box_before.add_argument("--category", type=str, default=None)
+    p_box_before.add_argument("--all", action="store_true")
 
     args = parser.parse_args()
 
@@ -823,6 +948,16 @@ def main() -> None:
 
         for category in categories:
             run_backward_box_dist(category)
+    elif args.command == "forward-box-dist":
+        if args.all:
+            categories = list(range(NUM_CATEGORIES))
+        elif args.category is not None:
+            categories = [category_from_arg(args.category)]
+        else:
+            raise SystemExit("Pass --category <0..12/name> or --all.")
+
+        for category in categories:
+            run_forward_box_dist(category)
     else:
         raise SystemExit(f"Unknown command: {args.command}")
 
