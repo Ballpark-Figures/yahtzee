@@ -14,6 +14,7 @@ Typical usage:
     python aggregate_properties.py forward-box-dist --all
     python aggregate_properties.py forward-yahtzee-bonus-dist
     python aggregate_properties.py backward-yahtzee-bonus-dist
+    python aggregate_properties.py backward-final-outcome-dist
 """
 
 from __future__ import annotations
@@ -27,7 +28,14 @@ from tqdm import tqdm
 from constants import (
     NUM_CATEGORIES,
     CATEGORY_NAMES,
+    THREE_KIND,
+    FOUR_KIND,
+    FULL_HOUSE,
+    SMALL_STRAIGHT,
+    LARGE_STRAIGHT,
     SIXES,
+    YAHTZEE,
+    YAHTZEE_POINTS,
     UPPER_BONUS_THRESHOLD,
     UPPER_BONUS,
     EXTRA_YAHTZEE_BONUS,
@@ -52,6 +60,33 @@ MAX_BOX_POINTS = 50
 N_BOX_BINS = MAX_BOX_POINTS + 1
 MAX_EXTRA_YAHTZEE_BONUSES = NUM_CATEGORIES - 1
 N_YAHTZEE_BONUS_BINS = MAX_EXTRA_YAHTZEE_BONUSES + 1
+
+FINAL_OUTCOME_DIST_DIR = "data/final_outcome_dists"
+FINAL_OUTCOME_OFFSETS = "offsets"
+FINAL_OUTCOME_KEYS = "keys"
+FINAL_OUTCOME_PROBS = "probs"
+
+# Packed final-outcome key layout:
+#   bits  0..10: score, including all immediate rewards/bonuses
+#   bits 11..14: yahtzee_units
+#       0 = Yahtzee box scored 0
+#       1 = Yahtzee box scored 50 with no extra +100 bonuses
+#       k = Yahtzee box scored 50 with k - 1 extra +100 bonuses
+#   bits 15..20: flags listed below
+SCORE_BITS = 11
+YAHTZEE_UNIT_BITS = 4
+SCORE_SHIFT = 0
+YAHTZEE_UNIT_SHIFT = SCORE_BITS
+FLAGS_SHIFT = SCORE_BITS + YAHTZEE_UNIT_BITS
+SCORE_MASK = (1 << SCORE_BITS) - 1
+YAHTZEE_UNIT_MASK = (1 << YAHTZEE_UNIT_BITS) - 1
+
+FLAG_LARGE_STRAIGHT = 1 << 0
+FLAG_SMALL_STRAIGHT = 1 << 1
+FLAG_FULL_HOUSE = 1 << 2
+FLAG_FOUR_KIND = 1 << 3
+FLAG_THREE_KIND = 1 << 4
+FLAG_TOP_BONUS = 1 << 5
 
 
 def box_after_name(category: int) -> str:
@@ -598,6 +633,300 @@ def run_backward_yahtzee_bonus_dist() -> None:
     print("Done. Wrote yahtzee_bonus_dist_after.")
 
 
+
+# ---------------------------------------------------------------------
+# Sparse final-outcome distributions
+# ---------------------------------------------------------------------
+
+def final_outcome_dist_path(level: int, mask: int) -> str:
+    return os.path.join(FINAL_OUTCOME_DIST_DIR, f"level_{level:02d}", f"{mask:013b}.npz")
+
+
+def pack_final_outcome_key(score, yahtzee_units, flags):
+    return (
+        np.asarray(score, dtype=np.uint32)
+        | (np.asarray(yahtzee_units, dtype=np.uint32) << YAHTZEE_UNIT_SHIFT)
+        | (np.asarray(flags, dtype=np.uint32) << FLAGS_SHIFT)
+    )
+
+
+def unpack_final_outcome_keys(keys: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    keys = np.asarray(keys, dtype=np.uint32)
+    score = (keys & SCORE_MASK).astype(np.int64)
+    yahtzee_units = ((keys >> YAHTZEE_UNIT_SHIFT) & YAHTZEE_UNIT_MASK).astype(np.int64)
+    flags = (keys >> FLAGS_SHIFT).astype(np.int64)
+    return score, yahtzee_units, flags
+
+
+def outcome_flags_from_transition(*, upper: int, category: int, box_points: int) -> int:
+    flags = 0
+
+    # Treat joker fills exactly like normal fills: if the box gets positive
+    # points, set the corresponding "made this box" flag.
+    if category == LARGE_STRAIGHT and box_points > 0:
+        flags |= FLAG_LARGE_STRAIGHT
+    elif category == SMALL_STRAIGHT and box_points > 0:
+        flags |= FLAG_SMALL_STRAIGHT
+    elif category == FULL_HOUSE and box_points > 0:
+        flags |= FLAG_FULL_HOUSE
+    elif category == FOUR_KIND and box_points > 0:
+        flags |= FLAG_FOUR_KIND
+    elif category == THREE_KIND and box_points > 0:
+        flags |= FLAG_THREE_KIND
+
+    if category <= SIXES and upper < UPPER_BONUS_THRESHOLD and upper + box_points >= UPPER_BONUS_THRESHOLD:
+        flags |= FLAG_TOP_BONUS
+
+    return flags
+
+
+def yahtzee_units_from_transition(*, upper: int, category: int, box_points: int, reward: int) -> int:
+    units = 0
+    if category == YAHTZEE and box_points == YAHTZEE_POINTS:
+        units += 1
+    units += extra_yahtzee_bonus_count_from_outcome(
+        upper=upper,
+        category=category,
+        box_points=box_points,
+        reward=reward,
+    )
+    return units
+
+
+def transform_final_outcome_keys(
+    keys: np.ndarray,
+    *,
+    reward: int,
+    yahtzee_units_add: int,
+    flags_add: int,
+) -> np.ndarray:
+    score, yahtzee_units, flags = unpack_final_outcome_keys(keys)
+    return pack_final_outcome_key(
+        score + int(reward),
+        yahtzee_units + int(yahtzee_units_add),
+        flags | int(flags_add),
+    )
+
+
+def combine_sparse_entries(keys_parts: list[np.ndarray], probs_parts: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+    if not keys_parts:
+        return np.empty(0, dtype=np.uint32), np.empty(0, dtype=np.float32)
+
+    keys = np.concatenate(keys_parts).astype(np.uint32, copy=False)
+    probs = np.concatenate(probs_parts).astype(np.float64, copy=False)
+
+    if len(keys) == 0:
+        return keys.astype(np.uint32), probs.astype(np.float32)
+
+    order = np.argsort(keys, kind="stable")
+    keys = keys[order]
+    probs = probs[order]
+
+    starts = np.r_[0, np.flatnonzero(keys[1:] != keys[:-1]) + 1]
+    out_keys = keys[starts]
+    out_probs = np.add.reduceat(probs, starts).astype(np.float32)
+
+    # Drop tiny numerical noise, but keep the usual float32-level mass.
+    keep = out_probs > 0.0
+    return out_keys[keep].astype(np.uint32), out_probs[keep].astype(np.float32)
+
+
+def save_final_outcome_sparse_shard(
+    level: int,
+    mask: int,
+    row_keys: list[np.ndarray],
+    row_probs: list[np.ndarray],
+) -> None:
+    if len(row_keys) != len(row_probs):
+        raise ValueError("row_keys and row_probs must have the same length")
+
+    n_rows = len(row_keys)
+    lengths = np.array([len(k) for k in row_keys], dtype=np.int64)
+    offsets = np.empty(n_rows + 1, dtype=np.int64)
+    offsets[0] = 0
+    np.cumsum(lengths, out=offsets[1:])
+
+    if int(offsets[-1]) == 0:
+        keys = np.empty(0, dtype=np.uint32)
+        probs = np.empty(0, dtype=np.float32)
+    else:
+        keys = np.concatenate(row_keys).astype(np.uint32, copy=False)
+        probs = np.concatenate(row_probs).astype(np.float32, copy=False)
+
+    path = final_outcome_dist_path(level, mask)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp.npz"
+    np.savez_compressed(
+        tmp,
+        **{
+            FINAL_OUTCOME_OFFSETS: offsets,
+            FINAL_OUTCOME_KEYS: keys,
+            FINAL_OUTCOME_PROBS: probs,
+        },
+    )
+    os.replace(tmp, path)
+
+
+def load_final_outcome_sparse_shard(level: int, mask: int) -> dict[str, np.ndarray]:
+    path = final_outcome_dist_path(level, mask)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Missing final-outcome distribution shard: {path}")
+    with np.load(path) as shard:
+        return {
+            FINAL_OUTCOME_OFFSETS: shard[FINAL_OUTCOME_OFFSETS].astype(np.int64),
+            FINAL_OUTCOME_KEYS: shard[FINAL_OUTCOME_KEYS].astype(np.uint32),
+            FINAL_OUTCOME_PROBS: shard[FINAL_OUTCOME_PROBS].astype(np.float32),
+        }
+
+
+def final_outcome_row_slice(table: dict[str, np.ndarray], row: int) -> slice:
+    offsets = table[FINAL_OUTCOME_OFFSETS]
+    return slice(int(offsets[row]), int(offsets[row + 1]))
+
+
+def seed_backward_final_outcome_dist() -> None:
+    level = NUM_CATEGORIES
+    masks = list_masks_for_level(level)
+    if not masks:
+        raise FileNotFoundError(f"No state_properties shards found for level {level}. Run build_terminal_shards.py first.")
+
+    zero_key = np.array([pack_final_outcome_key(0, 0, 0)], dtype=np.uint32)
+    one_prob = np.array([1.0], dtype=np.float32)
+
+    for mask in masks:
+        with load_shard(level, mask) as shard:
+            n_rows = int(shard["upper_total"].shape[0])
+        row_keys = [zero_key.copy() for _ in range(n_rows)]
+        row_probs = [one_prob.copy() for _ in range(n_rows)]
+        save_final_outcome_sparse_shard(level, mask, row_keys, row_probs)
+
+
+def load_backward_final_outcome_next_tables(level: int) -> dict[int, dict[str, np.ndarray]]:
+    out = {}
+    for mask in list_masks_for_level(level):
+        with load_shard(level, mask) as shard:
+            upper = shard["upper_total"].astype(np.int64)
+            eligible = shard["yahtzee_eligible"].astype(bool)
+        sparse = load_final_outcome_sparse_shard(level, mask)
+        sparse["row_for"] = make_row_lookup(upper, eligible)
+        out[mask] = sparse
+    return out
+
+
+def compute_backward_final_outcome_dist_level(level: int) -> None:
+    next_tables = load_backward_final_outcome_next_tables(level + 1)
+
+    for mask in tqdm(list_masks_for_level(level), desc=f"final outcome after L{level:02d}"):
+        with load_shard(level, mask) as shard:
+            n_rows = int(shard["upper_total"].shape[0])
+            upper_arr = shard["upper_total"].astype(np.int64)
+
+        row_keys_out: list[np.ndarray] = []
+        row_probs_out: list[np.ndarray] = []
+
+        with load_turn_kernel(level, mask) as kernel:
+            denom, category_all, box_points_all, reward_all, next_upper_all, next_eligible_all, numerator_all = kernel_prob(kernel)
+
+            for row in range(n_rows):
+                upper = int(upper_arr[row])
+                keys_parts: list[np.ndarray] = []
+                probs_parts: list[np.ndarray] = []
+
+                s = row_slice(kernel, row)
+                for cat, pts, reward, nu, ne, num in zip(
+                    category_all[s],
+                    box_points_all[s],
+                    reward_all[s],
+                    next_upper_all[s],
+                    next_eligible_all[s],
+                    numerator_all[s],
+                ):
+                    c = int(cat)
+                    pts_i = int(pts)
+                    reward_i = int(reward)
+                    p = float(num) / denom
+
+                    next_mask = mask | (1 << c)
+                    tables = next_tables[next_mask]
+                    next_row = int(tables["row_for"][int(nu), int(ne)])
+                    rs = final_outcome_row_slice(tables, next_row)
+                    succ_keys = tables[FINAL_OUTCOME_KEYS][rs]
+                    succ_probs = tables[FINAL_OUTCOME_PROBS][rs]
+
+                    flags_add = outcome_flags_from_transition(
+                        upper=upper,
+                        category=c,
+                        box_points=pts_i,
+                    )
+                    y_add = yahtzee_units_from_transition(
+                        upper=upper,
+                        category=c,
+                        box_points=pts_i,
+                        reward=reward_i,
+                    )
+
+                    keys_parts.append(
+                        transform_final_outcome_keys(
+                            succ_keys,
+                            reward=reward_i,
+                            yahtzee_units_add=y_add,
+                            flags_add=flags_add,
+                        )
+                    )
+                    probs_parts.append((p * succ_probs).astype(np.float32))
+
+                keys, probs = combine_sparse_entries(keys_parts, probs_parts)
+                row_keys_out.append(keys)
+                row_probs_out.append(probs)
+
+        save_final_outcome_sparse_shard(level, mask, row_keys_out, row_probs_out)
+
+
+def print_initial_final_outcome_summary(max_rows: int = 20) -> None:
+    with load_shard(0, 0) as state_shard:
+        upper = state_shard["upper_total"]
+        eligible = state_shard["yahtzee_eligible"]
+    rows = np.where((upper == 0) & (~eligible))[0]
+    if len(rows) != 1:
+        raise ValueError(f"Expected exactly one initial row; found {len(rows)}")
+    row = int(rows[0])
+
+    table = load_final_outcome_sparse_shard(0, 0)
+    s = final_outcome_row_slice(table, row)
+    keys = table[FINAL_OUTCOME_KEYS][s]
+    probs = table[FINAL_OUTCOME_PROBS][s].astype(np.float64)
+    score, yahtzee_units, flags = unpack_final_outcome_keys(keys)
+
+    print()
+    print("initial final-outcome distribution")
+    print(f"  nonzero outcomes: {len(keys):,}")
+    print(f"  total mass:       {float(probs.sum()):.12f}")
+    print(f"  mean score:       {float(probs @ score):.12f}")
+    print(f"  p top bonus:      {float(probs[(flags & FLAG_TOP_BONUS) != 0].sum()):.12f}")
+    print(f"  p yahtzee 50+:    {float(probs[yahtzee_units >= 1].sum()):.12f}")
+    print(f"  p extra yahtzee:  {float(probs[yahtzee_units >= 2].sum()):.12f}")
+
+    if max_rows > 0:
+        order = np.argsort(probs)[::-1][:max_rows]
+        print()
+        print(f"top {len(order)} outcomes by probability:")
+        for i in order:
+            print(
+                f"  p={probs[i]:.8f}  "
+                f"score={int(score[i]):4d}  "
+                f"yahtzee_units={int(yahtzee_units[i]):2d}  "
+                f"flags={int(flags[i]):02x}"
+            )
+
+
+def run_backward_final_outcome_dist() -> None:
+    seed_backward_final_outcome_dist()
+    for level in range(NUM_CATEGORIES - 1, -1, -1):
+        compute_backward_final_outcome_dist_level(level)
+    print("Done. Wrote sparse final-outcome distributions.")
+    print_initial_final_outcome_summary()
+
+
 # ---------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------
@@ -623,6 +952,7 @@ def main() -> None:
     sub.add_parser("backward-score-dist")
     sub.add_parser("forward-yahtzee-bonus-dist")
     sub.add_parser("backward-yahtzee-bonus-dist")
+    sub.add_parser("backward-final-outcome-dist")
 
     p_box_after = sub.add_parser("backward-box-dist")
     p_box_after.add_argument("--category", type=str, default=None)
@@ -650,6 +980,8 @@ def main() -> None:
         run_forward_yahtzee_bonus_dist()
     elif args.command == "backward-yahtzee-bonus-dist":
         run_backward_yahtzee_bonus_dist()
+    elif args.command == "backward-final-outcome-dist":
+        run_backward_final_outcome_dist()
     else:
         raise SystemExit(f"Unknown command: {args.command}")
 
