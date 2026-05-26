@@ -25,6 +25,13 @@ venv/
 !/math/data/turn_kernels/
 !/math/data/turn_kernels/**
 
+# Keep only the initial final outcome distribution
+!/math/data/final_outcome_dists/
+/math/data/final_outcome_dists/*
+!/math/data/final_outcome_dists/level_00/
+/math/data/final_outcome_dists/level_00/*
+!/math/data/final_outcome_dists/level_00/0000000000000.npz
+
 # Optional: keep old value-iteration pickle outputs only if you still use them.
 # !/math/data/values/
 # !/math/data/values/**
