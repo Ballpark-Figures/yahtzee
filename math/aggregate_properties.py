@@ -15,6 +15,9 @@ Typical usage:
     python aggregate_properties.py forward-yahtzee-bonus-dist
     python aggregate_properties.py backward-yahtzee-bonus-dist
     python aggregate_properties.py backward-final-outcome-dist
+    python aggregate_properties.py reduced-point-dist
+    python aggregate_properties.py reduced-point-dist --start-only
+    python aggregate_properties.py reduced-point-summary
 """
 
 from __future__ import annotations
@@ -87,6 +90,22 @@ FLAG_FULL_HOUSE = 1 << 2
 FLAG_FOUR_KIND = 1 << 3
 FLAG_THREE_KIND = 1 << 4
 FLAG_TOP_BONUS = 1 << 5
+
+REDUCED_POINT_DIST_DIR = "data/reduced_point_dists"
+REDUCED_POINT_OFFSETS = "offsets"
+REDUCED_POINT_KEYS = "keys"
+REDUCED_POINT_PROBS = "probs"
+REDUCED_POINT_SHIFT = SCORE_BITS
+REDUCED_POINT_MASK = (1 << (32 - REDUCED_POINT_SHIFT)) - 1
+
+REDUCED_POINTS_EXTRA_YAHTZEE_BONUS = 4
+REDUCED_POINTS_YAHTZEE = 2
+REDUCED_POINTS_LARGE_STRAIGHT = 2
+REDUCED_POINTS_TOP_BONUS = 2
+REDUCED_POINTS_SMALL_STRAIGHT = 1
+REDUCED_POINTS_FULL_HOUSE = 1
+REDUCED_POINTS_THREE_KIND = 1
+REDUCED_POINTS_FOUR_KIND = 1
 
 
 def box_after_name(category: int) -> str:
@@ -927,6 +946,219 @@ def run_backward_final_outcome_dist() -> None:
     print_initial_final_outcome_summary()
 
 
+
+# ---------------------------------------------------------------------
+# Reduced point / actual score joint distributions
+# ---------------------------------------------------------------------
+
+def reduced_point_dist_path(level: int, mask: int) -> str:
+    return os.path.join(REDUCED_POINT_DIST_DIR, f"level_{level:02d}", f"{mask:013b}.npz")
+
+
+def pack_reduced_point_key(score, reduced_points):
+    score = np.asarray(score, dtype=np.uint32)
+    reduced_points = np.asarray(reduced_points, dtype=np.uint32)
+    if np.any(score > SCORE_MASK):
+        raise ValueError("score does not fit in SCORE_BITS")
+    if np.any(reduced_points > REDUCED_POINT_MASK):
+        raise ValueError("reduced_points does not fit in packed key")
+    return score | (reduced_points << REDUCED_POINT_SHIFT)
+
+
+def unpack_reduced_point_keys(keys: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    keys = np.asarray(keys, dtype=np.uint32)
+    score = (keys & SCORE_MASK).astype(np.int64)
+    reduced_points = ((keys >> REDUCED_POINT_SHIFT) & REDUCED_POINT_MASK).astype(np.int64)
+    return score, reduced_points
+
+
+def reduced_points_from_components(yahtzee_units: np.ndarray, flags: np.ndarray) -> np.ndarray:
+    """Compute the simple reduced point system from final-outcome components.
+
+    yahtzee_units convention:
+        0 = Yahtzee box scored 0
+        1 = Yahtzee box scored 50, with no extra +100 bonuses
+        k = Yahtzee box scored 50, with k - 1 extra +100 bonuses
+    """
+    yahtzee_units = np.asarray(yahtzee_units, dtype=np.int64)
+    flags = np.asarray(flags, dtype=np.int64)
+
+    reduced_points = np.zeros_like(yahtzee_units, dtype=np.int64)
+
+    reduced_points += REDUCED_POINTS_EXTRA_YAHTZEE_BONUS * np.maximum(yahtzee_units - 1, 0)
+    reduced_points += REDUCED_POINTS_YAHTZEE * (yahtzee_units >= 1)
+    reduced_points += REDUCED_POINTS_LARGE_STRAIGHT * ((flags & FLAG_LARGE_STRAIGHT) != 0)
+    reduced_points += REDUCED_POINTS_TOP_BONUS * ((flags & FLAG_TOP_BONUS) != 0)
+    reduced_points += REDUCED_POINTS_SMALL_STRAIGHT * ((flags & FLAG_SMALL_STRAIGHT) != 0)
+    reduced_points += REDUCED_POINTS_FULL_HOUSE * ((flags & FLAG_FULL_HOUSE) != 0)
+    reduced_points += REDUCED_POINTS_THREE_KIND * ((flags & FLAG_THREE_KIND) != 0)
+    reduced_points += REDUCED_POINTS_FOUR_KIND * ((flags & FLAG_FOUR_KIND) != 0)
+
+    return reduced_points.astype(np.int64)
+
+
+def reduced_point_keys_from_final_outcome_keys(final_keys: np.ndarray) -> np.ndarray:
+    score, yahtzee_units, flags = unpack_final_outcome_keys(final_keys)
+    reduced_points = reduced_points_from_components(yahtzee_units, flags)
+    return pack_reduced_point_key(score, reduced_points)
+
+
+def collapse_final_outcome_row_to_reduced_points(
+    final_keys: np.ndarray,
+    final_probs: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    keys = reduced_point_keys_from_final_outcome_keys(final_keys)
+    return combine_sparse_entries([keys], [final_probs])
+
+
+def save_reduced_point_sparse_shard(
+    level: int,
+    mask: int,
+    row_keys: list[np.ndarray],
+    row_probs: list[np.ndarray],
+) -> None:
+    if len(row_keys) != len(row_probs):
+        raise ValueError("row_keys and row_probs must have the same length")
+
+    n_rows = len(row_keys)
+    lengths = np.array([len(k) for k in row_keys], dtype=np.int64)
+    offsets = np.empty(n_rows + 1, dtype=np.int64)
+    offsets[0] = 0
+    np.cumsum(lengths, out=offsets[1:])
+
+    if int(offsets[-1]) == 0:
+        keys = np.empty(0, dtype=np.uint32)
+        probs = np.empty(0, dtype=np.float32)
+    else:
+        keys = np.concatenate(row_keys).astype(np.uint32, copy=False)
+        probs = np.concatenate(row_probs).astype(np.float32, copy=False)
+
+    path = reduced_point_dist_path(level, mask)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp.npz"
+    np.savez_compressed(
+        tmp,
+        **{
+            REDUCED_POINT_OFFSETS: offsets,
+            REDUCED_POINT_KEYS: keys,
+            REDUCED_POINT_PROBS: probs,
+        },
+    )
+    os.replace(tmp, path)
+
+
+def load_reduced_point_sparse_shard(level: int, mask: int) -> dict[str, np.ndarray]:
+    path = reduced_point_dist_path(level, mask)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Missing reduced-point distribution shard: {path}")
+    with np.load(path) as shard:
+        return {
+            REDUCED_POINT_OFFSETS: shard[REDUCED_POINT_OFFSETS].astype(np.int64),
+            REDUCED_POINT_KEYS: shard[REDUCED_POINT_KEYS].astype(np.uint32),
+            REDUCED_POINT_PROBS: shard[REDUCED_POINT_PROBS].astype(np.float32),
+        }
+
+
+def reduced_point_row_slice(table: dict[str, np.ndarray], row: int) -> slice:
+    offsets = table[REDUCED_POINT_OFFSETS]
+    return slice(int(offsets[row]), int(offsets[row + 1]))
+
+
+def compute_reduced_point_dist_shard(level: int, mask: int) -> tuple[int, int]:
+    final_table = load_final_outcome_sparse_shard(level, mask)
+    offsets = final_table[FINAL_OUTCOME_OFFSETS]
+    n_rows = len(offsets) - 1
+
+    row_keys_out: list[np.ndarray] = []
+    row_probs_out: list[np.ndarray] = []
+
+    for row in range(n_rows):
+        s = final_outcome_row_slice(final_table, row)
+        keys, probs = collapse_final_outcome_row_to_reduced_points(
+            final_table[FINAL_OUTCOME_KEYS][s],
+            final_table[FINAL_OUTCOME_PROBS][s],
+        )
+        row_keys_out.append(keys)
+        row_probs_out.append(probs)
+
+    save_reduced_point_sparse_shard(level, mask, row_keys_out, row_probs_out)
+    return n_rows, int(sum(len(keys) for keys in row_keys_out))
+
+
+def initial_row() -> int:
+    with load_shard(0, 0) as shard:
+        upper = shard["upper_total"]
+        eligible = shard["yahtzee_eligible"]
+    rows = np.where((upper == 0) & (~eligible))[0]
+    if len(rows) != 1:
+        raise ValueError(f"Expected exactly one initial row; found {len(rows)}")
+    return int(rows[0])
+
+
+def run_reduced_point_dist(*, start_only: bool = False) -> None:
+    if start_only:
+        n_rows, n_entries = compute_reduced_point_dist_shard(0, 0)
+        print(
+            "Done. Wrote start-state reduced-point/score distribution to "
+            f"{reduced_point_dist_path(0, 0)}. rows={n_rows:,}, entries={n_entries:,}"
+        )
+        print_initial_reduced_point_summary()
+        return
+
+    total_rows = 0
+    total_entries = 0
+
+    for level in range(NUM_CATEGORIES + 1):
+        for mask in tqdm(list_masks_for_level(level), desc=f"reduced point dist L{level:02d}"):
+            n_rows, n_entries = compute_reduced_point_dist_shard(level, mask)
+            total_rows += n_rows
+            total_entries += n_entries
+
+    print(
+        "Done. Wrote sparse reduced-point/score distributions to "
+        f"{REDUCED_POINT_DIST_DIR}. rows={total_rows:,}, entries={total_entries:,}"
+    )
+    print_initial_reduced_point_summary()
+
+
+def initial_reduced_point_arrays() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    table = load_reduced_point_sparse_shard(0, 0)
+    s = reduced_point_row_slice(table, initial_row())
+    keys = table[REDUCED_POINT_KEYS][s]
+    probs = table[REDUCED_POINT_PROBS][s].astype(np.float64)
+    score, reduced_points = unpack_reduced_point_keys(keys)
+    order = np.lexsort((score, reduced_points))
+    return reduced_points[order], score[order], probs[order]
+
+
+def print_initial_reduced_point_summary(max_rows: int = 20) -> None:
+    reduced_points, score, probs = initial_reduced_point_arrays()
+
+    print()
+    print("initial reduced-point/score distribution")
+    print(f"  nonzero outcomes:     {len(probs):,}")
+    print(f"  total mass:           {float(probs.sum()):.12f}")
+    print(f"  mean score:           {float(probs @ score):.12f}")
+    print(f"  mean reduced points:  {float(probs @ reduced_points):.12f}")
+
+    marginal = np.bincount(reduced_points.astype(np.int64), weights=probs)
+    print()
+    print("reduced-point marginal:")
+    for points, prob in enumerate(marginal):
+        if prob > 0:
+            print(f"  {points:2d}: {prob:.12f}")
+
+    if max_rows > 0:
+        order = np.argsort(probs)[::-1][:max_rows]
+        print()
+        print(f"top {len(order)} joint outcomes by probability:")
+        for i in order:
+            print(
+                f"  p={probs[i]:.8f}  "
+                f"reduced_points={int(reduced_points[i]):2d}  "
+                f"score={int(score[i]):4d}"
+            )
+
 # ---------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------
@@ -953,6 +1185,12 @@ def main() -> None:
     sub.add_parser("forward-yahtzee-bonus-dist")
     sub.add_parser("backward-yahtzee-bonus-dist")
     sub.add_parser("backward-final-outcome-dist")
+
+    p_reduced = sub.add_parser("reduced-point-dist")
+    p_reduced.add_argument("--start-only", action="store_true")
+
+    p_reduced_summary = sub.add_parser("reduced-point-summary")
+    p_reduced_summary.add_argument("--max-rows", type=int, default=20)
 
     p_box_after = sub.add_parser("backward-box-dist")
     p_box_after.add_argument("--category", type=str, default=None)
@@ -982,6 +1220,10 @@ def main() -> None:
         run_backward_yahtzee_bonus_dist()
     elif args.command == "backward-final-outcome-dist":
         run_backward_final_outcome_dist()
+    elif args.command == "reduced-point-dist":
+        run_reduced_point_dist(start_only=args.start_only)
+    elif args.command == "reduced-point-summary":
+        print_initial_reduced_point_summary(max_rows=args.max_rows)
     else:
         raise SystemExit(f"Unknown command: {args.command}")
 
