@@ -9,7 +9,7 @@ from assets.scorecard import get_scorecard
 from assets.dice import DiceBoard, morph_dice
 
 
-class Intro(YahtzeeScene):
+class Test(YahtzeeScene):
     def setup_scene(self):
         self.scorecard = get_scorecard(center=LEFT_SC, scores=[None] * 14)
         self.board = DiceBoard()
