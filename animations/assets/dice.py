@@ -13,6 +13,17 @@ import numpy as np
 DIE_BEIGE = "#ECE1C4"
 DIE_SIZE  = 0.95
 
+# value -> color for pip_coloring: 1 red, 2 orange ... 6 purple (rainbow).
+# Darker/deeper shades so they read well on the beige die face.
+PIP_COLORS = {
+    1: "#C0392B",   # deep red
+    2: "#D35400",   # burnt orange
+    3: "#C9A200",   # dark gold (yellow that's visible on beige)
+    4: "#1E8449",   # forest green
+    5: "#1F618D",   # steel blue
+    6: "#6C3483",   # deep purple
+}
+
 # pip positions on a 3x3 grid: gx in {-1,0,1} (cols), gy in {-1,0,1} (+1 = top)
 PIP_GRID = {
     "TL": (-1, 1),  "TR": (1, 1),
@@ -40,10 +51,15 @@ class Die(VGroup):
     die moves and scales inside an animation.
     """
 
-    def __init__(self, value=1, size=DIE_SIZE, pip_color=BLACK, **kwargs):
+    def __init__(self, value=1, size=DIE_SIZE, pip_color=BLACK,
+                 pip_coloring=False, **kwargs):
         super().__init__(**kwargs)
         self.size = size
         self.pip_color = pip_color
+        # When True, the border and pips take the value's rainbow color (see
+        # PIP_COLORS) and re-tint whenever the face changes; otherwise they stay
+        # `pip_color`/black.
+        self.pip_coloring = pip_coloring
         self.body = RoundedRectangle(
             width=size, height=size, corner_radius=size * 0.18,
             fill_color=DIE_BEIGE, fill_opacity=1.0,
@@ -58,6 +74,24 @@ class Die(VGroup):
         self.add(self.body, self.pips)
         self.set_value(value)
 
+    def _accent_color(self):
+        """The current border/pip color: value-based when pip_coloring is on."""
+        if self.pip_coloring:
+            return PIP_COLORS[self.value]
+        return self.pip_color
+
+    def set_pip_coloring(self, on=True):
+        """Toggle value-based coloring and re-tint the border + pips in place."""
+        self.pip_coloring = on
+        self._apply_accent()
+        return self
+
+    def _apply_accent(self):
+        color = self._accent_color()
+        self.body.set_stroke(color=color)
+        for dot in self._pips.values():
+            dot.set_color(color)
+
     def set_value(self, value):
         self.value = int(value)
         w = self.body.width
@@ -71,6 +105,7 @@ class Die(VGroup):
             dot.scale_to_fit_width(pip_d)
             dot.move_to(c + np.array([gx * spacing, gy * spacing, 0.0]))
             dot.set_opacity(1.0 if key in active else 0.0)
+        self._apply_accent()
         return self
 
 
@@ -244,20 +279,31 @@ class RollDie(Animation):
     """
 
     def __init__(self, die, target, final_value, *, bump=0.4, n_flips=16,
+                 flip_ease=0.8, start_size=None, end_size=None,
                  run_time=1.0, rate_func=smooth, **kwargs):
         self.target = np.array(target, dtype=float)
         self.final_value = int(final_value)
         self.bump = bump
+        # Optional start/end base sizes: the die's base width is interpolated
+        # from start_size to end_size across the toss (the mid-flight bump rides
+        # on top). Either left None falls back to the die's size at begin().
+        self.start_size = start_size
+        self.end_size = end_size
 
         # Flip schedule: flips are dense early and sparse late, so the face
-        # changes quickly at first then slows to a stop. flip i fires at
-        # alpha = 1 - sqrt(1 - i/n); the last flip lands the final value.
+        # changes quickly at first then slows as it settles. flip i fires at
+        # alpha = 1 - (1 - i/n)**flip_ease, so the last flip (i = n) lands
+        # exactly at alpha = 1.0 — the face keeps changing right up until the
+        # die lands, and only that final flip locks in the final value.
+        # flip_ease controls the slowdown: 1.0 = uniform spacing (no settle),
+        # smaller = more front-loaded (the old sqrt curve was 0.5, which left
+        # the die sitting on its 2nd-to-last value for a full 0.25 of the toss).
         self.flip_alphas = []
         self.flip_values = []
         prev = None
         for i in range(1, n_flips + 1):
-            self.flip_alphas.append(1 - np.sqrt(1 - i / n_flips))
-            if i >= n_flips - 1:
+            self.flip_alphas.append(1 - (1 - i / n_flips) ** flip_ease)
+            if i == n_flips:
                 v = self.final_value
             else:
                 v = random.choice([x for x in range(1, 7) if x != prev])
@@ -268,7 +314,9 @@ class RollDie(Animation):
 
     def begin(self):
         self.start_point = self.mobject.get_center()
-        self.base_size = self.mobject.size
+        base = self.mobject.size
+        self._size0 = self.start_size if self.start_size is not None else base
+        self._size1 = self.end_size if self.end_size is not None else base
         super().begin()
 
     def _value_at(self, alpha):
@@ -283,7 +331,8 @@ class RollDie(Animation):
     def interpolate_mobject(self, alpha):
         die = self.mobject
         center = self.start_point + (self.target - self.start_point) * alpha
-        desired = self.base_size * (1 + self.bump * np.sin(np.pi * alpha))
+        base = self._size0 + (self._size1 - self._size0) * alpha
+        desired = base * (1 + self.bump * np.sin(np.pi * alpha))
         cur_w = die.body.width
         if cur_w > 1e-6:
             die.scale(desired / cur_w)
@@ -294,7 +343,7 @@ class RollDie(Animation):
         super().finish()
         die = self.mobject
         if die.body.width > 1e-6:
-            die.scale(self.base_size / die.body.width)
+            die.scale(self._size1 / die.body.width)
         die.move_to(self.target)
         die.set_value(self.final_value)
 

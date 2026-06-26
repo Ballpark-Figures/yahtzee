@@ -91,8 +91,13 @@ class Scorecard(VGroup):
         text_pad=0.12,
         section_gap=0.4,
         bottom_gap=1.0,
+        show_summary=True,
     ):
         super().__init__()
+        # show_summary=False removes the 3rd-column CONTENTS only (the (63) bar,
+        # running totals, bottom total, grand total) — the column outline, the
+        # box scores, and the Total footer bar all stay.
+        self.show_summary = show_summary
         self.cell_height = cell_height
         self.font_size   = font_size
         self.text_pad    = text_pad
@@ -164,7 +169,7 @@ class Scorecard(VGroup):
 
         header = Rectangle(
             width=full_width, height=header_h,
-            fill_color=BOARD_FILL, fill_opacity=1.0,
+            fill_color=ACCENT_FILL, fill_opacity=1.0,
             stroke_color=grid_color, stroke_width=grid_width,
         ).move_to(np.array([0, header_cy, 0]))
         cells.add(header)
@@ -222,7 +227,7 @@ class Scorecard(VGroup):
             fill_opacity=0, stroke_color=grid_color, stroke_width=grid_width,
         ).move_to(np.array([summary_x, top_summary_cy, 0])))
 
-        if c is not None:
+        if c is not None and self.show_summary:
             self._top_sum       = c["top_sum"]
             self._bottom_sum    = c["bottom_sum"]
             self._yahtzee_bonus = c["yahtzee_bonus"] or 0
@@ -243,7 +248,7 @@ class Scorecard(VGroup):
             elif c["top_complete"]:
                 fill_color = SCORE_RED
             else:
-                fill_color = BOARD_FILL
+                fill_color = ACCENT_FILL
 
             # bar fill (always present so it can animate from empty)
             self.bar_fill = Rectangle(
@@ -295,7 +300,21 @@ class Scorecard(VGroup):
             fill_opacity=0, stroke_color=grid_color, stroke_width=grid_width,
         ).move_to(np.array([summary_x, bottom_summary_cy, 0])))
 
-        if c is not None:
+        # ── Total footer (always shown; the number is omitted when scores=None)
+        footer = Rectangle(
+            width=full_width, height=cell_height * 1.18,
+            fill_color=ACCENT_FILL, fill_opacity=1.0,
+            stroke_color=grid_color, stroke_width=grid_width,
+        ).move_to(np.array([0, total_y, 0]))
+        cells.add(footer)
+
+        tl = crisp_text("Total", font_size=font_size, color=WHITE, font=FONT, weight="BOLD")
+        tl.align_to(footer, LEFT)
+        tl.shift(RIGHT * text_pad * 1.5)
+        tl.set_y(total_y)
+        score_texts.add(tl)
+
+        if c is not None and self.show_summary:
             bottom_opacity = 1.0 if c["bottom_complete"] else 0.5
 
             self.bottom_total_text = crisp_text(str(c["bottom_sum"]), font_size=font_size, color=stroke_color, font=FONT, weight="BOLD")
@@ -309,27 +328,14 @@ class Scorecard(VGroup):
                 self.yahtzee_bonus_text.move_to(np.array([summary_x, y_yahtzee, 0]))
                 score_texts.add(self.yahtzee_bonus_text)
 
-            # ── Total footer ─────────────────────────────────────────────────
+            # the grand total number (omitted entirely when scores=None)
             grand_total    = c["top_total"] + c["bottom_sum"] + (c["yahtzee_bonus"] or 0)
             grand_complete = c["top_complete"] and c["bottom_complete"]
-
-            footer = Rectangle(
-                width=full_width, height=cell_height * 1.18,
-                fill_color=BOARD_FILL, fill_opacity=1.0,
-                stroke_color=grid_color, stroke_width=grid_width,
-            ).move_to(np.array([0, total_y, 0]))
-            cells.add(footer)
-
-            tl = crisp_text("Total", font_size=font_size, color=WHITE, font=FONT, weight="BOLD")
-            tl.align_to(footer, LEFT)
-            tl.shift(RIGHT * text_pad * 1.5)
-            tl.set_y(total_y)
 
             self.total_text = crisp_text(str(grand_total), font_size=font_size, color=WHITE, font=FONT, weight="BOLD")
             self.total_text.set_fill(WHITE, opacity=1.0 if grand_complete else 0.5)
             self.total_text.move_to(np.array([summary_x, total_y, 0]))
-
-            score_texts.add(tl, self.total_text)
+            score_texts.add(self.total_text)
 
     # ── Animation ────────────────────────────────────────────────────────────
     def animate_top_score(self, scene, row, dice, *, run_time=1.1):
@@ -519,7 +525,7 @@ class Scorecard(VGroup):
         kind = max(counts, key=counts.get)
         if counts[kind] >= 3:
             flash = [d for d in dice if d.value == kind]
-            self.animate_bottom_score(scene, 6, dice, flash=flash, flash_color=BOARD_FILL)
+            self.animate_bottom_score(scene, 6, dice, flash=flash, flash_color=ACCENT_FILL)
         else:
             self.animate_zero_score(scene, 6, dice)
 
@@ -540,11 +546,11 @@ class Scorecard(VGroup):
             triple = [d for d in dice if d.value == triple_val]
             pair   = [d for d in dice if d.value == pair_val]
             scene.play(
-                *[FlashFill(d, BOARD_FILL, scale_factor=1.18) for d in triple],
+                *[FlashFill(d, ACCENT_FILL, scale_factor=1.18) for d in triple],
                 *[FlashFill(d, RED, scale_factor=1.18) for d in pair],
                 run_time=0.7,
             )
-            colors = [BOARD_FILL if d.value == triple_val else RED for d in dice]
+            colors = [ACCENT_FILL if d.value == triple_val else RED for d in dice]
             self.fly_to_box(scene, dice, colors, 8, 25)
         else:
             self.animate_zero_score(scene, 8, dice)
@@ -649,7 +655,7 @@ class Scorecard(VGroup):
         ch      = self.cell_height
         fives_y = bar_top - 2.5 * ch
         base    = self._bottom_sum + self._yahtzee_bonus
-        fcolor  = SCORE_GREEN if green else BOARD_FILL
+        fcolor  = SCORE_GREEN if green else ACCENT_FILL
 
         def fill_for(v):
             h = max(bar_h * v / 63, 1e-4)   # keeps growing past 63 (overflow)
