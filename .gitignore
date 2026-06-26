@@ -6,6 +6,17 @@
 .venv/
 venv/
 
+# Manim / generated media (never commit renders)
+media/
+**/media/
+*.mp4
+*.mov
+*.wav
+*.mp3
+
+# OS / editor junk
+.DS_Store
+
 # Ignore generated math data by default
 /math/data/*
 

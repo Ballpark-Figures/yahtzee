@@ -1,4 +1,0 @@
-# This file is used internally by FFMPEG.
-file 'file:/Users/patrickliscio/My Documents/Pycharm Projects/Ballpark-Figures/yahtzee/animations/scenes/media/videos/01intro/1080p60/partial_movie_files/Intro/3544663784_3115536190_223132457.mp4'
-file 'file:/Users/patrickliscio/My Documents/Pycharm Projects/Ballpark-Figures/yahtzee/animations/scenes/media/videos/01intro/1080p60/partial_movie_files/Intro/260329756_1432596116_3578354888.mp4'
-file 'file:/Users/patrickliscio/My Documents/Pycharm Projects/Ballpark-Figures/yahtzee/animations/scenes/media/videos/01intro/1080p60/partial_movie_files/Intro/260329756_3049479827_2375220172.mp4'

@@ -1,8 +1,0 @@
-# This file is used internally by FFMPEG.
-file 'file:/Users/patrickliscio/My Documents/Pycharm Projects/Ballpark-Figures/yahtzee/animations/scenes/media/videos/01intro/480p15/partial_movie_files/Intro/1833492187_268507815_239545068.mp4'
-file 'file:/Users/patrickliscio/My Documents/Pycharm Projects/Ballpark-Figures/yahtzee/animations/scenes/media/videos/01intro/480p15/partial_movie_files/Intro/1833492187_1868411241_3519179406.mp4'
-file 'file:/Users/patrickliscio/My Documents/Pycharm Projects/Ballpark-Figures/yahtzee/animations/scenes/media/videos/01intro/480p15/partial_movie_files/Intro/1833492187_3506589752_1691220074.mp4'
-file 'file:/Users/patrickliscio/My Documents/Pycharm Projects/Ballpark-Figures/yahtzee/animations/scenes/media/videos/01intro/480p15/partial_movie_files/Intro/1833492187_2664194064_443805934.mp4'
-file 'file:/Users/patrickliscio/My Documents/Pycharm Projects/Ballpark-Figures/yahtzee/animations/scenes/media/videos/01intro/480p15/partial_movie_files/Intro/1833492187_3506589752_1132311161.mp4'
-file 'file:/Users/patrickliscio/My Documents/Pycharm Projects/Ballpark-Figures/yahtzee/animations/scenes/media/videos/01intro/480p15/partial_movie_files/Intro/1833492187_3701103986_486500191.mp4'
-file 'file:/Users/patrickliscio/My Documents/Pycharm Projects/Ballpark-Figures/yahtzee/animations/scenes/media/videos/01intro/480p15/partial_movie_files/Intro/1833492187_1432596116_3918925606.mp4'
