@@ -74,6 +74,34 @@ that parent is wherever you want them, e.g. `/projects/`). `yahtzee` normally li
 5. **Done? Delete this block** from `yahtzee/CLAUDE.md` and commit/push, so it stops
    shipping to every machine.
 
+### Verification checklist (run after the steps; each line is pass/fail)
+
+Tick these off — if all pass, the desktop is fully wired. The last one is the real
+test; the rest explain *why* if it fails.
+
+- [ ] **Repos present & sibling layout.** `Ballpark-Figures/` and `dotclaude/` sit
+      in the SAME parent dir. Check: from the umbrella root, `ls -d ../dotclaude`
+      resolves.
+- [ ] **`bpkfigures/` came down with the umbrella.** Check: `ls bpkfigures/CLAUDE.md`
+      exists (it's tracked inside the umbrella, not a separate clone).
+- [ ] **Umbrella is up to date.** The import line must be present:
+      `grep '@CLAUDE.private.md' bpkfigures/CLAUDE.md` returns a hit. If not,
+      `git pull` in the umbrella (the activating commit is `4b24e0e`).
+- [ ] **Three symlinks resolve** (no "No such file or directory" from `ls -l`):
+      `bpkfigures/CLAUDE.private.md`, `.claude/commands`, `.claude/settings.local.json`.
+- [ ] **Slash commands load.** Type `/` in a session → `new-video` and `sync-videos`
+      appear. (Confirms `.claude/commands` symlink.)
+- [ ] **Allowlist active.** A trivial project-file edit does NOT prompt for
+      permission. (Confirms `.claude/settings.local.json` symlink.)
+- [ ] **Public conventions load.** Agent knows yahtzee terms cold (`DiceBoard`,
+      `slot_x`, `ACCENT_FILL`). (Confirms `bpkfigures/CLAUDE.md` loads.)
+- [ ] **★ Private import loads (THE real test).** Fresh session, asked cold before
+      reading any file: "What's my gh account name?" → **MathNCheese**. If yes, the
+      `@CLAUDE.private.md` import resolved and the whole chain works.
+
+If the ★ test fails but the symlinks resolve, the usual cause is the umbrella
+wasn't pulled (no import line) — re-check the third box.
+
 <!-- ===================================================================== -->
 <!-- END TEMPORARY BOOTSTRAP                                                -->
 <!-- ===================================================================== -->
