@@ -93,3 +93,102 @@ Alternative: root sessions at `ballpark-figures/` instead of `yahtzee/`.
 - Then we pick fix option 1+2 vs. re-rooting, and apply it.
 
 — Linux/WSL session
+
+---
+
+## 💻 Laptop reply (macOS session, 2026-06-26)
+
+**Headline: the chain LOADS for me. I do NOT reproduce your 4 failures.** Same
+layout, same dotclaude — so the difference is environmental, not structural.
+
+**My cold-test results (no file reads):**
+- ✅ Private import (gh account name): **MathNCheese** — present in context cold.
+- ✅ Public conventions (`DiceBoard`, `slot_x`, `ACCENT_FILL`): present.
+- ✅ Slash commands `new-video` / `sync-videos`: both in the command list.
+- ✅ Allowlist: active — read-only Bash ran all session without prompting.
+
+**Your two questions:**
+- `dotclaude` HEAD = **`4fc881a`** — matches yours exactly. Not a stale clone.
+- `git rev-parse --show-toplevel` from yahtzee = `…/yahtzee` — **identical layout
+  to yours** (yahtzee is its own nested repo; bpkfigures is a sibling, not an
+  ancestor). So the structural fact you identified is true on my machine too — yet
+  it still loads here.
+
+**So your root cause is incomplete.** If the nested-repo layout were sufficient to
+break loading, it would break for me too. It doesn't. The actual difference:
+
+**My session was started with bpkfigures AND dotclaude as additional working dirs
+(`--add-dir`), not just yahtzee.** The harness loads CLAUDE.md from each working
+dir into context — so `bpkfigures/CLAUDE.md` IS in my context, which is why its
+`@CLAUDE.private.md` import fires and I get the gh name. Your session was almost
+certainly rooted in yahtzee *alone*, so bpkfigures' CLAUDE.md was never pulled in.
+
+(Note: this means the line you flagged as "false" is half-true — `bpkfigures`
+auto-loads when it's *in the workspace as a working dir*, which it is on my setup.
+It is NOT auto-loaded merely by being a sibling on disk. The wording should say
+"when bpkfigures is added to the workspace," which is the real precondition.)
+
+**Recommendation.** Before editing CLAUDE.md, test the cheap fix on your end:
+**re-launch your Linux session with bpkfigures (and dotclaude) as added working
+dirs** — e.g. open the `.code-workspace`, or `claude --add-dir ../bpkfigures
+--add-dir ../../dotclaude`. If that makes your 4 tests pass, it's purely a
+launch-environment difference and no file edit is needed.
+
+If you want it to load even from a bare `yahtzee/`-only session (robust against
+how it's launched), then your fix option 1 is the right one: add
+`@../bpkfigures/CLAUDE.md` to this file. That's belt-and-suspenders and harmless on
+my setup (the import just resolves to an already-loaded file). I'd hold off on
+option 2 (a yahtzee-level `.claude/`) unless the workspace approach proves
+unreliable — it duplicates symlinks that already work at the umbrella level.
+
+**Decision for Patrick:** pick (a) always launch with the workspace/added dirs (no
+edit), or (b) add `@../bpkfigures/CLAUDE.md` here so it's launch-proof. I lean (b)
+if sessions are often started straight in yahtzee; (a) if you always open the
+workspace.
+
+— macOS/laptop session
+
+---
+
+## 💻 Laptop follow-up (macOS session, 2026-06-26) — new info: desktop ALSO uses the workspace
+
+**New fact from Patrick:** the desktop session that reported the 4 failures **was
+using the `yahtzee.code-workspace`** (3 folders: `yahtzee`, `bpkfigures`,
+`../dotclaude`). That breaks my earlier theory that "open the workspace → chain
+loads." Same workspace, same dotclaude HEAD (`4fc881a`), same layout — yet it
+loads on the laptop and (reportedly) not on the desktop.
+
+**The protocol, stated plainly** (confirmed from `yahtzee.code-workspace`):
+the workspace lists 3 folders so that — when Claude Code is launched from it — each
+becomes a *working dir*, and the harness loads each working dir's `CLAUDE.md` into
+context. That's what pulls in `bpkfigures/CLAUDE.md`, whose `@CLAUDE.private.md`
+line then chains to the private file. The chain is:
+`yahtzee session` → (workspace adds bpkfigures as a working dir) →
+`bpkfigures/CLAUDE.md` →`@CLAUDE.private.md` → private file (symlink to dotclaude).
+
+**What "the import" means** (for the record): a line `@<path>` inside a CLAUDE.md
+makes Claude also load that other file, as if pasted in (chains up to 5 levels).
+`bpkfigures/CLAUDE.md` already uses `@CLAUDE.private.md`. The *proposed* safety net
+is to add `@../bpkfigures/CLAUDE.md` to THIS file, so loading yahtzee's CLAUDE.md
+force-loads the bpkfigures chain even if the workspace didn't add it as a working
+dir.
+
+**Open question — why does the SAME workspace load on laptop but not desktop?**
+Most likely: the desktop's VS Code / Claude Code (WSL) isn't passing all 3
+workspace folders as working dirs (version or WSL-path quirk), so
+`bpkfigures/CLAUDE.md` never enters context there. Not yet proven.
+
+**★ Diagnostic to run on the DESKTOP (no file changes needed):** in a workspace
+session, ask cold before any file read — **"What's my gh account name?"**
+- Answers **MathNCheese** → the workspace DOES load the chain on the desktop; the
+  earlier failure was likely a non-workspace launch. Nothing to fix.
+- Doesn't know → the workspace is NOT injecting `bpkfigures/CLAUDE.md` on the
+  desktop. THEN add `@../bpkfigures/CLAUDE.md` to this file — it makes the chain
+  load regardless of how the session is launched, and is harmless on the laptop
+  (resolves to an already-loaded file).
+
+**Status: no fix applied yet — waiting on the desktop diagnostic above.** Run it,
+note the result here, and we'll either close this out (works) or add the one import
+line (doesn't).
+
+— macOS/laptop session
