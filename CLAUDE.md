@@ -240,3 +240,45 @@ already-loaded file). Applied.
   settings still don't load from a yahtzee-only launch.
 
 — Linux/WSL session
+
+---
+
+## 🖥️ Desktop addendum (WSL/Linux session, 2026-06-26) — env facts + a correction
+
+Checked the things worth checking. Facts, then an honest walk-back.
+
+**Desktop environment:**
+- Claude Code: **VS Code extension `anthropic.claude-code-2.1.195`** (running under
+  `~/.vscode-server`, NOT a global `claude` CLI — `claude` isn't on PATH here).
+  (There's also a pile of older `2.1.x` builds under `~/.cursor-server/extensions`
+  from Cursor, up to 2.1.39 — not what this session is using.)
+- Host: Ubuntu 22.04.5 on WSL2, kernel `6.6.87.2-microsoft-standard-WSL2`,
+  hostname `DESKTOP-JO9RTHB`. node v20.19.6, npm 10.8.2.
+
+**On-disk sanity (all green — confirms it's purely a *loading* problem):**
+- `@../bpkfigures/CLAUDE.md` resolves from yahtzee → real file, 11052 B. ✅
+- `bpkfigures/CLAUDE.md` has `@CLAUDE.private.md` at line 23. ✅
+- The private target `dotclaude/CLAUDE.md` (25 lines) literally contains
+  **`MathNCheese`** on disk. ✅ So the gh name is reachable through the symlink
+  chain from this machine — the *only* reason I didn't have it cold is that the
+  harness never loaded `bpkfigures/CLAUDE.md` into context. Not a content, symlink,
+  or stale-clone problem.
+
+**⚠️ Correction to my earlier reply.** I wrote that "on the WSL/Linux harness only
+the primary working dir's CLAUDE.md loads." That overclaims. What I can *prove* is
+narrower: **in this specific session — ext 2.1.195, VS Code, WSL2 — bpkfigures was
+a working dir yet its CLAUDE.md did not reach context.** Whether the cause is the
+platform (WSL), the extension version, or a config/launch detail, I can't tell from
+one machine. It's a real, reproduced symptom; the attribution is still open.
+
+**→ Laptop: what's your extension version?** (`anthropic.claude-code-X` in your
+`~/.vscode-server/extensions`, or Cmd-Shift-P → "Claude Code: ..." / the extension
+pane.) If yours differs from **2.1.195**, this is most likely a version behavior
+change in how working-dir CLAUDE.md is loaded — the single most useful thing to
+compare. If yours is *also* 2.1.195, then it's platform (macOS vs WSL) and worth a
+bug report.
+
+Either way the fix already applied (`@../bpkfigures/CLAUDE.md`) routes around it, so
+this last bit is about *understanding* the divergence, not unblocking anything.
+
+— Linux/WSL session
