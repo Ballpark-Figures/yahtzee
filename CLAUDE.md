@@ -1,12 +1,16 @@
 # Yahtzee video — specifics
 
 Yahtzee-only conventions. The shared cross-video rules live in
-`bpkfigures/CLAUDE.md` and are pulled in by the explicit import below. (The old
-"auto-loaded since bpkfigures is in the workspace" assumption proved unreliable:
-on the WSL/Linux harness only the *primary* working dir's CLAUDE.md loads, so the
-import makes the chain launch-proof. See the cross-machine handoff at the bottom.)
+`bpkfigures/CLAUDE.md` and the private facts in `dotclaude/CLAUDE.md`; both are
+pulled in by the two **in-tree** imports below. (History: an out-of-tree
+`@../bpkfigures/CLAUDE.md` import did NOT load on the WSL/Linux desktop — that
+harness won't follow imports whose path escapes the project root — so we switched
+to yahtzee-local symlinks (`CLAUDE.shared.md` → `../bpkfigures/CLAUDE.md`,
+`CLAUDE.private.md` → `../../dotclaude/CLAUDE.md`) and import them by their in-tree
+names. See the cross-machine handoff at the bottom.)
 
-@../bpkfigures/CLAUDE.md
+@CLAUDE.shared.md
+@CLAUDE.private.md
 
 ## Script
 - `animations/Script.md` is the video script — a 2-column table (voiceover |
@@ -381,3 +385,44 @@ in a fresh session, **before any file read, cold-ask "What's my gh account name?
 
 Everything before this section is committed history; THIS section is the open
 frontier. — Linux/WSL session
+
+---
+
+## ✅ H1 CONFIRMED + in-tree fix applied (desktop, 2026-06-27)
+
+**Diagnosis settled — it's H1 (out-of-tree `@import` not followed), not H2
+(cache).** Two clean facts nailed it:
+- A fresh desktop session (post-reload) failed the **venv** cold-test — and the
+  venv answer appears **0×** in `yahtzee/CLAUDE.md` (verified `grep`), so that
+  question is an *uncontaminated* probe of the private chain. RED is real.
+- That same session referenced the `🛑 LIVE STATE` section (newest content,
+  committed `f16ce18f`), proving its `yahtzee/CLAUDE.md` was loaded **fresh**, not
+  cached. So the file re-read fine; the `@../bpkfigures/CLAUDE.md` import simply
+  wasn't followed — the `../` escaping the project root is the cause. H2 ruled out.
+- ⚠️ Note: the **gh-name test is now contaminated** — `MathNCheese` appears 8× in
+  this file's handoff notes, so any session that loads `yahtzee/CLAUDE.md` "knows"
+  it without the private chain. **Use the venv question, not the gh name, to test
+  loading from here on.**
+
+**Fix applied (replaces the out-of-tree import):** two yahtzee-local symlinks +
+in-tree imports at the top of this file:
+- `yahtzee/CLAUDE.shared.md` → `../bpkfigures/CLAUDE.md`  →  `@CLAUDE.shared.md`
+- `yahtzee/CLAUDE.private.md` → `../../dotclaude/CLAUDE.md`  →  `@CLAUDE.private.md`
+The import paths no longer contain `../`, so they don't escape the project root.
+Importing the private file directly (not only via the shared file's nested
+`@CLAUDE.private.md`) is belt-and-suspenders: the gh/venv facts load even if the
+shared chain's nested import doesn't resolve.
+
+**▶ NEXT TEST (fresh session required — imports resolve at launch):** open a new
+session and cold-ask **"What goes into a new video's venv?"** *before any file
+read*. Expected if fixed: shared `.venv` at the video root, newest-stable
+`manim`+`scipy`, `numpy` via manim, editable `bpkfigures`, `python3.14`→`python3`
+fallback on WSL.
+- Answers that → **the in-tree symlink import works on WSL: this is the real fix.**
+  Close the thread and condense.
+- Still can't → the harness rejects imports by *resolved realpath* (symlink target
+  is still out-of-tree), so symlinks don't help either. Fallback: stop importing
+  and **inline** the shared/private content into a real in-tree file (kept in sync
+  via `/sync-videos`), or re-root sessions at `ballpark-figures/`.
+
+— Linux/WSL session
