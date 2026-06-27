@@ -10,37 +10,6 @@ way.
 
 ---
 
-## ⏳ TEMP — desktop setup (added 2026-06-27 from laptop) — DELETE this whole section once the desktop is set up and verified
-
-The laptop session changed Claude **permissions**, the **render** script, **fps**,
-and **explorer visibility**. Apply on the WSL desktop:
-
-1. **Pull all three repos**, each from its own dir: `dotclaude`, the umbrella
-   `ballpark-figures`, and `yahtzee`.
-2. **Recreate the git-ignored `.claude/` symlinks** (they're not in the pull).
-   From the `yahtzee/` repo root:
-   ```sh
-   mkdir -p .claude
-   ln -sf ../../../dotclaude/settings.local.json .claude/settings.local.json
-   ln -sf ../../../dotclaude/commands            .claude/commands
-   ```
-   Check: `readlink -f .claude/settings.local.json` should land in `dotclaude/`.
-   (Repeat for any other existing video repo; `/sync-videos` does this for
-   freshly-cloned ones.)
-3. **Reload / relaunch Claude Code** (reopen `yahtzee.code-workspace`). Everything
-   takes effect on reload: the allowlist loads (bare `render`/`rg`/`git status`
-   stop prompting), the tightened perms apply (`python -c`/`awk`/`find`/`source`
-   now prompt), `media/` renders become visible in the explorer, and the 60fps
-   `manim.cfg` is live.
-4. **Verify**: explorer shows `animations/scenes/media/videos/...` (renders +
-   `frames/`, with `partial_movie_files` hidden); a bare
-   `render 02a --fast --quiet` runs with no permission prompt.
-
-No venv rebuild this session. If `git pull` complains about local changes, stash
-or commit first. **Then delete this section** (and commit) so it stops loading.
-
----
-
 ## Script
 - `animations/Script.md` is the video script — a 2-column table (voiceover |
   animation notes). Scenes `01`–`12` become `scenes/NN<name>.py`; talking-head
