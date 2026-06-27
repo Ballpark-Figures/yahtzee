@@ -21,6 +21,10 @@ animations/**/cache/
 # OS / editor junk
 .DS_Store
 
+# Claude config symlinks (machine-local; recreated from dotclaude by /sync-videos)
+.claude/commands
+.claude/settings.local.json
+
 # Ignore generated math data by default
 /math/data/*
 
