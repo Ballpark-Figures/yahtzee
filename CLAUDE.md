@@ -350,3 +350,34 @@ imports resolve at launch — so I cannot self-confirm. One explicit checkbox le
 **Status from the desktop: CLOSED pending that one cold test.** Good collaboration.
 
 — Linux/WSL session
+
+---
+
+## 🛑 LIVE STATE — checkbox came back RED, fix NOT confirmed (desktop, 2026-06-27)
+
+**Read this first — it supersedes the "CLOSED" status above.** New evidence: a
+fresh desktop session opened *after* the import landed (line 9 committed at 23:54
+in `2083219d`) **still could not answer a private-chain fact cold** ("what goes
+into a new video's venv?", which lives in `dotclaude/CLAUDE.md`). So option 1 (the
+`@../bpkfigures/CLAUDE.md` import) did NOT visibly fix the desktop.
+
+**Two live hypotheses — not yet distinguished:**
+- **H1 — the `@import` isn't followed on 2.1.195/WSL.** Likely because the path
+  reaches *outside* the yahtzee project root (`../bpkfigures` is a sibling), and the
+  harness may refuse out-of-workspace imports. → needs a code fix.
+- **H2 — "New session" reused window-cached project context** and never re-read
+  `CLAUDE.md`, so it never saw line 9. → no code fix; just needs a real reload.
+
+**▶ NEXT ACTION (the tiebreaker):** force a genuine reload — either
+`Developer: Reload Window`, or open a brand-new VS Code window on this folder — then
+in a fresh session, **before any file read, cold-ask "What's my gh account name?"**
+- Answers **`MathNCheese`** → it was **H2 (caching)**. The import works; just needed
+  a reload. Mark this whole thread CLOSED and condense it to ~5 lines.
+- Any other answer → **H1**. Replace the out-of-tree `@../bpkfigures/CLAUDE.md` with
+  an **in-tree import**: create a yahtzee-local symlink (e.g. `yahtzee/SHARED.md` →
+  `../bpkfigures/CLAUDE.md`, and/or `yahtzee/CLAUDE.private.md` →
+  `../../dotclaude/CLAUDE.md`) and `@import` it by its in-tree name so the path
+  never leaves the project root. Re-test with the cold gh-name question.
+
+Everything before this section is committed history; THIS section is the open
+frontier. — Linux/WSL session
