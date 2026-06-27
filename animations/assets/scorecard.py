@@ -173,6 +173,8 @@ class Scorecard(VGroup):
             stroke_color=grid_color, stroke_width=grid_width,
         ).move_to(np.array([0, header_cy, 0]))
         cells.add(header)
+        # full content width + center x are reused by the row-highlight helpers
+        self.header_rect = header
         title = crisp_text("YAHTZEE", font_size=font_size * 1.15, color=WHITE, font=FONT, weight="BOLD")
         title.move_to(np.array([0, header_cy, 0]))
         score_texts.add(title)
@@ -336,6 +338,31 @@ class Scorecard(VGroup):
             self.total_text.set_fill(WHITE, opacity=1.0 if grand_complete else 0.5)
             self.total_text.move_to(np.array([summary_x, total_y, 0]))
             score_texts.add(self.total_text)
+
+    # ── Row highlighting ───────────────────────────────────────────────────────
+    def row_band(self, row):
+        """A full-card-width Rectangle covering `row`'s strip (label+value+
+        summary), in the card's current (global) coordinates. Used as the shape
+        for a transient highlight; not added to the card."""
+        cell = self.value_cells[row]
+        return Rectangle(
+            width=self.header_rect.width, height=self.cell_height,
+            stroke_width=0, fill_opacity=0,
+        ).move_to(np.array([self.header_rect.get_center()[0],
+                            cell.get_center()[1], 0]))
+
+    def highlight_rows(self, scene, rows, *, color=YELLOW, opacity=0.45,
+                       run_time=0.8, lag_ratio=0.0):
+        """Pulse a soft fill across the given rows (each fades in then back out).
+        `lag_ratio=0` flashes them together; >0 walks them one at a time. The
+        highlights are transient — nothing is left on the card afterward."""
+        bands = [self.row_band(r).set_fill(color, opacity=opacity) for r in rows]
+        scene.play(
+            LaggedStart(*[FadeIn(b, rate_func=there_and_back) for b in bands],
+                        lag_ratio=lag_ratio),
+            run_time=run_time,
+        )
+        scene.remove(*bands)
 
     # ── Animation ────────────────────────────────────────────────────────────
     def animate_top_score(self, scene, row, dice, *, run_time=1.1):
