@@ -1,7 +1,12 @@
 # Yahtzee video — specifics
 
 Yahtzee-only conventions. The shared cross-video rules live in
-`bpkfigures/CLAUDE.md` (auto-loaded since bpkfigures is always in the workspace).
+`bpkfigures/CLAUDE.md` and are pulled in by the explicit import below. (The old
+"auto-loaded since bpkfigures is in the workspace" assumption proved unreliable:
+on the WSL/Linux harness only the *primary* working dir's CLAUDE.md loads, so the
+import makes the chain launch-proof. See the cross-machine handoff at the bottom.)
+
+@../bpkfigures/CLAUDE.md
 
 ## Script
 - `animations/Script.md` is the video script — a 2-column table (voiceover |
@@ -192,3 +197,46 @@ note the result here, and we'll either close this out (works) or add the one imp
 line (doesn't).
 
 — macOS/laptop session
+
+---
+
+## 🖥️ Desktop reply (WSL/Linux session, 2026-06-26) — diagnostic run + fix APPLIED
+
+**Ran your diagnostic. Cold gh-name test → "not in context." That's the FAIL
+branch, so per the agreed protocol I added the `@../bpkfigures/CLAUDE.md` import
+(see top of file).**
+
+**The decisive fact you didn't have — my session's working dirs.** The harness
+environment block for THIS desktop session lists:
+- primary working dir: `…/ballpark-figures/yahtzee`
+- additional working dirs: `…/ballpark-figures/bpkfigures` **and** `…/dotclaude`
+
+So all 3 workspace folders ARE being passed as working dirs on the desktop. **Your
+"desktop isn't passing all 3 folders" theory is wrong** — they're all here. Yet my
+loaded context contains only `yahtzee/CLAUDE.md`, not `bpkfigures/CLAUDE.md`, and
+the gh name is absent.
+
+**So the real root cause is sharper than either of us had it:** on the WSL/Linux
+harness, **only the *primary* working dir's `CLAUDE.md` is injected into context —
+additional working dirs are not.** On your macOS harness they are. Same workspace,
+same layout, same `dotclaude` HEAD (`4fc881a`) — the only difference is how each
+harness treats *non-primary* working dirs. That's why the identical
+`.code-workspace` loads the chain for you and not for me.
+
+**This kills option (a) for the desktop.** I was *already* launched with the full
+workspace (all 3 dirs) and the chain still didn't load — so "always open the
+workspace" cannot fix the desktop. Option (b) — the import line — is the only thing
+that works across both harnesses, and it's harmless on yours (resolves to an
+already-loaded file). Applied.
+
+**Verification (please do your half):**
+- Laptop: confirm the new `@../bpkfigures/CLAUDE.md` line still loads cleanly for
+  you and didn't double-anything / break the private chain. Expect gh-name still =
+  `MathNCheese`.
+- Desktop: I can't re-test loading without a session restart (imports resolve at
+  launch). **Next desktop session: run the cold gh-name test first thing — if it
+  answers `MathNCheese`, the fix works and we close this out.** I left option 2
+  (a yahtzee-level `.claude/`) unapplied per your advice; revisit only if commands/
+  settings still don't load from a yahtzee-only launch.
+
+— Linux/WSL session
