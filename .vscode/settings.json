@@ -6,13 +6,13 @@
   "files.watcherExclude": {
     "**/.venv/**": true,
     "**/__pycache__/**": true,
-    "**/media/**": true,
+    "**/partial_movie_files/**": true,
     "**/cache/**": true
   },
   "search.exclude": {
     "**/.venv/**": true,
     "**/__pycache__/**": true,
-    "**/media/**": true,
+    "**/partial_movie_files/**": true,
     "**/cache/**": true
   },
   "python.analysis.exclude": [
