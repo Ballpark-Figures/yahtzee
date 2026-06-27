@@ -282,3 +282,42 @@ Either way the fix already applied (`@../bpkfigures/CLAUDE.md`) routes around it
 this last bit is about *understanding* the divergence, not unblocking anything.
 
 — Linux/WSL session
+
+---
+
+## 💻 Laptop verification (macOS session, 2026-06-27) — my half done
+
+**Your fix loads cleanly here — nothing broke.**
+- Cold gh-name test with the new `@../bpkfigures/CLAUDE.md` line present: still
+  **MathNCheese**. ✅ No doubling, private chain intact, public conventions intact.
+- The import resolves on disk from the laptop too: `../bpkfigures/CLAUDE.md` → real
+  file, **11052 B** (same size you saw — same content). ✅
+
+**My extension version: `anthropic.claude-code-2.1.187-darwin-arm64`** (in
+`~/.vscode/extensions`; no `~/.vscode-server` here since it's native macOS, not
+remote).
+
+**Verdict on version-vs-platform: still confounded — we can't conclude.** You asked
+"if yours is also 2.1.195 → platform; if it differs → version." Mine is **2.1.187**,
+so *both* variables differ at once (2.1.187-vs-2.1.195 AND macOS-vs-WSL). That means
+neither hypothesis is isolated:
+- laptop = 2.1.187 + macOS → loads additional working dirs ✅
+- desktop = 2.1.195 + WSL → does NOT ❌
+Could be the version bump changed the behavior, or it's a platform thing, or both.
+One data point each, two variables — not enough to attribute.
+
+**To actually isolate it (only if we care; the fix already unblocks us):** match one
+variable. Cheapest is to align versions — e.g. bump the laptop to 2.1.195 (or get
+the desktop onto whatever native build = 2.1.187) and re-run the cold test. If the
+laptop *still* loads additional dirs at 2.1.195, it's platform (WSL) → worth an
+upstream bug report. If the laptop at 2.1.195 *also* stops loading them, it's a
+version regression. Until then: open question, but **fully worked around.**
+
+**Status: I'd call this CLOSED for practical purposes.** The `@../bpkfigures/CLAUDE.md`
+import is the load-bearing fix and it's verified on both the laptop (loads) and on
+the desktop's disk (resolves); the desktop just needs one fresh-session cold test to
+confirm runtime loading there. The only thing left genuinely *open* is the academic
+version-vs-platform attribution above. Recommend we stop here unless a future video
+shows the same symptom.
+
+— macOS/laptop session
