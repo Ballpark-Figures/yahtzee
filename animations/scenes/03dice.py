@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
-from assets.dice import get_die, DIE_COLORS, PIP_COLORS
+from assets.dice import (get_die, DIE_COLORS, PIP_COLORS, morph_dice, RollDie)
 
 
 # ── outcome enumeration ───────────────────────────────────────────────────────
@@ -196,14 +196,14 @@ class Dice(YahtzeeScene):
 
     # ── construction ──────────────────────────────────────────────────────────
     def _setup_powers(self):
-        # 6 real dice, then squares all the way: morph at 6, grow to 7776.
-        self.lv1 = _build_level(1)              # the 6 singles, as real dice
+        # dice for the 6 singles + their square versions, and square levels 2-4.
+        # lv5 (38,880 squares) is built lazily in grow_7776 so it stays out of the
+        # earlier subscenes' snapshots.
+        self.lv1 = _build_level(1)
         self.lv1_sq = _build_square_level(1)
         self.lv2_sq = _build_square_level(2)
         self.lv3_sq = _build_square_level(3)
         self.lv4_sq = _build_square_level(4)
-        self.lv5_sq = _build_square_level(5)
-        self.power_final = None   # the last level; consumed by to_252
 
     def _setup_252(self):
         # EXACTLY scene 1's 252 grid: same dice size (0.24) + intra-group buff
@@ -219,23 +219,20 @@ class Dice(YahtzeeScene):
         self.grid252 = groups
 
     def _setup_yahtzee(self):
-        # all five dice show the same value, each a different color → still 1 way
-        self.yz_dice = _colored_row([3, 3, 3, 3, 3], DIE_COLORS,
-                                    size=1.0, buff=0.25)
-        self.yz_dice.move_to([0, 0.5, 0])
-        self.yz_label = _label("1 Arrangement").next_to(self.yz_dice, DOWN,
-                                                        buff=0.7)
+        # 5 PLAIN (uncolored) dice, all showing 3 — a yahtzee. c colors them, then
+        # swaps two dice's pips to show that swapping identical dice changes nothing.
+        self.yz_dice = VGroup(*[get_die(3, size=1.0) for _ in range(5)])
+        self.yz_dice.arrange(RIGHT, buff=0.25).move_to([0, 0.5, 0])
 
     def _setup_straight_120(self):
-        # 120 1-5 straights (all color orderings), 15×8 grid filled down the rows.
-        # Tight buffs + full height so the dice render as large as 120 of them fit.
+        # 120 1-5 straights (all color orderings), 15×8 down the rows, FULL SCREEN
+        # (no label now). s120[0] (top-left) is the identity coloring 1=red…5=blue,
+        # which the 5 dice from d shrink into.
         groups = VGroup(*[_colored_row([1, 2, 3, 4, 5], perm, size=0.2, buff=0.04)
                           for perm in _COLOR_PERMS])
-        # taller vertical gap (buff[1]) spreads the rows to use the vertical space
-        groups.arrange_in_grid(rows=15, cols=8, buff=(0.25, 0.22), flow_order="dr")
-        _fit(groups, h=7.6, center=[0, -0.45, 0])
+        groups.arrange_in_grid(rows=15, cols=8, buff=(0.25, 0.15), flow_order="dr")
+        _fit(groups, h=8.5, center=ORIGIN)
         self.s120 = groups
-        self.s120_label = _label("120 arrangements").move_to([0, 4.0, 0])
 
     def _setup_straights_vs(self):
         # 240 large straights split into halves (script: 120 1-5 on top, 120 2-6
@@ -250,7 +247,7 @@ class Dice(YahtzeeScene):
         self.s240_top = _half([1, 2, 3, 4, 5])
         self.s240_bot = _half([2, 3, 4, 5, 6])
         block = VGroup(self.s240_top, self.s240_bot).arrange(DOWN, buff=0.5)
-        _fit(block, w=9.5, h=7.6, center=[-3.0, 0.0, 0])
+        _fit(block, w=9.0, h=6.6, center=[-3.0, -0.5, 0])   # shrunk: room for label
         self.s240 = block
 
         # 6 yahtzees (one per value), colored dice, stacked on the right.
@@ -260,9 +257,9 @@ class Dice(YahtzeeScene):
         yz.move_to([5.0, 0.0, 0])
         self.six_yz = yz
 
-        # counts above each group
-        self.s240_label = _label("240").next_to(block, UP, buff=0.2)
-        self.six_label = _label("6").next_to(yz, UP, buff=0.2)
+        # "240" up at the top (room above the shrunk block); "6" above the yahtzees
+        self.s240_label = _label("240").move_to([-3.0, 3.7, 0])
+        self.six_label = _label("6").next_to(yz, UP, buff=0.25)
 
     def _setup_frequency(self):
         self.freq_title = _label("Dice Combo Frequencies", font_size=44)
@@ -298,32 +295,45 @@ class Dice(YahtzeeScene):
         self.add(*children)
         return children
 
+    # Each n→n+1 transition is its own subscene (so they can be rendered/tuned
+    # independently). All grows share the single GROW_RT knob.
     @subscene
-    def powers(self):
+    def singles(self):
         self.play(LaggedStart(*[FadeIn(g) for g in self.lv1], lag_ratio=0.08),
                   run_time=1.0)
         self.wait(0.4)
-        # only 6 dice on screen — the smoothest moment to switch to colored squares
+        # only 6 dice on screen — smoothest moment to switch to colored squares
         self.play(*[ReplacementTransform(d, s)
                     for d, s in zip(self.lv1, self.lv1_sq)], run_time=0.8)
         self.wait(0.3)
+
+    @subscene
+    def grow_36(self):
         self._grow(self.lv1_sq, self.lv2_sq, 1, run_time=self.GROW_RT)
         self.wait(0.3)
+
+    @subscene
+    def grow_216(self):
         self._grow(self.lv2_sq, self.lv3_sq, 2, run_time=self.GROW_RT)
         self.wait(0.3)
+
+    @subscene
+    def grow_1296(self):
         self._grow(self.lv3_sq, self.lv4_sq, 3, run_time=self.GROW_RT)
         self.wait(0.3)
+
+    @subscene
+    def grow_7776(self):
+        self.lv5_sq = _build_square_level(5)   # built lazily (38,880 squares)
         self._grow(self.lv4_sq, self.lv5_sq, 4, run_time=self.GROW_RT)
         self.wait(0.6)
-        # Keep only the 252 ascending (distinct) quints; drop the other 7524
-        # instantly (no fade) so a's snapshot stays light and b animates just the
-        # 252. a's video still ends on the full 7776 — the rest vanish at the cut.
+        # keep only the 252 ascending (distinct) quints; drop the other 7524
+        # instantly so the snapshot stays light and to_252 animates just the 252.
         asc = [pi for pi, t in enumerate(product(range(1, 7), repeat=5))
                if all(t[i] <= t[i + 1] for i in range(4))]
         asc_set = set(asc)
         self.remove(*[g for i, g in enumerate(self.lv5_sq) if i not in asc_set])
         self.power_asc = [self.lv5_sq[i] for i in asc]   # 252, multiset order
-        # release the big intermediate levels so they aren't pickled into snapshots
         self.lv1 = self.lv1_sq = self.lv2_sq = None
         self.lv3_sq = self.lv4_sq = self.lv5_sq = None
 
@@ -340,20 +350,44 @@ class Dice(YahtzeeScene):
                     for mi in range(len(self.power_asc))], run_time=1.8)
         self.wait(1.0)
 
-    # ── c. a yahtzee in colored dice → only 1 way ──────────────────────────────
+    # ── c. yahtzee: color the dice, swap two pips → still one arrangement ───────
     @subscene
     def yahtzee_ways(self):
         self.play(FadeOut(self.grid252), run_time=0.6)
         self.play(FadeIn(self.yz_dice), run_time=0.6)
-        self.play(FadeIn(self.yz_label, shift=UP * 0.2), run_time=0.5)
+        self.wait(0.3)
+        # the five plain dice take the five colors
+        self.play(*[d.body.animate.set_fill(col, opacity=1.0)
+                    for d, col in zip(self.yz_dice, DIE_COLORS)], run_time=0.8)
+        self.wait(0.3)
+        # swap die-1 and die-2 pips, then back — identical dice, so nothing really
+        # changes (→ one arrangement).
+        d1, d2 = self.yz_dice[0], self.yz_dice[1]
+        off = d2.get_center() - d1.get_center()
+        self.play(d1.pips.animate.shift(off), d2.pips.animate.shift(-off),
+                  path_arc=PI, run_time=0.8)
+        self.play(d1.pips.animate.shift(-off), d2.pips.animate.shift(off),
+                  path_arc=PI, run_time=0.8)
         self.wait(0.8)
 
-    # ── d. a 1-5 straight in all 120 color arrangements → 120 ways ─────────────
+    # ── d. 33333 → 12345, roll permutations, then fill the 120-straight grid ────
     @subscene
     def straight_120(self):
-        self.play(FadeOut(self.yz_dice), FadeOut(self.yz_label), run_time=0.6)
-        self.play(FadeIn(self.s120), run_time=0.8)
-        self.play(FadeIn(self.s120_label, shift=DOWN * 0.2), run_time=0.5)
+        dice = self.yz_dice          # 5 colored dice showing 3 3 3 3 3
+        morph_dice(self, dice, [1, 2, 3, 4, 5], run_time=0.7)
+        self.wait(0.2)
+        # roll through two permutations of 1-5…
+        for perm in ([3, 1, 4, 5, 2], [4, 2, 5, 1, 3]):
+            self.play(*[RollDie(d, d.get_center(), v)
+                        for d, v in zip(dice, perm)], run_time=0.9)
+            self.wait(0.15)
+        # …then morph back to 1 2 3 4 5
+        morph_dice(self, dice, [1, 2, 3, 4, 5], run_time=0.7)
+        self.wait(0.2)
+        # shrink the straight into the grid's top-left, then fill the rest out
+        self.play(ReplacementTransform(dice, self.s120[0]), run_time=1.0)
+        self.play(LaggedStart(*[FadeIn(g) for g in self.s120[1:]],
+                              lag_ratio=0.01), run_time=1.6)
         self.wait(0.8)
 
     # ── e. 240 straights vs 6 yahtzees → ~40x ──────────────────────────────────
@@ -362,7 +396,6 @@ class Dice(YahtzeeScene):
         # d's 120 (1-5) straights relocate into the TOP half (same 120 in the same
         # order); the 2-6 bottom half and the 6 yahtzees appear alongside.
         self.play(
-            FadeOut(self.s120_label),
             ReplacementTransform(self.s120, self.s240_top),
             FadeIn(self.s240_bot),
             FadeIn(self.six_yz),
