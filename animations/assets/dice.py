@@ -92,6 +92,18 @@ class Die(VGroup):
         for dot in self._pips.values():
             dot.set_color(color)
 
+    def set_opacity(self, opacity, family=True):
+        """Fade ONLY the visible content: the body (fill + border) and the pips
+        that are currently lit. The die keeps a fixed pool of 7 pips with the
+        unused ones at opacity 0; a plain VGroup.set_opacity would lift those
+        hidden pips to `opacity` too, so a fade made all 7 pips appear. Keep the
+        inactive pips hidden so fading a die never reveals phantom pips."""
+        self.body.set_opacity(opacity)
+        active = set(PIP_FACES[self.value])
+        for key, dot in self._pips.items():
+            dot.set_opacity(opacity if key in active else 0.0)
+        return self
+
     def set_value(self, value):
         self.value = int(value)
         w = self.body.width
@@ -197,21 +209,33 @@ def jump_and_spin(scene, dice, *, rainbow=False, bump=0.4, turns=1, run_time=1.0
                run_time=run_time)
 
 
-def reorder_dice(scene, dice_in_slot_order, *, band=3, run_time=0.7):
-    """Slide dice into slots 0,1,2,... in the given left-to-right order."""
-    scene.play(*[d.animate.move_to(slot_point(band, i))
+def reorder_dice(scene, dice_in_slot_order, *, band=3, y=None, run_time=0.7):
+    """Slide dice into slots 0,1,2,... in the given left-to-right order. `y`
+    overrides the band's height (used by the centered-dice presentation)."""
+    yy = BAND_YS[band] if y is None else y
+    scene.play(*[d.animate.move_to([slot_x(i), yy, 0])
                  for i, d in enumerate(dice_in_slot_order)],
                run_time=run_time)
 
 
-def ascend_and_flash(scene, dice_in_order, colors, *, band=3, step=0.2, run_time=0.9):
+def reindex_dice(dice, new_order):
+    """Rewrite the dice list IN PLACE so it matches `new_order` (the dice in their
+    current left-to-right slot order). After a rearrange we keep the dice where
+    they are and just relabel them — the die now in slot 0 becomes die 0, etc. —
+    so nothing has to move back afterwards."""
+    dice[:] = list(new_order)
+    return dice
+
+
+def ascend_and_flash(scene, dice_in_order, colors, *, band=3, y=None, step=0.2, run_time=0.9):
     """Stagger dice into an ascending staircase (left/low → right/high), then
-    flash them left-to-right in `colors`."""
+    flash them left-to-right in `colors`. `y` overrides the band's base height
+    (used by the centered-dice presentation)."""
+    yy = BAND_YS[band] if y is None else y
     k = len(dice_in_order)
     moves = []
     for i, d in enumerate(dice_in_order):
-        x, y, _ = slot_point(band, i)
-        moves.append(d.animate.move_to([x, y + (i - (k - 1) / 2) * step, 0]))
+        moves.append(d.animate.move_to([slot_x(i), yy + (i - (k - 1) / 2) * step, 0]))
     scene.play(*moves, run_time=run_time * 0.55)
     scene.play(
         LaggedStart(*[FlashFill(d, c, scale_factor=1.2)
@@ -259,6 +283,19 @@ def spin_into(scene, dice, target, *, rainbow=False, turns=2, run_time=1.0):
         run_time=run_time,
     )
     scene.remove(*copies)
+
+
+def spin_into_anim(scene, dice, target, *, rainbow=False, turns=2):
+    """Like spin_into, but RETURNS (copies, AnimationGroup) instead of playing it,
+    so the caller can run the dice-into-box flight concurrently with something
+    else (e.g. a counter tick). Remove `copies` from the scene when done."""
+    copies = [d.copy() for d in dice]
+    for c in copies:
+        scene.add(c)
+    anim = AnimationGroup(*[SpinShrink(c, target, turns=turns, rainbow=rainbow,
+                                       phase=i / len(copies))
+                            for i, c in enumerate(copies)])
+    return copies, anim
 
 
 def respawn_dice(scene, dice, values, *, band=3, run_time=0.5):

@@ -7,7 +7,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 from manim import *
 from config import *
 from assets.dice import (
-    FlashFill, reorder_dice, ascend_and_flash, jump_and_spin, spin_into,
+    FlashFill, reorder_dice, ascend_and_flash, jump_and_spin,
+    spin_into_anim, reindex_dice, slot_x, BAND_YS,
 )
 import numpy as np
 
@@ -75,6 +76,12 @@ class Scorecard(VGroup):
     label, the Total) are kept as attributes and mutated in place.
     """
 
+    # Where the running counters start, as a fraction of the box/score animation
+    # they overlap: the totals begin at COUNTER_LAG of that "lead" animation (so
+    # they kick in a bit before it finishes, not after). EVERY scoring path routes
+    # its counter through a `lead` so this is applied consistently. A feel knob.
+    COUNTER_LAG = 0.7
+
     def __init__(
         self,
         scores=None,
@@ -101,10 +108,14 @@ class Scorecard(VGroup):
         self.cell_height = cell_height
         self.font_size   = font_size
         self.text_pad    = text_pad
+        self.stroke_color = stroke_color
+        self.stroke_width = stroke_width
 
         # animatable handles
         self.value_cells = {}     # row -> value Rectangle
+        self.label_cells = {}     # row -> label Rectangle (col 1)
         self.value_texts = {}     # row -> score Text
+        self.value_nums  = {}     # row -> numeric score (for un-scoring/totals)
         self.bar_border       = None
         self.bar_fill         = None
         self.bar_number       = None
@@ -127,6 +138,11 @@ class Scorecard(VGroup):
                     section_gap, bottom_gap)
 
         self.add(self.cells, self.labels, self.score_texts)
+        # Keep all card text ABOVE any transient highlight fill (which sits at the
+        # default z_index 0), so the (bold) label reads in front of the yellow,
+        # not dimmed behind it.
+        self.labels.set_z_index(1)
+        self.score_texts.set_z_index(1)
         self.move_to(center)
 
     # ── Static build ─────────────────────────────────────────────────────────
@@ -141,6 +157,11 @@ class Scorecard(VGroup):
         n = len(SCORE_ROWS)
         total_height = n * cell_height + section_gap + bottom_gap
 
+        # slight breathing room: a gap below the YAHTZEE header (above row 1) and
+        # above the Total footer (below the last row).
+        header_gap = cell_height * 0.32
+        footer_gap = cell_height * 0.32
+
         full_width = label_width + value_width + summary_width
         left_edge  = -full_width / 2
         label_x    = left_edge + label_width / 2
@@ -148,15 +169,15 @@ class Scorecard(VGroup):
         summary_x  = left_edge + label_width + value_width + summary_width / 2
 
         bottom_edge = total_height / 2 - (BOTTOM_START + BOTTOM_ROWS) * cell_height - section_gap
-        total_y     = bottom_edge - cell_height / 2
+        total_y     = bottom_edge - cell_height / 2 - footer_gap
 
         # ── Card surface ─────────────────────────────────────────────────────
         grid_top    = total_height / 2
         header_h    = cell_height * 1.2
-        header_cy   = grid_top + header_h / 2
+        header_cy   = grid_top + header_gap + header_h / 2
 
         panel_pad   = 0.18
-        content_top = grid_top + header_h
+        content_top = grid_top + header_gap + header_h
         content_bot = total_y - cell_height * 0.7
         panel = RoundedRectangle(
             width=full_width + 2 * panel_pad,
@@ -196,6 +217,7 @@ class Scorecard(VGroup):
                 width=label_width, height=cell_height,
                 fill_opacity=0, stroke_color=grid_color, stroke_width=grid_width,
             ).move_to(np.array([label_x, y, 0]))
+            self.label_cells[i] = label_cell
 
             value_cell = Rectangle(
                 width=value_width, height=cell_height,
@@ -219,6 +241,7 @@ class Scorecard(VGroup):
                     sv.move_to(np.array([value_x, y, 0]))
                     score_texts.add(sv)
                     self.value_texts[i] = sv
+                    self.value_nums[i] = val
 
         # ── Top summary column ───────────────────────────────────────────────
         top_h          = TOP_ROWS * cell_height
@@ -340,29 +363,55 @@ class Scorecard(VGroup):
             score_texts.add(self.total_text)
 
     # ── Row highlighting ───────────────────────────────────────────────────────
-    def row_band(self, row):
-        """A full-card-width Rectangle covering `row`'s strip (label+value+
-        summary), in the card's current (global) coordinates. Used as the shape
-        for a transient highlight; not added to the card."""
-        cell = self.value_cells[row]
-        return Rectangle(
-            width=self.header_rect.width, height=self.cell_height,
-            stroke_width=0, fill_opacity=0,
-        ).move_to(np.array([self.header_rect.get_center()[0],
-                            cell.get_center()[1], 0]))
+    def _row_highlight(self, row, color, opacity):
+        """The transient highlight pieces for `row`: a soft fill + a thick black
+        border over the label+value pair (columns 1-2 ONLY, not the summary
+        column), and a BOLD copy of the row label sitting exactly over the
+        original. Returns (fill, border, bold_label). Built in global coords; not
+        added to the card."""
+        lcell = self.label_cells[row]
+        vcell = self.value_cells[row]
+        left  = lcell.get_left()[0]
+        right = vcell.get_right()[0]
+        width = right - left
+        cx    = (left + right) / 2
+        y     = vcell.get_center()[1]
+
+        fill = Rectangle(
+            width=width, height=self.cell_height, stroke_width=0,
+            fill_color=color, fill_opacity=opacity,
+        ).move_to(np.array([cx, y, 0]))
+        border = Rectangle(
+            width=width, height=self.cell_height, fill_opacity=0,
+            stroke_color=BLACK, stroke_width=self.stroke_width * 3,
+        ).move_to(np.array([cx, y, 0]))
+
+        lbl = self.labels[row]
+        bold_lbl = crisp_text(SCORE_ROWS[row], font_size=self.font_size,
+                              color=BLACK, font=FONT, weight="BOLD")
+        bold_lbl.align_to(lbl, LEFT).set_y(lbl.get_center()[1])
+        return fill, border, bold_lbl
 
     def highlight_rows(self, scene, rows, *, color=YELLOW, opacity=0.45,
                        run_time=0.8, lag_ratio=0.0):
-        """Pulse a soft fill across the given rows (each fades in then back out).
-        `lag_ratio=0` flashes them together; >0 walks them one at a time. The
-        highlights are transient — nothing is left on the card afterward."""
-        bands = [self.row_band(r).set_fill(color, opacity=opacity) for r in rows]
-        scene.play(
-            LaggedStart(*[FadeIn(b, rate_func=there_and_back) for b in bands],
-                        lag_ratio=lag_ratio),
-            run_time=run_time,
-        )
-        scene.remove(*bands)
+        """Pulse a highlight across the given rows (each up then back down): a soft
+        fill + thick black border over columns 1-2 (label+value, NOT the summary
+        column), and the row label TRANSFORMING into bold and back (there_and_back,
+        so it ends as the original regular text). `lag_ratio=0` flashes them
+        together; >0 walks them one at a time. Transient — nothing is left on the
+        card afterward."""
+        rows   = list(rows)
+        pieces = [self._row_highlight(r, color, opacity) for r in rows]
+        anims  = []
+        for (fill, border, bold), r in zip(pieces, rows):
+            anims.append(AnimationGroup(
+                FadeIn(fill,   rate_func=there_and_back),
+                FadeIn(border, rate_func=there_and_back),
+                Transform(self.labels[r], bold, rate_func=there_and_back),
+            ))
+        scene.play(LaggedStart(*anims, lag_ratio=lag_ratio), run_time=run_time)
+        for fill, border, _bold in pieces:
+            scene.remove(fill, border)
 
     # ── Animation ────────────────────────────────────────────────────────────
     def animate_top_score(self, scene, row, dice, *, run_time=1.1):
@@ -394,13 +443,15 @@ class Scorecard(VGroup):
 
         if len(pip_copies) > 0:
             scene.add(pip_copies)
-            scene.play(ReplacementTransform(pip_copies, number), run_time=1.0)
+            lead = ReplacementTransform(pip_copies, number)
         else:
-            scene.play(FadeIn(number))
+            lead = FadeIn(number)
         self.value_texts[row] = number
+        self.value_nums[row]  = add
 
-        # 3. raise the bar + count the totals (flashes green when crossing 63)
-        self._animate_top_total(scene, old, new, run_time)
+        # 3. raise the bar + count the totals (the counter overlaps the fly-in via
+        #    `lead`; flashes green when crossing 63)
+        self._animate_top_total(scene, old, new, run_time, lead=lead)
         self._top_sum = new
 
     def animate_bottom_score(self, scene, row, dice, *, flash=None, flash_color=YELLOW,
@@ -431,14 +482,15 @@ class Scorecard(VGroup):
 
         if len(pip_copies) > 0:
             scene.add(pip_copies)
-            scene.play(ReplacementTransform(pip_copies, number), run_time=1.0)
+            lead = ReplacementTransform(pip_copies, number)
         else:
-            scene.play(FadeIn(number))
+            lead = FadeIn(number)
         self.value_texts[row] = number
+        self.value_nums[row]  = score
 
-        # 3. tick the bottom total + grand total
+        # 3. tick the bottom total + grand total (overlapping the fly-in)
         old_b, new_b = self._bottom_sum, self._bottom_sum + score
-        self._animate_bottom_total(scene, old_b, new_b, run_time)
+        self._animate_bottom_total(scene, old_b, new_b, run_time, lead=lead)
         self._bottom_sum = new_b
 
     def animate_fixed_score(self, scene, row, score, *, flash_color=YELLOW, run_time=1.1):
@@ -452,13 +504,14 @@ class Scorecard(VGroup):
         hl.set_fill(flash_color, opacity=0.7)
         hl.set_stroke(width=0)
         scene.add(hl)                       # behind the number, which play() adds after
-        scene.play(FadeIn(hl, rate_func=there_and_back), GrowFromCenter(number), run_time=0.8)
-        scene.remove(hl)
+        lead = AnimationGroup(FadeIn(hl, rate_func=there_and_back), GrowFromCenter(number))
         self.value_texts[row] = number
+        self.value_nums[row]  = score
 
         old_b, new_b = self._bottom_sum, self._bottom_sum + score
-        self._animate_bottom_total(scene, old_b, new_b, run_time)
+        self._animate_bottom_total(scene, old_b, new_b, run_time, lead=lead)
         self._bottom_sum = new_b
+        scene.remove(hl)
 
     def animate_zero_score(self, scene, row, dice, *, run_time=1.0):
         """Score a 0 in `row`: bold red X's stamp over the dice all at once
@@ -476,11 +529,20 @@ class Scorecard(VGroup):
         zero.move_to(cell.get_center())
         scene.play(ReplacementTransform(box_x, zero), run_time=0.5)
         self.value_texts[row] = zero
+        self.value_nums[row]  = 0
 
-    def fly_to_box(self, scene, dice, colors, row, score, *, run_time=1.0):
+    def fly_to_box(self, scene, dice, colors, row, score, *, run_time=1.0,
+                   hide_pips=False, return_dice=None, return_y=None):
         """For color categories: tint copies of `dice` with `colors` (None = leave
-        as-is) and fly them into the value box, morphing into the score; then
-        tick the bottom total + grand total."""
+        as-is) and fly them into the value box, morphing into the score; then tick
+        the bottom total + grand total.
+
+        hide_pips    -> the flying copies show only the colored die BODIES, no pips.
+        return_dice  -> these real dice slide back to their home slots (by list
+                        index) in the SAME play, so they start returning as soon as
+                        the colored boxes begin moving off. `return_y` overrides
+                        the band-3 height (used by the centered-dice presentation).
+        The running counters overlap the fly via `lead` (see COUNTER_LAG)."""
         cell   = self.value_cells[row]
         number = crisp_text(str(score), font_size=self.font_size, color=BLACK, font=FONT)
         number.move_to(cell.get_center())
@@ -490,46 +552,31 @@ class Scorecard(VGroup):
             cp = d.copy()
             if c is not None:
                 cp.body.set_fill(ManimColor(c), opacity=1.0)
+            if hide_pips:
+                cp.pips.set_opacity(0.0)
             group.add(cp)
 
         scene.add(group)
-        scene.play(ReplacementTransform(group, number), run_time=run_time)
+        fly = ReplacementTransform(group, number)
+        if return_dice is not None:
+            yy = BAND_YS[3] if return_y is None else return_y
+            # dice slide home AND restore full opacity in the same motion, so any
+            # die grayed for this category (e.g. the small-straight odd die) un-fades
+            # as it returns rather than in a separate step afterward.
+            returns = [d.animate.move_to([slot_x(i), yy, 0]).set_opacity(1.0)
+                       for i, d in enumerate(return_dice)]
+            lead = AnimationGroup(fly, *returns)
+        else:
+            lead = fly
         self.value_texts[row] = number
+        self.value_nums[row]  = score
 
         old_b, new_b = self._bottom_sum, self._bottom_sum + score
-        self._animate_bottom_total(scene, old_b, new_b, run_time)
+        self._animate_bottom_total(scene, old_b, new_b, run_time, lead=lead)
         self._bottom_sum = new_b
 
     def yahtzee_box_point(self):
         return self.value_cells[YAHTZEE_IDX].get_center()
-
-    def yahtzee_bonus_point(self):
-        return np.array([self.bar_border.get_center()[0],
-                         self.value_cells[YAHTZEE_IDX].get_center()[1], 0])
-
-    def animate_yahtzee_bonus(self, scene, *, run_time=1.1):
-        """Add a +100 Yahtzee bonus: flash the running +N in the Yahtzee row and
-        tick the grand total up by 100."""
-        old_g = self._top_total() + self._bottom_sum + self._yahtzee_bonus
-        self._yahtzee_bonus += 100
-
-        bar_cx = self.bar_border.get_center()[0]
-        y      = self.value_cells[YAHTZEE_IDX].get_center()[1]
-        label  = crisp_text(f"+{self._yahtzee_bonus}", font_size=self.font_size, color=SCORE_GREEN, font=FONT, weight="BOLD")
-        label.move_to(np.array([bar_cx, y, 0]))
-
-        if self.yahtzee_bonus_text is None:
-            self.yahtzee_bonus_text = label
-            self.score_texts.add(label)
-            scene.play(GrowFromCenter(label),
-                       Flash(label.get_center(), color=SCORE_GREEN, flash_radius=0.5),
-                       run_time=0.8)
-        else:
-            scene.play(Transform(self.yahtzee_bonus_text, label),
-                       Flash(self.yahtzee_bonus_text.get_center(), color=SCORE_GREEN, flash_radius=0.5),
-                       run_time=0.8)
-
-        self._tick_total(scene, old_g, old_g + 100, run_time)
 
     # ── Category scoring: detect the result, then play the right animation ─────
     @staticmethod
@@ -578,102 +625,216 @@ class Scorecard(VGroup):
                 run_time=0.7,
             )
             colors = [ACCENT_FILL if d.value == triple_val else RED for d in dice]
-            self.fly_to_box(scene, dice, colors, 8, 25)
+            # only the colored boxes fly into the Full House box — not the pips
+            self.fly_to_box(scene, dice, colors, 8, 25, hide_pips=True)
         else:
             self.animate_zero_score(scene, 8, dice)
 
-    def small_straight(self, scene, dice):
+    def small_straight(self, scene, dice, *, y=None):
         present = {d.value for d in dice}
         run = next((s for s in ({1, 2, 3, 4}, {2, 3, 4, 5}, {3, 4, 5, 6}) if s <= present), None)
         if run:
             order = [next(d for d in dice if d.value == v) for v in sorted(run)]
             extra = [d for d in dice if d not in order]
-            reorder_dice(scene, order + extra)
+            new = order + extra
+            # gray the unused die(s) for the duration of the straight — part of the
+            # animation itself (set_opacity(0.25), same fade as always). They un-fade
+            # automatically during the dice return inside fly_to_box.
+            if extra:
+                scene.play(*[d.animate.set_opacity(0.25) for d in extra], run_time=0.4)
+            # rearrange ONCE into the run order, then reindex (die in slot 0 becomes
+            # die 0, …) so the dice stay where they are — nothing moves back.
+            reorder_dice(scene, new, y=y)
+            reindex_dice(dice, new)
             colors = [RED, YELLOW, GREEN, BLUE]
-            ascend_and_flash(scene, order, colors)
-            self.fly_to_box(scene, order, colors, 9, 30)
+            ascend_and_flash(scene, order, colors, y=y)   # vertical staircase + flash
+            # colored boxes fly off while the dice settle back into a flat horizontal
+            # line AND restore opacity (the unused die un-fades as it returns).
+            self.fly_to_box(scene, order, colors, 9, 30,
+                            hide_pips=True, return_dice=dice, return_y=y)
         else:
             self.animate_zero_score(scene, 9, dice)
 
-    def large_straight(self, scene, dice):
+    def large_straight(self, scene, dice, *, y=None):
         present = {d.value for d in dice}
         if present in ({1, 2, 3, 4, 5}, {2, 3, 4, 5, 6}):
             order = [next(d for d in dice if d.value == v) for v in sorted(present)]
-            reorder_dice(scene, order)
+            reorder_dice(scene, order, y=y)
+            reindex_dice(dice, order)
             colors = [RED, ORANGE, YELLOW, GREEN, BLUE]
-            ascend_and_flash(scene, order, colors)
-            self.fly_to_box(scene, order, colors, 10, 40)
+            ascend_and_flash(scene, order, colors, y=y)   # vertical staircase + flash
+            self.fly_to_box(scene, order, colors, 10, 40,
+                            hide_pips=True, return_dice=dice, return_y=y)
         else:
             self.animate_zero_score(scene, 10, dice)
 
-    def _resolve_square(self, square):
-        if square is None:
-            return self.yahtzee_bonus_point()
-        if hasattr(square, "get_center"):
-            return square.get_center()
-        return square
-
-    def yahtzee(self, scene, dice, bonus_square=None):
-        """All five the same -> 50 the first time. On a later Yahtzee: a +100
-        bonus (rainbow spin) if the box holds a real 50, or — if it was scratched
-        to 0 — no bonus, just a plain spin toward the new cell. A non-Yahtzee
-        scratches the box to 0. `bonus_square` (a value cell or point) is where
-        extra Yahtzees are sent."""
-        is_yahtzee = len({d.value for d in dice}) == 1
-
-        if 11 not in self.value_texts:                     # Yahtzee box still open
-            if is_yahtzee:
-                reorder_dice(scene, dice)
-                jump_and_spin(scene, dice)
-                spin_into(scene, dice, self.yahtzee_box_point())
-                self.animate_fixed_score(scene, 11, 50)
-                self._yahtzee_is_50 = True
-            else:
-                self.animate_zero_score(scene, 11, dice)
-            return
-
-        if not is_yahtzee:
-            return                                          # box already filled
-
-        target = self._resolve_square(bonus_square)
-        reorder_dice(scene, dice)
-        if self._yahtzee_is_50:                             # real Yahtzee -> +100 bonus
-            jump_and_spin(scene, dice, rainbow=True)
-            spin_into(scene, dice, target, rainbow=True)
-            self.animate_yahtzee_bonus(scene)
-        else:                                               # scratched 0 -> no bonus
+    def yahtzee(self, scene, dice, *, y=None):
+        """Score the still-open Yahtzee box: five-of-a-kind → 50 with a jump-spin
+        into the box (and the box becomes bonus-eligible); otherwise scratch it to
+        0. Later bonus Yahtzees are handled by `joker_fill`, which reads
+        `_yahtzee_is_50` to decide on the rainbow flourish + the +100."""
+        if len({d.value for d in dice}) == 1:
+            reorder_dice(scene, dice, y=y)
             jump_and_spin(scene, dice)
-            spin_into(scene, dice, target)
+            self._fill_via_spin(scene, dice, 11, 50, self.yahtzee_box_point())
+            self._yahtzee_is_50 = True
+        else:
+            self.animate_zero_score(scene, 11, dice)
 
     def chance(self, scene, dice):
         """Always the sum of all dice; pips fly in, no flash."""
         self.animate_bottom_score(scene, 12, dice)
 
+    # ── Un-scoring + joker / endgame edits ─────────────────────────────────────
+    def reset(self, scene, *, run_time=0.8):
+        """Empty the whole card back to blank — SAME card object — fading every
+        filled value out while the bar + all totals reverse down to 0. Used to
+        wipe the mechanics demo (a–c) before the systematic box walkthrough."""
+        fades = [FadeOut(t) for t in self.value_texts.values()]
+        lead  = AnimationGroup(*fades) if fades else None
+        self.value_texts    = {}
+        self.value_nums     = {}
+        self._yahtzee_is_50 = False
+        self._animate_to(scene, top=0, bottom=0, ybonus=0, lead=lead, run_time=run_time)
+
+    def _fill_via_spin(self, scene, dice, row, score, target, *, rainbow=False,
+                       turns=2, flash_color=YELLOW, run_time=1.1):
+        """Fly the dice into `target` (a spin-shrink) AS the counter's lead: the
+        box number grows in as the dice arrive and the bottom + grand totals
+        overlap the FLIGHT (so the counter doesn't wait for the dice to land).
+        Shared by the Yahtzee and Joker box fills."""
+        copies, fly = spin_into_anim(scene, dice, target, rainbow=rainbow, turns=turns)
+        cell   = self.value_cells[row]
+        number = crisp_text(str(score), font_size=self.font_size, color=BLACK, font=FONT)
+        number.move_to(cell.get_center())
+        hl = cell.copy()
+        hl.set_fill(flash_color, opacity=0.7)
+        hl.set_stroke(width=0)
+        scene.add(hl)
+        # the number pops in at the TAIL of the flight (as the dice arrive), not
+        # growing throughout it; the counter still overlaps the flight via `lead`.
+        reveal = Succession(Wait(0.6),
+                            AnimationGroup(FadeIn(hl, rate_func=there_and_back),
+                                           GrowFromCenter(number)))
+        lead = AnimationGroup(fly, reveal)
+        self.value_texts[row] = number
+        self.value_nums[row]  = score
+        old_b, new_b = self._bottom_sum, self._bottom_sum + score
+        self._animate_bottom_total(scene, old_b, new_b, run_time, lead=lead)
+        self._bottom_sum = new_b
+        scene.remove(hl, *copies)
+
+    def joker_fill(self, scene, dice, row, score, *, y=None, run_time=1.1):
+        """Fill `row` with `score` via a Joker Yahtzee. The card chooses everything
+        from its OWN state (`_yahtzee_is_50`): a real-50 Yahtzee (bonus-eligible)
+        gets the full rainbow JUMP-spin AND a +100 bonus; a scratched-0 Yahtzee
+        gets a plain spin-in-place → glide and no bonus. Works for an upper box
+        (raises the bar) or a lower box (raises the bottom total), chosen by `row`.
+        The score pops in at the tail of the flight; the counters overlap it."""
+        bonus  = self._yahtzee_is_50
+        target = self.value_cells[row].get_center()
+        reorder_dice(scene, dice, y=y)
+        if bonus:
+            jump_and_spin(scene, dice, rainbow=True)            # jump + spin + rainbow
+            copies, fly = spin_into_anim(scene, dice, target, rainbow=True, turns=2)
+        else:
+            jump_and_spin(scene, dice, bump=0.0)                # spin in place, no jump
+            copies, fly = spin_into_anim(scene, dice, target, turns=0)   # glide, no spin
+
+        number = crisp_text(str(score), font_size=self.font_size, color=BLACK, font=FONT)
+        number.move_to(target)
+        hl = self.value_cells[row].copy()
+        hl.set_fill(YELLOW, opacity=0.7)
+        hl.set_stroke(width=0)
+        scene.add(hl)
+        reveal = Succession(Wait(0.6),
+                            AnimationGroup(FadeIn(hl, rate_func=there_and_back),
+                                           GrowFromCenter(number)))
+        lead = AnimationGroup(fly, reveal)
+        self.value_texts[row] = number
+        self.value_nums[row]  = score
+        self._animate_to(
+            scene, lead=lead, run_time=run_time,
+            top=(self._top_sum + score) if row < BOTTOM_START else None,
+            bottom=(self._bottom_sum + score) if row >= BOTTOM_START else None,
+            ybonus=(self._yahtzee_bonus + 100) if bonus else None,
+        )
+        scene.remove(hl, *copies)
+
+    def transition(self, scene, changes, *, run_time=1.1, flash=True):
+        """Transition the card to a new state declaratively, in ONE play. `changes`
+        maps a row to its new value: an int sets/replaces the cell (shown as a
+        plain number, e.g. 0 for a scratch); None clears the cell. The top/bottom
+        sums are recomputed from the deltas and the cells + bar + counters animate
+        together (via `_animate_to`). This is for plain state edits — clearing,
+        scratching, replacing a value; the fancy demo flourishes (pips flying,
+        dice spinning, colored boxes) build their own `lead` and call `_animate_to`
+        directly."""
+        fades   = []
+        new_top = self._top_sum
+        new_bot = self._bottom_sum
+        for row, val in changes.items():
+            old_val = self.value_nums.get(row, 0)
+            delta   = (0 if val is None else val) - old_val
+            if row < BOTTOM_START:
+                new_top += delta
+            else:
+                new_bot += delta
+            num = self.value_texts.get(row)
+            if val is None:                              # clear the cell
+                if num is not None:
+                    fades.append(FadeOut(num))
+                self.value_texts.pop(row, None)
+                self.value_nums.pop(row, None)
+            else:                                        # set / replace the value
+                new_text = crisp_text(str(val), font_size=self.font_size, color=BLACK, font=FONT)
+                new_text.move_to(self.value_cells[row].get_center())
+                if num is not None:
+                    fades.append(Transform(num, new_text))   # morph in place
+                else:
+                    scene.add(new_text)
+                    fades.append(FadeIn(new_text))
+                    self.value_texts[row] = new_text
+                self.value_nums[row] = val
+            if row == YAHTZEE_IDX:
+                self._yahtzee_is_50 = (val == 50)
+
+        lead = AnimationGroup(*fades) if fades else None
+        self._animate_to(scene, top=new_top, bottom=new_bot, lead=lead,
+                         run_time=run_time, flash=flash)
+
     # ── totals helpers ─────────────────────────────────────────────────────────
-    def _tick_total(self, scene, old_g, new_g, run_time):
-        def total_for(g):
-            t = crisp_text(str(int(round(g))), font_size=self.font_size, color=WHITE, font=FONT, weight="BOLD")
-            t.move_to(self.total_text.get_center())
-            return t
+    # Thin wrappers over the one animator, kept so the per-category scoring
+    # methods read naturally.
+    def _animate_top_total(self, scene, old, new, run_time, *, lead=None):
+        self._animate_to(scene, top=new, lead=lead, run_time=run_time)
 
-        tr = ValueTracker(old_g)
-        self.total_text.add_updater(lambda m: m.become(total_for(tr.get_value())))
-        scene.play(tr.animate.set_value(new_g), run_time=run_time)
-        self.total_text.clear_updaters()
-        self.total_text.become(total_for(new_g))
+    def _animate_bottom_total(self, scene, old_b, new_b, run_time, *, lead=None):
+        self._animate_to(scene, bottom=new_b, lead=lead, run_time=run_time)
 
-    def _top_total(self):
-        return self._top_sum + (35 if self._top_sum >= 63 else 0)
+    def _animate_to(self, scene, *, top=None, bottom=None, ybonus=None,
+                    lead=None, run_time=1.1, flash=True):
+        """THE counter/bar animator. Moves the top sum, bottom sum, and Yahtzee
+        bonus from their current values to the given targets (any left None is
+        unchanged) in ONE play, driven by value off three trackers:
 
-    def _animate_top_total(self, scene, old, new, run_time):
-        # One continuous rise (never pauses, even crossing 63); the green flash
-        # fires afterward once the bar has reached its final height.
-        past = old >= 63
-        self._run_rise(scene, old, new, green=past, bonus=past, run_time=run_time)
-        if old < 63 <= new:
-            self._flash_63(scene, new)
+          • top bar    — height grows/shrinks; fill is green iff value >= 63;
+                         the "(63)" cap sits above the bar (black) below 63 and
+                         drops inside the bar top (white) at/above 63; the +35
+                         label fades in/out at 63; an UPWARD crossing fires a
+                         green Flash burst (when `flash`).
+          • bottom sum — the bottom total text.
+          • Yahtzee +100 — the running "+N" label is grown/updated.
+          • grand total — recomputed from all three every frame.
 
-    def _run_rise(self, scene, frm, to, *, green, bonus, run_time):
+        `lead` (the cell-level visual: pips flying, dice spinning, a fade, …)
+        overlaps the count via COUNTER_LAG. This is the ONLY place the bar and
+        the totals are animated; every scoring/un-scoring path routes through it."""
+        old_top, old_bot, old_yb = self._top_sum, self._bottom_sum, self._yahtzee_bonus
+        new_top = old_top if top    is None else top
+        new_bot = old_bot if bottom is None else bottom
+        new_yb  = old_yb  if ybonus is None else ybonus
+
         bar_top = self.bar_border.get_top()[1]
         bar_bot = self.bar_border.get_bottom()[1]
         bar_h   = self.bar_border.height
@@ -681,12 +842,20 @@ class Scorecard(VGroup):
         bar_w   = self.bar_border.width
         ch      = self.cell_height
         fives_y = bar_top - 2.5 * ch
-        base    = self._bottom_sum + self._yahtzee_bonus
-        fcolor  = SCORE_GREEN if green else ACCENT_FILL
+        green_c = ManimColor(SCORE_GREEN)
+
+        tr_top = ValueTracker(old_top)
+        tr_bot = ValueTracker(old_bot)
+        tr_yb  = ValueTracker(old_yb)
+
+        # The bar is green iff the bonus is earned (value >= 63); the switch is at
+        # the 63 threshold (masked by the flash), NOT a ramp over height.
+        def color_at(v):
+            return green_c if v >= 63 else ACCENT_FILL
 
         def fill_for(v):
             h = max(bar_h * v / 63, 1e-4)   # keeps growing past 63 (overflow)
-            r = Rectangle(width=bar_w, height=h, fill_color=fcolor,
+            r = Rectangle(width=bar_w, height=h, fill_color=color_at(v),
                           fill_opacity=1.0, stroke_width=0)
             r.move_to(np.array([bar_cx, bar_bot + h / 2, 0]))
             return r
@@ -702,68 +871,125 @@ class Scorecard(VGroup):
             t.move_to(np.array([bar_cx, y, 0]))
             return t
 
-        def total_for(v):
-            g = int(round(v)) + (35 if bonus else 0) + base
-            t = crisp_text(str(g), font_size=self.font_size, color=WHITE, font=FONT, weight="BOLD")
-            t.move_to(self.total_text.get_center())
-            return t
-
-        tr = ValueTracker(frm)
-        self.bar_fill.add_updater(lambda m: m.become(fill_for(tr.get_value())))
-        self.bar_number.add_updater(lambda m: m.become(number_for(tr.get_value())))
-        self.total_text.add_updater(lambda m: m.become(total_for(tr.get_value())))
-        scene.play(tr.animate.set_value(to), run_time=run_time)
-        for m in (self.bar_fill, self.bar_number, self.total_text):
-            m.clear_updaters()
-        self.bar_fill.become(fill_for(to))
-        self.bar_number.become(number_for(to))
-        self.total_text.become(total_for(to))
-
-    def _flash_63(self, scene, top_sum):
-        bar_top = self.bar_border.get_top()[1]
-        bar_cx  = self.bar_border.get_center()[0]
-        ch      = self.cell_height
-        base    = self._bottom_sum + self._yahtzee_bonus
-
-        new_cap = crisp_text("(63)", font_size=self.font_size * 0.55, color=WHITE, font=FONT, weight="BOLD")
-        new_cap.move_to(np.array([bar_cx, bar_top - 0.35 * ch, 0]))
-
-        self.bonus_label = crisp_text("+35", font_size=self.font_size, color=SCORE_GREEN, font=FONT, weight="BOLD")
-        self.bonus_label.move_to(np.array([bar_cx, bar_top - 3.5 * ch, 0]))
-
-        new_total = crisp_text(str(top_sum + 35 + base), font_size=self.font_size, color=WHITE, font=FONT, weight="BOLD")
-        new_total.move_to(self.total_text.get_center())
-
-        scene.play(
-            self.bar_fill.animate.set_fill(SCORE_GREEN, opacity=1.0),
-            Flash(self.bar_border.get_center(), color=SCORE_GREEN, flash_radius=0.55, line_length=0.22),
-            Transform(self.cap_label, new_cap),
-            FadeIn(self.bonus_label, shift=0.25 * DOWN),
-            Transform(self.total_text, new_total),
-            run_time=0.8,
-        )
-        self.score_texts.add(self.bonus_label)
-
-    def _animate_bottom_total(self, scene, old_b, new_b, run_time):
         def bottom_for(b):
             t = crisp_text(str(int(round(b))), font_size=self.font_size, color=BLACK, font=FONT, weight="BOLD")
             t.move_to(self.bottom_total_text.get_center())
             return t
 
-        def total_for(b):
-            g = self._top_total() + int(round(b)) + self._yahtzee_bonus
+        def grand_for():
+            tv, bv, yv = tr_top.get_value(), tr_bot.get_value(), tr_yb.get_value()
+            g = int(round(tv)) + (35 if tv >= 63 else 0) + int(round(bv)) + int(round(yv))
             t = crisp_text(str(g), font_size=self.font_size, color=WHITE, font=FONT, weight="BOLD")
             t.move_to(self.total_text.get_center())
             return t
 
-        tr = ValueTracker(old_b)
-        self.bottom_total_text.add_updater(lambda m: m.become(bottom_for(tr.get_value())))
-        self.total_text.add_updater(lambda m: m.become(total_for(tr.get_value())))
-        scene.play(tr.animate.set_value(new_b), run_time=run_time)
-        for m in (self.bottom_total_text, self.total_text):
+        self.bar_fill.add_updater(lambda m: m.become(fill_for(tr_top.get_value())))
+        self.bar_number.add_updater(lambda m: m.become(number_for(tr_top.get_value())))
+        self.bottom_total_text.add_updater(lambda m: m.become(bottom_for(tr_bot.get_value())))
+        self.total_text.add_updater(lambda m: m.become(grand_for()))
+
+        # +35 top-bonus label (created the first time we cross up into the bonus)
+        crossing_up = old_top < 63 <= new_top
+        sixes_y     = bar_bot - 0.5 * ch
+        if self.bonus_label is None and crossing_up:
+            self.bonus_label = crisp_text("+35", font_size=self.font_size, color=SCORE_GREEN, font=FONT, weight="BOLD")
+            self.bonus_label.move_to(np.array([bar_cx, sixes_y, 0])).set_opacity(0.0)
+            self.score_texts.add(self.bonus_label)
+        if self.bonus_label is not None:
+            self.bonus_label.add_updater(
+                lambda m: m.set_opacity(1.0 if tr_top.get_value() >= 63 else 0.0))
+
+        # "(63)" cap: above the bar (black) below 63, inside the bar top (white) at/above
+        black_cap = crisp_text("(63)", font_size=self.font_size * 0.55, color=BLACK, font=FONT, weight="BOLD")
+        black_cap.move_to(np.array([bar_cx, bar_top + 0.35 * ch, 0]))
+        white_cap = crisp_text("(63)", font_size=self.font_size * 0.55, color=WHITE, font=FONT, weight="BOLD")
+        white_cap.move_to(np.array([bar_cx, bar_top - 0.35 * ch, 0]))
+        self.cap_label.add_updater(
+            lambda m: m.become(white_cap if tr_top.get_value() >= 63 else black_cap))
+
+        # Yahtzee +100 label (discrete): grown/updated as part of the lead
+        leads = [lead] if lead is not None else []
+        if new_yb != old_yb and new_yb > 0:
+            yb_y     = self.value_cells[YAHTZEE_IDX].get_center()[1]
+            yb_label = crisp_text(f"+{new_yb}", font_size=self.font_size, color=SCORE_GREEN, font=FONT, weight="BOLD")
+            yb_label.move_to(np.array([bar_cx, yb_y, 0]))
+            if self.yahtzee_bonus_text is None:
+                self.yahtzee_bonus_text = yb_label
+                self.score_texts.add(yb_label)
+                leads.append(AnimationGroup(GrowFromCenter(yb_label),
+                                            Flash(yb_label.get_center(), color=SCORE_GREEN, flash_radius=0.5)))
+            else:
+                leads.append(AnimationGroup(Transform(self.yahtzee_bonus_text, yb_label),
+                                            Flash(self.yahtzee_bonus_text.get_center(), color=SCORE_GREEN, flash_radius=0.5)))
+        elif new_yb == 0 and self.yahtzee_bonus_text is not None:    # cleared (e.g. reset)
+            leads.append(FadeOut(self.yahtzee_bonus_text))
+            self.yahtzee_bonus_text = None
+
+        moves = AnimationGroup(tr_top.animate.set_value(new_top),
+                               tr_bot.animate.set_value(new_bot),
+                               tr_yb.animate.set_value(new_yb))
+
+        # Green spark burst as the bar crosses UP through 63. It TRIGGERS by value
+        # (the moment the bar reaches 63) but then plays for a FIXED duration off
+        # real elapsed time (dt) — so its speed is independent of how fast the bar
+        # is rising. Never early (nothing below 63), never twice, and only when the
+        # bonus is actually (re)earned.
+        FLASH_DUR = 0.5     # fixed burst length (feel knob), independent of bar speed
+        spark = None
+        spark_t = {"v": None}     # elapsed since trigger; None = not yet triggered
+        if flash and crossing_up and new_top > old_top:
+            bc   = self.bar_border.get_center()
+            # short radial dashes sitting just OUTSIDE the bar (so they're never
+            # hidden behind it), in 12 directions.
+            dirs = [np.array([np.cos(i * TAU / 12), np.sin(i * TAU / 12), 0.0]) for i in range(12)]
+            base = VGroup(*[Line(bc + 0.34 * d, bc + 0.66 * d, stroke_color=green_c,
+                                 stroke_width=4) for d in dirs])
+            spark = base.copy().set_opacity(0.0)
+            scene.add(spark)
+
+            def _spark(m, dt):
+                if spark_t["v"] is None:
+                    if tr_top.get_value() >= 63:
+                        spark_t["v"] = 0.0        # trigger the instant the bar hits 63
+                    else:
+                        return
+                else:
+                    spark_t["v"] += dt
+                p = spark_t["v"] / FLASH_DUR       # fixed-duration progress (not bar-speed)
+                if p >= 1.0:
+                    m.set_opacity(0.0)
+                    return
+                m.become(base.copy().scale(1.0 + 0.35 * p, about_point=bc)   # gentle radiate
+                         .set_stroke(green_c, width=4).set_opacity(np.sin(np.pi * p)))  # in→out
+            spark.add_updater(_spark)
+
+        full_lead = AnimationGroup(*leads) if len(leads) > 1 else (leads[0] if leads else None)
+        if full_lead is not None:
+            scene.play(LaggedStart(full_lead, moves, lag_ratio=self.COUNTER_LAG), run_time=run_time)
+        else:
+            scene.play(moves, run_time=run_time)
+
+        # finalize the counters (bar has reached its target)
+        for m in (self.bar_fill, self.bar_number, self.bottom_total_text,
+                  self.total_text, self.cap_label):
             m.clear_updaters()
-        self.bottom_total_text.become(bottom_for(new_b))
-        self.total_text.become(total_for(new_b))
+        if self.bonus_label is not None:
+            self.bonus_label.clear_updaters()
+            self.bonus_label.set_opacity(1.0 if new_top >= 63 else 0.0)
+        self.cap_label.become(white_cap if new_top >= 63 else black_cap)
+        self.bar_fill.become(fill_for(new_top))
+        self.bar_number.become(number_for(new_top))
+        self.bottom_total_text.become(bottom_for(new_bot))
+        self.total_text.become(grand_for())
+        self._top_sum, self._bottom_sum, self._yahtzee_bonus = new_top, new_bot, new_yb
+
+        # let the fixed-duration flash finish if the bar settled before it did
+        # (the bar is done; this is just the spark's tail)
+        if spark is not None:
+            if spark_t["v"] is not None and spark_t["v"] < FLASH_DUR:
+                scene.wait(FLASH_DUR - spark_t["v"])
+            spark.clear_updaters()
+            scene.remove(spark)
 
 
 def get_scorecard(scores=None, center=CENTER_SC, **kwargs):
