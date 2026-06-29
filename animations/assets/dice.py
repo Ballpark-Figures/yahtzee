@@ -24,6 +24,19 @@ PIP_COLORS = {
     6: "#6C3483",   # deep purple
 }
 
+# Body-fill colors for the "colored dice" mode (separate from pip_coloring):
+# the WHOLE FACE takes one of these — five distinct colors, one per die —
+# while the pips and border stay BLACK. Colors are value-independent, so any
+# color can sit on any face value, in any order. Bright enough that black pips
+# read clearly on the colored face.
+DIE_COLORS = [
+    "#E74C3C",   # red
+    "#E67E22",   # orange
+    "#F1C40F",   # yellow
+    "#2ECC71",   # green
+    "#3498DB",   # blue
+]
+
 # pip positions on a 3x3 grid: gx in {-1,0,1} (cols), gy in {-1,0,1} (+1 = top)
 PIP_GRID = {
     "TL": (-1, 1),  "TR": (1, 1),
@@ -52,7 +65,7 @@ class Die(VGroup):
     """
 
     def __init__(self, value=1, size=DIE_SIZE, pip_color=BLACK,
-                 pip_coloring=False, **kwargs):
+                 pip_coloring=False, body_color=None, **kwargs):
         super().__init__(**kwargs)
         self.size = size
         self.pip_color = pip_color
@@ -60,9 +73,14 @@ class Die(VGroup):
         # PIP_COLORS) and re-tint whenever the face changes; otherwise they stay
         # `pip_color`/black.
         self.pip_coloring = pip_coloring
+        # "Colored dice" mode: a value-independent body fill (see DIE_COLORS).
+        # None -> the default beige face. This is independent of pip_coloring;
+        # the pips/border stay black regardless of the body color.
+        self.body_color = body_color
         self.body = RoundedRectangle(
             width=size, height=size, corner_radius=size * 0.18,
-            fill_color=DIE_BEIGE, fill_opacity=1.0,
+            fill_color=body_color if body_color is not None else DIE_BEIGE,
+            fill_opacity=1.0,
             stroke_color=BLACK, stroke_width=2.0,
         )
         self.pips = VGroup()
@@ -84,6 +102,14 @@ class Die(VGroup):
         """Toggle value-based coloring and re-tint the border + pips in place."""
         self.pip_coloring = on
         self._apply_accent()
+        return self
+
+    def set_body_color(self, color):
+        """Set the body fill ("colored dice" mode). `color=None` restores beige.
+        The pips and border are untouched (they stay black)."""
+        self.body_color = color
+        self.body.set_fill(
+            color if color is not None else DIE_BEIGE, opacity=1.0)
         return self
 
     def _apply_accent(self):

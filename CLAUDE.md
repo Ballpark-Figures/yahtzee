@@ -24,6 +24,14 @@ way.
   `99test.py` is the canonical example. Default die size is `DIE_SIZE = 0.95`.
 - Scorecard sits at `LEFT_SC`; dice on the right at `slot_x(...)`.
 
+## Outcome grids (scenes 1 & 3)
+- The 6^5 dot build-up and the 252 distinct-outcome grid enumerate with
+  `_multisets` (canonical `combinations_with_replacement` order) and fill grids
+  COLUMN-MAJOR — down the rows: `arrange_in_grid(..., flow_order="dr")`. Scene 1
+  (`01intro.py`) is canonical; scene 3 matches it. Use the SAME `flow_order="dr"`
+  ordering for EVERY grid in the video so they read consistently, and when a beat
+  re-shows another scene's grid (e.g. the 252), match that scene's shape too.
+
 ## Scorecard (`animations/assets/scorecard.py`)
 - `get_scorecard(scores=None)` → empty card. `scores=[s0..s13]` → filled
   (`0..5` = Ones–Sixes, `6..12` = 3oak/4oak/full house/sm straight/lg straight/
