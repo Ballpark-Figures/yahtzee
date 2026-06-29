@@ -24,8 +24,12 @@ _COLOR_PERMS = list(permutations(DIE_COLORS))
 # 1..6 (scene-1's grow style). The bounding box stays full-frame and just
 # subdivides. PROTOTYPE: dice for levels 1-3; levels 4-5 will switch to colored
 # rounded squares (dice become unreadable that small) — TODO.
-_BUILD_W, _BUILD_H = 15.4, 8.4
-_CELL_GAP = 0.10          # 2×3 cell gap, as a fraction of the cell box
+_BUILD_W, _BUILD_H = 15.6, 8.6
+_CELL_GAP = 0.04          # gap between sibling cells, as a fraction of the box
+# Per-die 6-split (rows, cols), outermost (d1) first. Singles are square → 2×3;
+# deeper levels use 3×2 so cells stay WIDE to match the widening k-die rows. This
+# keeps dice as large as possible instead of letting them collapse ~6×/level.
+_SPLIT_SHAPES = [(2, 3), (3, 2), (3, 2), (3, 2), (3, 2)]
 
 # frequency classes: (example combo, # of ways), sorted most→least.
 _FREQ = [
@@ -83,44 +87,46 @@ def _label(text, font_size=44):
                       weight="BOLD")
 
 
-def _cluster_centers(depth, cx, cy, w, h):
-    """Centers of 6^depth cells, lex order (first die = outermost 2×3 split)."""
-    if depth == 0:
+def _cluster_centers(splits, cx, cy, w, h):
+    """Cell centers for nested per-die splits, lex order (splits[0] = first die).
+    Each split is (rows, cols) with rows*cols == 6."""
+    if not splits:
         return [(cx, cy)]
+    (r, c), rest = splits[0], splits[1:]
     gx, gy = w * _CELL_GAP, h * _CELL_GAP
-    cw, ch = (w - 2 * gx) / 3.0, (h - gy) / 2.0
+    cw, ch = (w - (c - 1) * gx) / c, (h - (r - 1) * gy) / r
     out = []
     for val in range(6):
-        r, c = divmod(val, 3)            # 0,1,2 top row; 3,4,5 bottom row
-        scx = cx + (c - 1) * (cw + gx)
-        scy = cy + (0.5 - r) * (ch + gy)
-        out.extend(_cluster_centers(depth - 1, scx, scy, cw, ch))
+        rr, cc = divmod(val, c)
+        scx = cx + (cc - (c - 1) / 2.0) * (cw + gx)
+        scy = cy + ((r - 1) / 2.0 - rr) * (ch + gy)
+        out.extend(_cluster_centers(rest, scx, scy, cw, ch))
     return out
 
 
-def _leaf_cell(depth):
-    """Size (w, h) of one cell after `depth` 2×3 subdivisions of the box."""
+def _leaf_cell(level):
+    """Size (w, h) of one leaf cell after the level's nested splits."""
     w, h = _BUILD_W, _BUILD_H
-    for _ in range(depth):
-        w = (w - 2 * w * _CELL_GAP) / 3.0
-        h = (h - h * _CELL_GAP) / 2.0
+    for (r, c) in _SPLIT_SHAPES[:level]:
+        w = (w - (c - 1) * w * _CELL_GAP) / c
+        h = (h - (r - 1) * h * _CELL_GAP) / r
     return w, h
 
 
 def _die_size(k):
-    """Die size so a k-die row fits the leaf cell at level k."""
+    """Largest die so a k-die row fits the leaf cell (tight packing)."""
     cw, ch = _leaf_cell(k)
-    b = 0.03
-    return max(min((cw * 0.9 - (k - 1) * b) / k, ch * 0.78), 0.02)
+    bf = 0.06   # inter-die buff as a fraction of die size
+    return max(min(cw * 0.98 / (k + bf * (k - 1)), ch * 0.94), 0.01)
 
 
 def _build_level(level):
     """6^level dice-groups (colored pips), lex order, placed in the 2×3 fractal."""
     size = _die_size(level)
-    centers = _cluster_centers(level, 0.0, 0.0, _BUILD_W, _BUILD_H)
+    centers = _cluster_centers(_SPLIT_SHAPES[:level], 0.0, 0.0, _BUILD_W, _BUILD_H)
     groups = []
     for i, tup in enumerate(product(range(1, 7), repeat=level)):
-        g = _pip_row(list(tup), size=size, buff=0.03)
+        g = _pip_row(list(tup), size=size, buff=size * 0.06)
         cx, cy = centers[i]
         g.move_to([cx, cy, 0.0])
         groups.append(g)
@@ -138,10 +144,10 @@ def _build_square_level(level):
     """Like _build_level, but each die is a rounded colored square — used once the
     groups get too small to read as pip-dice."""
     size = _die_size(level)
-    centers = _cluster_centers(level, 0.0, 0.0, _BUILD_W, _BUILD_H)
+    centers = _cluster_centers(_SPLIT_SHAPES[:level], 0.0, 0.0, _BUILD_W, _BUILD_H)
     groups = []
     for i, tup in enumerate(product(range(1, 7), repeat=level)):
-        g = VGroup(*[_square(v, size) for v in tup]).arrange(RIGHT, buff=0.03)
+        g = VGroup(*[_square(v, size) for v in tup]).arrange(RIGHT, buff=size * 0.06)
         cx, cy = centers[i]
         g.move_to([cx, cy, 0.0])
         groups.append(g)
