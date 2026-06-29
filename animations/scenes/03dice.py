@@ -231,7 +231,9 @@ class Dice(YahtzeeScene):
         groups = VGroup(*[_colored_row([1, 2, 3, 4, 5], perm, size=0.2, buff=0.04)
                           for perm in _COLOR_PERMS])
         groups.arrange_in_grid(rows=15, cols=8, buff=(0.25, 0.15), flow_order="dr")
-        _fit(groups, h=8.5, center=ORIGIN)
+        # equal-margin fit + row-balance (like the 252 grid) → fills full height
+        _fit_equal_margins(groups)
+        _balance_rows(groups, 15)
         self.s120 = groups
 
     def _setup_straights_vs(self):
@@ -250,10 +252,10 @@ class Dice(YahtzeeScene):
         _fit(block, w=9.0, h=6.6, center=[-3.0, -0.5, 0])   # shrunk: room for label
         self.s240 = block
 
-        # 6 yahtzees (one per value), colored dice, stacked on the right.
-        yz = VGroup(*[_colored_row([v] * 5, DIE_COLORS, size=0.18, buff=0.03)
+        # 6 yahtzees (one per value), colored dice, stacked on the right — bigger.
+        yz = VGroup(*[_colored_row([v] * 5, DIE_COLORS, size=0.3, buff=0.04)
                       for v in range(1, 7)])
-        yz.arrange(DOWN, buff=0.25)
+        yz.arrange(DOWN, buff=0.3)
         yz.move_to([5.0, 0.0, 0])
         self.six_yz = yz
 
