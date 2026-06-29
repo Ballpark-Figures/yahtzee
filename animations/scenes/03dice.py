@@ -305,20 +305,30 @@ class Dice(YahtzeeScene):
         self._grow(self.lv3_sq, self.lv4_sq, 3, run_time=2.0)
         self.wait(0.3)
         self._grow(self.lv4_sq, self.lv5_sq, 4, run_time=2.4)
-        self.power_final = VGroup(*self.lv5_sq)
         self.wait(0.6)
+        # Keep only the 252 ascending (distinct) quints; drop the other 7524
+        # instantly (no fade) so a's snapshot stays light and b animates just the
+        # 252. a's video still ends on the full 7776 — the rest vanish at the cut.
+        asc = [pi for pi, t in enumerate(product(range(1, 7), repeat=5))
+               if all(t[i] <= t[i + 1] for i in range(4))]
+        asc_set = set(asc)
+        self.remove(*[g for i, g in enumerate(self.lv5_sq) if i not in asc_set])
+        self.power_asc = [self.lv5_sq[i] for i in asc]   # 252, multiset order
+        # release the big intermediate levels so they aren't pickled into snapshots
+        self.lv1 = self.lv1_sq = self.lv2_sq = None
+        self.lv3_sq = self.lv4_sq = self.lv5_sq = None
 
     # ── b. 7776 raw outcomes → 252 distinct ones (scene-1 callback) ────────────
     @subscene
     def to_252(self):
-        # crossfade, NOT a morph: ReplacementTransform-ing the 7776 dots into the
-        # 1260-die grid (~10k paths) is brutally slow (the b slowdown). Kept as a
-        # fade. The label is just text, so it morphs cheaply.
-        self.play(
-            FadeOut(self.power_final, scale=0.85),
-            FadeIn(self.grid252),
-            run_time=1.2,
-        )
+        # The 252 ASCENDING-order quints are exactly the distinct outcomes, and
+        # (since product() and combinations_with_replacement() share lex order)
+        # the k-th ascending square-quint maps to grid252[k]. Morph those back
+        # into dice and send them to their grid slots; fade everything else.
+        # a left only the 252 ascending squares on screen (multiset order); morph
+        # them back into dice and move them into scene-1's ordered grid.
+        self.play(*[ReplacementTransform(self.power_asc[mi], self.grid252[mi])
+                    for mi in range(len(self.power_asc))], run_time=1.8)
         self.wait(1.0)
 
     # ── c. a yahtzee in colored dice → only 1 way ──────────────────────────────
