@@ -18,12 +18,11 @@ def _multisets(k):
 # the 120 orderings of the 5 colored dice (used for the straight permutations)
 _COLOR_PERMS = list(permutations(DIE_COLORS))
 
-# 6^k build-up as nested 2×3 clusters of dice-groups (colored pips), lex-ordered
-# by (d1,…,dk): the OUTERMOST 2×3 is the first die, the appended (last) die is the
-# innermost split. Each grow turns every k-group into 6 (k+1)-groups by appending
-# 1..6 (scene-1's grow style). The bounding box stays full-frame and just
-# subdivides. PROTOTYPE: dice for levels 1-3; levels 4-5 will switch to colored
-# rounded squares (dice become unreadable that small) — TODO.
+# 6^k build-up as nested clusters of colored squares. We show 6 REAL dice first,
+# morph them to squares while there are only 6 (the smoothest moment), then grow
+# 6 → 36 → 216 → 1296 → 7776 — each k-group spawns 6 (k+1)-groups by appending
+# 1..6 (scene-1's grow style). Lex-ordered by (d1,…,dk): outermost split = first
+# die, appended (last) die = innermost. Box stays full-frame and just subdivides.
 _BUILD_W, _BUILD_H = 15.6, 8.6
 _CELL_GAP = 0.04          # gap between sibling cells, as a fraction of the box
 # Per-die 6-split (rows, cols), outermost (d1) first. Singles are square → 2×3;
@@ -196,14 +195,14 @@ class Dice(YahtzeeScene):
 
     # ── construction ──────────────────────────────────────────────────────────
     def _setup_powers(self):
-        # Build-up levels: dice for 1-3 (6 → 36 → 216), colored squares from 3 on
-        # (trios morph dice→squares, then grow to 1296 quads). 7776 quints: TODO.
-        self.lv1 = _build_level(1)
-        self.lv2 = _build_level(2)
-        self.lv3 = _build_level(3)
+        # 6 real dice, then squares all the way: morph at 6, grow to 7776.
+        self.lv1 = _build_level(1)              # the 6 singles, as real dice
+        self.lv1_sq = _build_square_level(1)
+        self.lv2_sq = _build_square_level(2)
         self.lv3_sq = _build_square_level(3)
         self.lv4_sq = _build_square_level(4)
-        self.power_final = None   # the last built level; consumed by to_252
+        self.lv5_sq = _build_square_level(5)
+        self.power_final = None   # the last level; consumed by to_252
 
     def _setup_252(self):
         # EXACTLY scene 1's 252 grid: same dice size (0.24) + intra-group buff
@@ -295,16 +294,18 @@ class Dice(YahtzeeScene):
         self.play(LaggedStart(*[FadeIn(g) for g in self.lv1], lag_ratio=0.08),
                   run_time=1.0)
         self.wait(0.4)
-        self._grow(self.lv1, self.lv2, 1, run_time=1.4)
-        self.wait(0.3)
-        self._grow(self.lv2, self.lv3, 2, run_time=1.8)
-        self.wait(0.3)
-        # too small to read as pips now → morph each die into its colored square
+        # only 6 dice on screen — the smoothest moment to switch to colored squares
         self.play(*[ReplacementTransform(d, s)
-                    for d, s in zip(self.lv3, self.lv3_sq)], run_time=1.0)
-        self.wait(0.2)
+                    for d, s in zip(self.lv1, self.lv1_sq)], run_time=0.8)
+        self.wait(0.3)
+        self._grow(self.lv1_sq, self.lv2_sq, 1, run_time=1.4)
+        self.wait(0.3)
+        self._grow(self.lv2_sq, self.lv3_sq, 2, run_time=1.8)
+        self.wait(0.3)
         self._grow(self.lv3_sq, self.lv4_sq, 3, run_time=2.0)
-        self.power_final = VGroup(*self.lv4_sq)
+        self.wait(0.3)
+        self._grow(self.lv4_sq, self.lv5_sq, 4, run_time=2.4)
+        self.power_final = VGroup(*self.lv5_sq)
         self.wait(0.6)
 
     # ── b. 7776 raw outcomes → 252 distinct ones (scene-1 callback) ────────────
