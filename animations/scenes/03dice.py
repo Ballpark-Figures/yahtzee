@@ -180,8 +180,9 @@ class Dice(YahtzeeScene):
       frequency_table     — every frequency class with # of ways, sorted
     """
 
-    # vertical center the big dot/outcome grids sit at (top strip left for the
-    # running count label).
+    # one knob for the whole build-up: every n→n+1 grow transition in `a` runs for
+    # this many seconds (uniform). Tune this single value to retime all of them.
+    GROW_RT = 1.8
     GRID_CY = -0.35
     LABEL_Y = 3.7
 
@@ -221,16 +222,20 @@ class Dice(YahtzeeScene):
         # all five dice show the same value, each a different color → still 1 way
         self.yz_dice = _colored_row([3, 3, 3, 3, 3], DIE_COLORS,
                                     size=1.0, buff=0.25)
-        self.yz_dice.move_to(ORIGIN)
+        self.yz_dice.move_to([0, 0.5, 0])
+        self.yz_label = _label("1 Arrangement").next_to(self.yz_dice, DOWN,
+                                                        buff=0.7)
 
     def _setup_straight_120(self):
         # 120 1-5 straights (all color orderings), 15×8 grid filled down the rows.
         # Tight buffs + full height so the dice render as large as 120 of them fit.
         groups = VGroup(*[_colored_row([1, 2, 3, 4, 5], perm, size=0.2, buff=0.04)
                           for perm in _COLOR_PERMS])
-        groups.arrange_in_grid(rows=15, cols=8, buff=(0.25, 0.12), flow_order="dr")
-        _fit(groups, h=8.5, center=ORIGIN)
+        # taller vertical gap (buff[1]) spreads the rows to use the vertical space
+        groups.arrange_in_grid(rows=15, cols=8, buff=(0.25, 0.22), flow_order="dr")
+        _fit(groups, h=7.6, center=[0, -0.45, 0])
         self.s120 = groups
+        self.s120_label = _label("120 arrangements").move_to([0, 4.0, 0])
 
     def _setup_straights_vs(self):
         # 240 large straights split into halves (script: 120 1-5 on top, 120 2-6
@@ -254,6 +259,10 @@ class Dice(YahtzeeScene):
         yz.arrange(DOWN, buff=0.25)
         yz.move_to([5.0, 0.0, 0])
         self.six_yz = yz
+
+        # counts above each group
+        self.s240_label = _label("240").next_to(block, UP, buff=0.2)
+        self.six_label = _label("6").next_to(yz, UP, buff=0.2)
 
     def _setup_frequency(self):
         self.freq_title = _label("Dice Combo Frequencies", font_size=44)
@@ -298,13 +307,13 @@ class Dice(YahtzeeScene):
         self.play(*[ReplacementTransform(d, s)
                     for d, s in zip(self.lv1, self.lv1_sq)], run_time=0.8)
         self.wait(0.3)
-        self._grow(self.lv1_sq, self.lv2_sq, 1, run_time=1.4)
+        self._grow(self.lv1_sq, self.lv2_sq, 1, run_time=self.GROW_RT)
         self.wait(0.3)
-        self._grow(self.lv2_sq, self.lv3_sq, 2, run_time=1.8)
+        self._grow(self.lv2_sq, self.lv3_sq, 2, run_time=self.GROW_RT)
         self.wait(0.3)
-        self._grow(self.lv3_sq, self.lv4_sq, 3, run_time=2.0)
+        self._grow(self.lv3_sq, self.lv4_sq, 3, run_time=self.GROW_RT)
         self.wait(0.3)
-        self._grow(self.lv4_sq, self.lv5_sq, 4, run_time=2.4)
+        self._grow(self.lv4_sq, self.lv5_sq, 4, run_time=self.GROW_RT)
         self.wait(0.6)
         # Keep only the 252 ascending (distinct) quints; drop the other 7524
         # instantly (no fade) so a's snapshot stays light and b animates just the
@@ -336,26 +345,30 @@ class Dice(YahtzeeScene):
     def yahtzee_ways(self):
         self.play(FadeOut(self.grid252), run_time=0.6)
         self.play(FadeIn(self.yz_dice), run_time=0.6)
+        self.play(FadeIn(self.yz_label, shift=UP * 0.2), run_time=0.5)
         self.wait(0.8)
 
     # ── d. a 1-5 straight in all 120 color arrangements → 120 ways ─────────────
     @subscene
     def straight_120(self):
-        self.play(FadeOut(self.yz_dice), run_time=0.6)
+        self.play(FadeOut(self.yz_dice), FadeOut(self.yz_label), run_time=0.6)
         self.play(FadeIn(self.s120), run_time=0.8)
+        self.play(FadeIn(self.s120_label, shift=DOWN * 0.2), run_time=0.5)
         self.wait(0.8)
 
     # ── e. 240 straights vs 6 yahtzees → ~40x ──────────────────────────────────
     @subscene
     def straights_vs_yahtzees(self):
-        self.play(FadeOut(self.s120), run_time=0.6)
+        self.play(FadeOut(self.s120), FadeOut(self.s120_label), run_time=0.6)
         self.play(FadeIn(self.s240), FadeIn(self.six_yz), run_time=0.9)
+        self.play(FadeIn(self.s240_label), FadeIn(self.six_label), run_time=0.5)
         self.wait(1.0)
 
     # ── f. frequency table: example combo (colored pips) + # of ways ───────────
     @subscene
     def frequency_table(self):
-        self.play(FadeOut(self.s240), FadeOut(self.six_yz), run_time=0.6)
+        self.play(FadeOut(self.s240), FadeOut(self.six_yz),
+                  FadeOut(self.s240_label), FadeOut(self.six_label), run_time=0.6)
         self.play(FadeIn(self.freq_title, shift=DOWN * 0.2), run_time=0.5)
         self.play(LaggedStart(*[FadeIn(r, shift=RIGHT * 0.2)
                                 for r in self.freq_rows],
