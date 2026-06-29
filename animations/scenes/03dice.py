@@ -359,8 +359,15 @@ class Dice(YahtzeeScene):
     # ── e. 240 straights vs 6 yahtzees → ~40x ──────────────────────────────────
     @subscene
     def straights_vs_yahtzees(self):
-        self.play(FadeOut(self.s120), FadeOut(self.s120_label), run_time=0.6)
-        self.play(FadeIn(self.s240), FadeIn(self.six_yz), run_time=0.9)
+        # d's 120 (1-5) straights relocate into the TOP half (same 120 in the same
+        # order); the 2-6 bottom half and the 6 yahtzees appear alongside.
+        self.play(
+            FadeOut(self.s120_label),
+            ReplacementTransform(self.s120, self.s240_top),
+            FadeIn(self.s240_bot),
+            FadeIn(self.six_yz),
+            run_time=1.2,
+        )
         self.play(FadeIn(self.s240_label), FadeIn(self.six_label), run_time=0.5)
         self.wait(1.0)
 
