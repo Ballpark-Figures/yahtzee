@@ -253,7 +253,7 @@ class Dice(YahtzeeScene):
         self.s240 = block
 
         # 6 yahtzees (one per value), colored dice, stacked on the right — bigger.
-        yz = VGroup(*[_colored_row([v] * 5, DIE_COLORS, size=0.3, buff=0.04)
+        yz = VGroup(*[_colored_row([v] * 5, DIE_COLORS, size=0.4, buff=0.05)
                       for v in range(1, 7)])
         yz.arrange(DOWN, buff=0.3)
         yz.move_to([5.0, 0.0, 0])
@@ -261,7 +261,7 @@ class Dice(YahtzeeScene):
 
         # "240" up at the top (room above the shrunk block); "6" above the yahtzees
         self.s240_label = _label("240").move_to([-3.0, 3.7, 0])
-        self.six_label = _label("6").next_to(yz, UP, buff=0.25)
+        self.six_label = _label("6").next_to(yz, UP, buff=0.6)
 
     def _setup_frequency(self):
         self.freq_title = _label("Dice Combo Frequencies", font_size=44)
