@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
-from assets.dice import get_die, DIE_COLORS
+from assets.dice import get_die, DIE_COLORS, PIP_COLORS
 
 
 # ── outcome enumeration ───────────────────────────────────────────────────────
@@ -127,6 +127,27 @@ def _build_level(level):
     return groups
 
 
+def _square(value, size):
+    """A rounded square in `value`'s color (the colored-pip palette)."""
+    return RoundedRectangle(width=size, height=size, corner_radius=size * 0.22,
+                            fill_color=PIP_COLORS[value], fill_opacity=1.0,
+                            stroke_width=0)
+
+
+def _build_square_level(level):
+    """Like _build_level, but each die is a rounded colored square — used once the
+    groups get too small to read as pip-dice."""
+    size = _die_size(level)
+    centers = _cluster_centers(level, 0.0, 0.0, _BUILD_W, _BUILD_H)
+    groups = []
+    for i, tup in enumerate(product(range(1, 7), repeat=level)):
+        g = VGroup(*[_square(v, size) for v in tup]).arrange(RIGHT, buff=0.03)
+        cx, cy = centers[i]
+        g.move_to([cx, cy, 0.0])
+        groups.append(g)
+    return groups
+
+
 def _colored_row(values, colors, size, buff=0.05):
     """A row of dice with COLORED BODIES (black pips/border) — colored-dice mode."""
     g = VGroup(*[get_die(v, size=size, body_color=c)
@@ -169,11 +190,13 @@ class Dice(YahtzeeScene):
 
     # ── construction ──────────────────────────────────────────────────────────
     def _setup_powers(self):
-        # PROTOTYPE: dice build-up levels 1-3 (6 → 36 → 216). Built here; the grow
-        # animation in `powers` transforms each level into the next.
+        # Build-up levels: dice for 1-3 (6 → 36 → 216), colored squares from 3 on
+        # (trios morph dice→squares, then grow to 1296 quads). 7776 quints: TODO.
         self.lv1 = _build_level(1)
         self.lv2 = _build_level(2)
         self.lv3 = _build_level(3)
+        self.lv3_sq = _build_square_level(3)
+        self.lv4_sq = _build_square_level(4)
         self.power_final = None   # the last built level; consumed by to_252
 
     def _setup_252(self):
@@ -270,7 +293,12 @@ class Dice(YahtzeeScene):
         self.wait(0.3)
         self._grow(self.lv2, self.lv3, 2, run_time=1.8)
         self.wait(0.3)
-        self.power_final = VGroup(*self.lv3)
+        # too small to read as pips now → morph each die into its colored square
+        self.play(*[ReplacementTransform(d, s)
+                    for d, s in zip(self.lv3, self.lv3_sq)], run_time=1.0)
+        self.wait(0.2)
+        self._grow(self.lv3_sq, self.lv4_sq, 3, run_time=2.0)
+        self.power_final = VGroup(*self.lv4_sq)
         self.wait(0.6)
 
     # ── b. 7776 raw outcomes → 252 distinct ones (scene-1 callback) ────────────
