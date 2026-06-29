@@ -186,25 +186,14 @@ class Dice(YahtzeeScene):
     GRID_CY = -0.35
     LABEL_Y = 3.7
 
-    def setup_scene(self):
-        self._setup_powers()
-        self._setup_252()
-        self._setup_yahtzee()
-        self._setup_straight_120()
-        self._setup_straights_vs()
-        self._setup_frequency()
-
-    # ── construction ──────────────────────────────────────────────────────────
-    def _setup_powers(self):
-        # dice for the 6 singles + their square versions, and square levels 2-4.
-        # lv5 (38,880 squares) is built lazily in grow_7776 so it stays out of the
-        # earlier subscenes' snapshots.
-        self.lv1 = _build_level(1)
-        self.lv1_sq = _build_square_level(1)
-        self.lv2_sq = _build_square_level(2)
-        self.lv3_sq = _build_square_level(3)
-        self.lv4_sq = _build_square_level(4)
-
+    # LAZY BUILDING — no setup_scene front-loads everything. Each subscene builds
+    # the mobjects it OWNS (its first appearance), animates, and drops them once
+    # consumed; carry-over objects ride forward in the snapshot. This keeps every
+    # snapshot light AND makes a setup edit invalidate only its owner subscene
+    # onward instead of the whole scene. Owners: singles→lv1/lv1_sq,
+    # grow_NN→lvN_sq, to_252→grid252, yahtzee_ways→yz_dice, straight_120→s120,
+    # straights_vs_yahtzees→s240/six_yz, frequency_table→freq_*. The _setup_<name>
+    # helpers below are called by their owner subscene, not by a setup_scene.
     def _setup_252(self):
         # EXACTLY scene 1's 252 grid: same dice size (0.24) + intra-group buff
         # (0.025), same (21, 12) shape, inter-group buff (0.1) = 4×, column-major
@@ -301,32 +290,41 @@ class Dice(YahtzeeScene):
     # independently). All grows share the single GROW_RT knob.
     @subscene
     def singles(self):
+        self.lv1 = _build_level(1)              # owns lv1, lv1_sq
+        self.lv1_sq = _build_square_level(1)
         self.play(LaggedStart(*[FadeIn(g) for g in self.lv1], lag_ratio=0.08),
                   run_time=1.0)
         self.wait(0.4)
         # only 6 dice on screen — smoothest moment to switch to colored squares
         self.play(*[ReplacementTransform(d, s)
                     for d, s in zip(self.lv1, self.lv1_sq)], run_time=0.8)
+        self.lv1 = None                         # consumed
         self.wait(0.3)
 
     @subscene
     def grow_36(self):
+        self.lv2_sq = _build_square_level(2)
         self._grow(self.lv1_sq, self.lv2_sq, 1, run_time=self.GROW_RT)
+        self.lv1_sq = None                      # consumed
         self.wait(0.3)
 
     @subscene
     def grow_216(self):
+        self.lv3_sq = _build_square_level(3)
         self._grow(self.lv2_sq, self.lv3_sq, 2, run_time=self.GROW_RT)
+        self.lv2_sq = None
         self.wait(0.3)
 
     @subscene
     def grow_1296(self):
+        self.lv4_sq = _build_square_level(4)
         self._grow(self.lv3_sq, self.lv4_sq, 3, run_time=self.GROW_RT)
+        self.lv3_sq = None
         self.wait(0.3)
 
     @subscene
     def grow_7776(self):
-        self.lv5_sq = _build_square_level(5)   # built lazily (38,880 squares)
+        self.lv5_sq = _build_square_level(5)   # 38,880 squares
         self._grow(self.lv4_sq, self.lv5_sq, 4, run_time=self.GROW_RT)
         self.wait(0.6)
         # keep only the 252 ascending (distinct) quints; drop the other 7524
@@ -336,26 +334,27 @@ class Dice(YahtzeeScene):
         asc_set = set(asc)
         self.remove(*[g for i, g in enumerate(self.lv5_sq) if i not in asc_set])
         self.power_asc = [self.lv5_sq[i] for i in asc]   # 252, multiset order
-        self.lv1 = self.lv1_sq = self.lv2_sq = None
-        self.lv3_sq = self.lv4_sq = self.lv5_sq = None
+        self.lv4_sq = self.lv5_sq = None        # consumed / culled
 
     # ── b. 7776 raw outcomes → 252 distinct ones (scene-1 callback) ────────────
     @subscene
     def to_252(self):
-        # The 252 ASCENDING-order quints are exactly the distinct outcomes, and
-        # (since product() and combinations_with_replacement() share lex order)
-        # the k-th ascending square-quint maps to grid252[k]. Morph those back
-        # into dice and send them to their grid slots; fade everything else.
-        # a left only the 252 ascending squares on screen (multiset order); morph
-        # them back into dice and move them into scene-1's ordered grid.
+        # owns grid252; power_asc (the 252 ascending squares) carried in from
+        # grow_7776. The k-th ascending square-quint maps to grid252[k] (product()
+        # and combinations_with_replacement() share lex order) — morph each back
+        # into its dice form and move it to the ordered grid slot.
+        self._setup_252()
         self.play(*[ReplacementTransform(self.power_asc[mi], self.grid252[mi])
                     for mi in range(len(self.power_asc))], run_time=1.8)
+        self.power_asc = None                   # consumed
         self.wait(1.0)
 
     # ── c. yahtzee: color the dice, swap two pips → still one arrangement ───────
     @subscene
     def yahtzee_ways(self):
+        self._setup_yahtzee()                   # owns yz_dice (grid252 carried in)
         self.play(FadeOut(self.grid252), run_time=0.6)
+        self.grid252 = None                     # consumed
         self.play(FadeIn(self.yz_dice), run_time=0.6)
         self.wait(0.3)
         # the five plain dice take the five colors
@@ -381,6 +380,7 @@ class Dice(YahtzeeScene):
     # ── d. 33333 → 12345, roll permutations, then fill the 120-straight grid ────
     @subscene
     def straight_120(self):
+        self._setup_straight_120()              # owns s120 (yz_dice carried in)
         dice = self.yz_dice          # 5 colored dice showing 3 3 3 3 3
         morph_dice(self, dice, [1, 2, 3, 4, 5], run_time=0.7)
         self.wait(0.2)
@@ -393,6 +393,7 @@ class Dice(YahtzeeScene):
         self.wait(0.2)
         # shrink the straight into the grid's top-left, then fill the rest out
         self.play(ReplacementTransform(dice, self.s120[0]), run_time=1.0)
+        self.yz_dice = None                     # consumed
         self.play(LaggedStart(*[FadeIn(g) for g in self.s120[1:]],
                               lag_ratio=0.01), run_time=1.6)
         self.wait(0.8)
@@ -400,20 +401,24 @@ class Dice(YahtzeeScene):
     # ── e. 240 straights vs 6 yahtzees → ~40x ──────────────────────────────────
     @subscene
     def straights_vs_yahtzees(self):
-        # d's 120 (1-5) straights relocate into the TOP half (same 120 in the same
-        # order); the 2-6 bottom half and the 6 yahtzees appear alongside.
+        # owns s240*/six_yz/labels; s120 carried in. d's 120 (1-5) straights
+        # relocate into the TOP half (same 120, same order); the 2-6 bottom half
+        # and the 6 yahtzees appear alongside.
+        self._setup_straights_vs()
         self.play(
             ReplacementTransform(self.s120, self.s240_top),
             FadeIn(self.s240_bot),
             FadeIn(self.six_yz),
             run_time=1.2,
         )
+        self.s120 = None                        # consumed
         self.play(FadeIn(self.s240_label), FadeIn(self.six_label), run_time=0.5)
         self.wait(1.0)
 
     # ── f. frequency table: example combo (colored pips) + # of ways ───────────
     @subscene
     def frequency_table(self):
+        self._setup_frequency()                 # owns freq_* (s240/six_yz carried)
         self.play(FadeOut(self.s240), FadeOut(self.six_yz),
                   FadeOut(self.s240_label), FadeOut(self.six_label), run_time=0.6)
         self.play(FadeIn(self.freq_title, shift=DOWN * 0.2), run_time=0.5)
