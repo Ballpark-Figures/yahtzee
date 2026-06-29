@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
-from assets.dice import (get_die, DIE_COLORS, PIP_COLORS, morph_dice, RollDie)
+from assets.dice import get_die, DIE_COLORS, PIP_COLORS, morph_dice
 
 
 # ── outcome enumeration ───────────────────────────────────────────────────────
@@ -363,11 +363,17 @@ class Dice(YahtzeeScene):
         # swap die-1 and die-2 pips, then back — identical dice, so nothing really
         # changes (→ one arrangement).
         d1, d2 = self.yz_dice[0], self.yz_dice[1]
+        # raise the moving pips so they stay ON TOP of the other die's body while
+        # they arc across (otherwise d1's pips end up hidden behind d2)
+        d1.pips.set_z_index(10)
+        d2.pips.set_z_index(10)
         off = d2.get_center() - d1.get_center()
         self.play(d1.pips.animate.shift(off), d2.pips.animate.shift(-off),
                   path_arc=PI, run_time=0.8)
         self.play(d1.pips.animate.shift(-off), d2.pips.animate.shift(off),
                   path_arc=PI, run_time=0.8)
+        d1.pips.set_z_index(0)
+        d2.pips.set_z_index(0)
         self.wait(0.8)
 
     # ── d. 33333 → 12345, roll permutations, then fill the 120-straight grid ────
@@ -376,10 +382,9 @@ class Dice(YahtzeeScene):
         dice = self.yz_dice          # 5 colored dice showing 3 3 3 3 3
         morph_dice(self, dice, [1, 2, 3, 4, 5], run_time=0.7)
         self.wait(0.2)
-        # roll through two permutations of 1-5…
+        # morph through two permutations of 1-5…
         for perm in ([3, 1, 4, 5, 2], [4, 2, 5, 1, 3]):
-            self.play(*[RollDie(d, d.get_center(), v)
-                        for d, v in zip(dice, perm)], run_time=0.9)
+            morph_dice(self, dice, perm, run_time=0.7)
             self.wait(0.15)
         # …then morph back to 1 2 3 4 5
         morph_dice(self, dice, [1, 2, 3, 4, 5], run_time=0.7)
