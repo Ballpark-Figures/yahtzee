@@ -5,7 +5,9 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
-from bpkfigures.style import FONT_SIZE_SM
+from bpkfigures.style import (FONT_SIZE_SM, ACCENT_FILL, ACCENT_GOLD,
+                              ACCENT_ORANGE, ACCENT_RED)
+from bpkfigures.card import get_card
 from assets.scorecard import get_scorecard
 from bpkfigures.histogram import get_histogram, overlay_bars, make_hist_legend
 from bpkfigures.bar_graph import get_bar_graph
@@ -17,10 +19,15 @@ PLOT_W   = 8.0
 PLOT_H   = 4.0
 MIN_PROB = 1e-4
 
-BASE_COLOR   = "#1E335C"     # dark navy bars / +2 big-bonus numbers
-BONUS1_COLOR = ORANGE        # one 100-pt yahtzee bonus
-BONUS2_COLOR = RED           # two 100-pt yahtzee bonuses / +4 giant bonus
-HL_COLOR     = "#E8A33D"     # peak-highlight colour / +1 small-bonus numbers
+# Colours come from the shared palette (style.py).
+BASE_COLOR   = ACCENT_FILL    # bars / +2 big-bonus numbers / big-tier header
+BONUS1_COLOR = ACCENT_ORANGE  # one 100-pt yahtzee bonus
+BONUS2_COLOR = ACCENT_RED     # two 100-pt yahtzee bonuses / +4 giant bonus
+HL_COLOR     = ACCENT_GOLD    # peak highlights / +1 small-bonus numbers
+
+# Right-hand panel/table card: same vertical range as the scorecard.
+RIGHT_CX = 2.6
+RIGHT_W  = 8.0
 
 TOP_ROWS    = list(range(6))
 CHANCE_ROW  = 12
@@ -49,12 +56,11 @@ class Histogram(YahtzeeScene):
             b.stretch(1e-3, dim=1, about_edge=DOWN)
         self.play(*[Restore(b) for b in bars], *extra, run_time=run_time)
 
-    def _card_behind(self, mob, pad=0.45, corner=0.22):
-        card = RoundedRectangle(
-            width=mob.width + 2 * pad, height=mob.height + 2 * pad,
-            corner_radius=corner, fill_color=CARD_FILL, fill_opacity=1.0,
-            stroke_color=BLACK, stroke_width=2)
-        card.move_to(mob.get_center())
+    def _right_card(self):
+        """A card on the right that spans the SAME vertical range as the
+        scorecard."""
+        card = get_card(RIGHT_W, self.card.height,
+                        center=[RIGHT_CX, self.card.get_center()[1], 0])
         card.set_z_index(-1)
         return card
 
@@ -136,9 +142,9 @@ class Histogram(YahtzeeScene):
         panel = VGroup(*lines).arrange(DOWN, aligned_edge=LEFT, buff=0.22)
         for it in self.i_giant + self.i_big + self.i_small:
             it.shift(RIGHT * 0.45)
-        panel.move_to([2.9, 0.0, 0])
+        self.panel_card = self._right_card()
+        panel.move_to(self.panel_card.get_center())
         self.bonus_panel = panel
-        self.panel_card = self._card_behind(panel, pad=0.5)
 
     @subscene
     def card_in(self, run_time=1.0):
@@ -205,11 +211,10 @@ class Histogram(YahtzeeScene):
         self.bonus_panel = self.panel_card = None
 
         self.table_rows = sd.bonus_table_rows()
-        self.table = get_bar_graph(self.table_rows, bar_max_width=3.6,
-                                   short_color=BASE_COLOR, long_color=GREY)
-        self.table.scale(1.05)
-        self.table_card = self._card_behind(self.table, pad=0.45)
-        VGroup(self.table, self.table_card).move_to([2.9, 0, 0])
+        self.table = get_bar_graph(self.table_rows, bar_max_width=3.4,
+                                   long_color=GREY)        # short bar = accent
+        self.table_card = self._right_card()
+        self.table.move_to(self.table_card.get_center())
         self.play(FadeIn(self.table_card), FadeIn(self.table, shift=RIGHT * 0.3),
                   run_time=run_time)
         self.wait(0.4)
@@ -223,30 +228,35 @@ class Histogram(YahtzeeScene):
         self.wait(0.3)
 
     def _emph(self, card_rows, table_idxs, hold=1.5, run_time=0.6):
-        """Hold a scorecard-box highlight (stays up for ``hold`` s) while the
-        matching bar-graph label + % go bold. Uses overlaid copies, so nothing on
-        the card or table is mutated — a clean FadeOut restores everything."""
-        extras = VGroup()
+        """Hold a scorecard-box highlight (fill + border) for ``hold`` s while the
+        row label and the matching bar-graph label + % TRANSFORM from regular into
+        bold (and back) — the same morph the scorecard's highlight uses, not a
+        copy laid on top. Originals are save_state'd and Restore'd, so nothing is
+        left mutated."""
+        fills = VGroup()
+        morphs = []          # mobjects we morph to bold, then Restore
         ins = []
         for r in card_rows:
             fill, border, bold = self.card._row_highlight(r, YELLOW, 0.45)
-            extras.add(fill, border, bold)
-            ins += [FadeIn(fill), FadeIn(border), FadeIn(bold)]
+            fills.add(fill, border)
+            lbl = self.card.labels[r]
+            lbl.save_state()
+            ins += [FadeIn(fill), FadeIn(border), Transform(lbl, bold)]
+            morphs.append(lbl)
         for i in table_idxs:
-            lab, pct = self.table[i][0], self.table[i][3]
-            blab = crisp_text(self.table_rows[i]["label"], font=FONT,
-                              font_size=FONT_SIZE_SM * 1.05, color=BLACK,
-                              weight="BOLD").move_to(lab, aligned_edge=RIGHT)
-            bpct = crisp_text(f"{self.table_rows[i]['pct']:.0f}%", font=FONT,
-                              font_size=FONT_SIZE_SM * 1.05, color=BLACK,
-                              weight="BOLD").move_to(pct, aligned_edge=LEFT)
-            blab.set_z_index(5)
-            bpct.set_z_index(5)
-            extras.add(blab, bpct)
-            ins += [FadeIn(blab), FadeIn(bpct)]
+            targets = [
+                (self.table[i][0], self.table_rows[i]["label"], RIGHT),
+                (self.table[i][3], f"{self.table_rows[i]['pct']:.0f}%", LEFT),
+            ]
+            for m, txt, edge in targets:
+                bold = crisp_text(txt, font=FONT, font_size=FONT_SIZE_SM,
+                                  color=BLACK, weight="BOLD").move_to(m, aligned_edge=edge)
+                m.save_state()
+                ins.append(Transform(m, bold))
+                morphs.append(m)
         self.play(*ins, run_time=run_time)
         self.wait(hold)
-        self.play(FadeOut(extras), run_time=run_time)
+        self.play(FadeOut(fills), *[Restore(m) for m in morphs], run_time=run_time)
 
     # ════════════════════════════════════════════════════════════════════════
     # i–q : back to the plot, highlight peak regions by reduced-bonus points
@@ -291,30 +301,30 @@ class Histogram(YahtzeeScene):
 
     @subscene
     def all_bonuses(self, run_time=1.0):
-        self._highlight(sd.overlay_by_reduced(10), "All regular bonuses (10 points)",
+        self._highlight(sd.overlay_by_reduced(10), "All regular bonuses (10 bonus pts)",
                         HL_COLOR, run_time)
 
     @subscene
     def minus_one_small(self, run_time=1.0):
-        self._highlight(sd.overlay_by_reduced(9), "Missing one small (9)",
+        self._highlight(sd.overlay_by_reduced(9), "Missing 1 bonus pt",
                         HL_COLOR, run_time)
 
     @subscene
     def minus_two_three(self, run_time=1.0):
-        self._highlight(sd.overlay_by_reduced(8), "Missing 2 pts", HL_COLOR, run_time)
-        self._highlight(sd.overlay_by_reduced(7), "Missing 3 pts", HL_COLOR, run_time)
+        self._highlight(sd.overlay_by_reduced(8), "Missing 2 bonus pts", HL_COLOR, run_time)
+        self._highlight(sd.overlay_by_reduced(7), "Missing 3 bonus pts", HL_COLOR, run_time)
 
     @subscene
     def minus_four(self, run_time=1.0):
-        self._highlight(sd.overlay_by_reduced(6), "Missing 4 pts", HL_COLOR, run_time)
+        self._highlight(sd.overlay_by_reduced(6), "Missing 4 bonus pts", HL_COLOR, run_time)
 
     @subscene
     def minus_five(self, run_time=1.0):
-        self._highlight(sd.overlay_by_reduced(5), "Missing 5 pts", HL_COLOR, run_time)
+        self._highlight(sd.overlay_by_reduced(5), "Missing 5 bonus pts", HL_COLOR, run_time)
 
     @subscene
     def below_five(self, run_time=1.0):
-        self._highlight(sd.overlay_reduced_below(5), "Missing 6+ pts",
+        self._highlight(sd.overlay_reduced_below(5), "Missing 6+ bonus pts",
                         HL_COLOR, run_time)
         self.play(FadeOut(self.plot, self.cur_overlay, self.legend), run_time=0.8)
         self.plot = self.cur_overlay = self.legend = None
