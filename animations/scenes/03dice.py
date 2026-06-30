@@ -7,7 +7,6 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
 from assets.dice import get_die, DIE_COLORS, PIP_COLORS, morph_dice
-from bpkfigures.card import card_behind
 
 
 # ── outcome enumeration ───────────────────────────────────────────────────────
@@ -265,10 +264,6 @@ class Dice(YahtzeeScene):
             count.move_to([1.6, y, 0], aligned_edge=LEFT)
             rows.add(VGroup(dice, count))
         self.freq_rows = rows
-        # sit the title + rows on a card (centred, scaled to a consistent height)
-        group = VGroup(self.freq_title, self.freq_rows)
-        group.move_to(ORIGIN).scale(6.6 / group.height)
-        self.freq_card = card_behind(group, pad=0.5)
 
     # ── a. 6^k build-up: each k-group spawns 6 (k+1)-groups (append 1..6) ───────
     def _grow(self, parents, children, k, run_time, lag_ratio=0.002):
@@ -382,19 +377,40 @@ class Dice(YahtzeeScene):
         d2.pips.set_z_index(0)
         self.wait(0.8)
 
-    # ── d. 33333 → 12345, roll permutations, then fill the 120-straight grid ────
+    def _shuffle_pips(self, dice, arrangement, run_time):
+        """Re-home each die's pip-group so slot i shows the pips of die
+        ``arrangement[i]`` — the bodies (and their colours) stay put, only the
+        pips arc across. The yahtzee-swap mechanic generalised to a full
+        permutation. Pips already at their target slot don't move (no loop).
+
+        Pips are kept ABOVE every body (z-index 10, never reset): once a pip-group
+        lands on a different die, a body drawn later in the group would otherwise
+        cover it."""
+        positions = [d.get_center() for d in dice]
+        for d in dice:
+            d.pips.set_z_index(10)
+        anims = []
+        for slot, g in enumerate(arrangement):
+            target = positions[slot]
+            if float(((dice[g].pips.get_center() - target) ** 2).sum()) > 1e-9:
+                anims.append(dice[g].pips.animate.move_to(target))
+        if anims:
+            self.play(*anims, path_arc=PI, run_time=run_time)
+
+    # ── d. 33333 → 12345, shuffle pips, then fill the 120-straight grid ──────────
     @subscene
     def straight_120(self):
         self._setup_straight_120()              # owns s120 (yz_dice carried in)
         dice = self.yz_dice          # 5 colored dice showing 3 3 3 3 3
         morph_dice(self, dice, [1, 2, 3, 4, 5], run_time=0.7)
         self.wait(0.2)
-        # morph through two permutations of 1-5…
-        for perm in ([3, 1, 4, 5, 2], [4, 2, 5, 1, 3]):
-            morph_dice(self, dice, perm, run_time=0.7)
+        # shuffle the pips into other large-straight arrangements — bodies/colours
+        # stay put, only the pips arc across (like the yahtzee swap just before)
+        for arr in ([2, 0, 1, 4, 3], [3, 4, 0, 1, 2]):
+            self._shuffle_pips(dice, arr, run_time=0.7)
             self.wait(0.15)
-        # …then morph back to 1 2 3 4 5
-        morph_dice(self, dice, [1, 2, 3, 4, 5], run_time=0.7)
+        # …then settle back to 1 2 3 4 5
+        self._shuffle_pips(dice, [0, 1, 2, 3, 4], run_time=0.7)
         self.wait(0.2)
         # shrink the straight into the grid's top-left, then fill the rest out
         self.play(ReplacementTransform(dice, self.s120[0]), run_time=1.0)
@@ -426,7 +442,6 @@ class Dice(YahtzeeScene):
         self._setup_frequency()                 # owns freq_* (s240/six_yz carried)
         self.play(FadeOut(self.s240), FadeOut(self.six_yz),
                   FadeOut(self.s240_label), FadeOut(self.six_label), run_time=0.6)
-        self.play(FadeIn(self.freq_card), run_time=0.5)
         self.play(FadeIn(self.freq_title, shift=DOWN * 0.2), run_time=0.5)
         self.play(LaggedStart(*[FadeIn(r, shift=RIGHT * 0.2)
                                 for r in self.freq_rows],
