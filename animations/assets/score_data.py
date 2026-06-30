@@ -128,6 +128,16 @@ def overlay_reduced_below(k):
     return _dist(rp < k)
 
 
+def overlay_all_big_bonuses():
+    """Games with all three big bonuses — top bonus, large straight, and a
+    yahtzee — but NO extra yahtzee (yu == 1), regardless of small bonuses."""
+    _, yu, flags, _ = _load()
+    mask = ((yu == 1)
+            & ((flags & FLAG_TOP_BONUS) != 0)
+            & ((flags & FLAG_LARGE_STRAIGHT) != 0))
+    return _dist(mask)
+
+
 def overlay_yahtzee_bumps():
     """All games with at least one EXTRA yahtzee bonus (yu >= 2) — the right
     bumps revisited in the highlight beats."""
