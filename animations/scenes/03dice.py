@@ -385,8 +385,12 @@ class Dice(YahtzeeScene):
 
         Pips are kept ABOVE every body (z-index 10, never reset): once a pip-group
         lands on a different die, a body drawn later in the group would otherwise
-        cover it."""
-        positions = [d.get_center() for d in dice]
+        cover it.
+
+        Targets are the BODY centres (not d.get_center()): after a shuffle a die's
+        pips are displaced, which would skew the group centre and make the next
+        shuffle aim between dice."""
+        positions = [d.body.get_center() for d in dice]
         for d in dice:
             d.pips.set_z_index(10)
         anims = []
