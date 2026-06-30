@@ -209,15 +209,17 @@ class Histogram(YahtzeeScene):
 
     @subscene
     def bonus_table(self, run_time=1.5):
-        self.play(FadeOut(self.bonus_panel, self.panel_card), run_time=run_time * 0.4)
-        self.bonus_panel = self.panel_card = None
-
         self.table_rows = sd.bonus_table_rows()
-        self.table = get_bar_graph(self.table_rows, bar_max_width=3.4)
-        self.table_card = self._right_card()
+        self.table = get_bar_graph(self.table_rows, bar_max_width=3.4,
+                                   title="Average Points", pct_header="Success\nProb",
+                                   show_values=True)
+        # keep the SAME card from the point-system beat — only swap the contents
+        self.table_card = self.panel_card
+        self.panel_card = None
         self.table.move_to(self.table_card.get_center())
-        self.play(FadeIn(self.table_card), FadeIn(self.table, shift=RIGHT * 0.3),
+        self.play(FadeOut(self.bonus_panel), FadeIn(self.table, shift=RIGHT * 0.3),
                   run_time=run_time)
+        self.bonus_panel = None
         self.wait(0.4)
         self._emph([YAHTZEE_ROW], [6])                 # yahtzee box + table row
         self._emph([9, 10], [4, 5])                    # small & large straight
