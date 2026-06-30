@@ -139,10 +139,12 @@ class Histogram(YahtzeeScene):
 
         lines = [self.h_giant, *self.i_giant, self.h_big, *self.i_big,
                  self.h_small, *self.i_small]
-        panel = VGroup(*lines).arrange(DOWN, aligned_edge=LEFT, buff=0.22)
+        panel = VGroup(*lines).arrange(DOWN, aligned_edge=LEFT, buff=0.24)
         for it in self.i_giant + self.i_big + self.i_small:
             it.shift(RIGHT * 0.45)
         self.panel_card = self._right_card()
+        # scale the text up to fill most of the card's height
+        panel.scale(self.panel_card.height * 0.86 / panel.height)
         panel.move_to(self.panel_card.get_center())
         self.bonus_panel = panel
 
@@ -211,8 +213,7 @@ class Histogram(YahtzeeScene):
         self.bonus_panel = self.panel_card = None
 
         self.table_rows = sd.bonus_table_rows()
-        self.table = get_bar_graph(self.table_rows, bar_max_width=3.4,
-                                   long_color=GREY)        # short bar = accent
+        self.table = get_bar_graph(self.table_rows, bar_max_width=3.4)
         self.table_card = self._right_card()
         self.table.move_to(self.table_card.get_center())
         self.play(FadeIn(self.table_card), FadeIn(self.table, shift=RIGHT * 0.3),
