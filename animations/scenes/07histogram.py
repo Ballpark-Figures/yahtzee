@@ -25,9 +25,9 @@ BONUS1_COLOR = ACCENT_ORANGE  # one 100-pt yahtzee bonus
 BONUS2_COLOR = ACCENT_RED     # two 100-pt yahtzee bonuses / +4 giant bonus
 HL_COLOR     = ACCENT_GOLD    # peak highlights / +1 small-bonus numbers
 
-# Right-hand panel/table card: same vertical range as the scorecard.
-RIGHT_CX = 2.6
-RIGHT_W  = 8.0
+# Equal horizontal gaps: frame|G|scorecard|G|card|G|frame. (The scorecard's
+# default position bleeds off the left edge, so we re-place it for this layout.)
+GAP = 0.45
 
 TOP_ROWS    = list(range(6))
 CHANCE_ROW  = 12
@@ -58,9 +58,14 @@ class Histogram(YahtzeeScene):
 
     def _right_card(self):
         """A card on the right that spans the SAME vertical range as the
-        scorecard."""
-        card = get_card(RIGHT_W, self.card.height,
-                        center=[RIGHT_CX, self.card.get_center()[1], 0])
+        scorecard, leaving a gap of GAP from the scorecard and from the right
+        frame edge."""
+        fxr = self.camera.frame_width / 2
+        card_left = self.card.get_right()[0] + GAP
+        card_right = fxr - GAP
+        card = get_card(card_right - card_left, self.card.height,
+                        center=[(card_left + card_right) / 2,
+                                self.card.get_center()[1], 0])
         card.set_z_index(-1)
         return card
 
@@ -152,6 +157,9 @@ class Histogram(YahtzeeScene):
     def card_in(self, run_time=1.0):
         self.card = get_scorecard(scores=[None] * 14, center=LEFT_SC,
                                   show_summary=False)
+        # re-place so the left gap matches the scorecard↔card and card↔right gaps
+        fxr = self.camera.frame_width / 2
+        self.card.move_to([-fxr + GAP + self.card.width / 2, 0, 0])
         self.play(FadeOut(self.plot, self.overlay, self.legend),
                   run_time=run_time * 0.5)
         self.plot = self.overlay = self.legend = None
