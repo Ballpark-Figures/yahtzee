@@ -123,14 +123,12 @@ class Intro(YahtzeeScene):
       grand_total  — count 385B down to 341,960,288,112, x756 -> 258,521,977,812,672
     """
 
+    # LAZY BUILDING: each subscene builds what it OWNS by calling its
+    # _setup_<name>() at its start; carry-over objects ride the snapshot. So
+    # editing a late setup (e.g. _setup_grand_total) no longer rebuilds the heavy
+    # build-up, and early snapshots stay light. See bpkfigures/CLAUDE.md.
     def setup_scene(self):
-        self._setup_one_die()
-        self._setup_buildup()
-        self._setup_card()
-        self._setup_three_rolls()
-        self._setup_box_combos()
-        self._setup_one_card()
-        self._setup_grand_total()
+        pass
 
     def _setup_card(self):
         # ONE shared scorecard for the whole right-side / scorecard portion of
@@ -369,6 +367,7 @@ class Intro(YahtzeeScene):
     # ── 6 things can happen ───────────────────────────────────────────────────
     @subscene
     def one_die(self):
+        self._setup_one_die()
         dice = self.one_die_dice
         big = self.one_die_lone_size
         grid = self.one_die_grid_size
@@ -396,6 +395,7 @@ class Intro(YahtzeeScene):
     # ── build up: 6 singles -> 21 pairs -> 56 trios -> 126 quads -> 252 quints ─
     @subscene
     def pairs(self):
+        self._setup_buildup()           # owns the build-up grids (uses one_die_dice)
         self.add(self.bgrid[1])
         self._grow_step(1, run_time=2.4)
         self.wait(1)
@@ -427,6 +427,8 @@ class Intro(YahtzeeScene):
     # ── dice roll up through the bands, count 252 -> 504 -> 756 ───────────────
     @subscene
     def three_rolls(self):
+        self._setup_card()              # owns the shared scorecard…
+        self._setup_three_rolls()       # …and the roll dice / lines / counts
         dice = self.tr_dice
 
         # board + dice MOVE on screen (the lines just fade in): the card slides
@@ -495,6 +497,7 @@ class Intro(YahtzeeScene):
     # ── flash the 13 boxes & multiply 2's down the 3rd column -> 8192 ──────────
     @subscene
     def box_combos(self):
+        self._setup_box_combos()        # owns box glows / 2's / products (card carried)
         BEAT = 0.2
         N = 13
         twos, products = self.box_twos, self.box_products
@@ -544,6 +547,7 @@ class Intro(YahtzeeScene):
     # ── rapidly cycle complete scorecards (each ~0.2s, ~2s total) ─────────────
     @subscene
     def cycle_cards(self):
+        self._setup_one_card()          # owns the filled cards (card / 8192 carried)
         sc = self.card        # empty card, on screen; dice/756 stay put
         fills = self.card_fills[:10]
 
@@ -578,6 +582,7 @@ class Intro(YahtzeeScene):
     # ── card/dice exit; 8192 -> 385B; cull; x756 down to 1 / count up to 258T ──
     @subscene
     def grand_total(self):
+        self._setup_grand_total()       # owns gt_* (tr_dice / 8192 / card carried)
         import math
         dice = self.tr_dice
         fs = self.gt_fs
