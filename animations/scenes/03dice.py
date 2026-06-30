@@ -7,6 +7,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
 from assets.dice import get_die, DIE_COLORS, PIP_COLORS, morph_dice
+from bpkfigures.card import card_behind
 
 
 # ── outcome enumeration ───────────────────────────────────────────────────────
@@ -264,6 +265,10 @@ class Dice(YahtzeeScene):
             count.move_to([1.6, y, 0], aligned_edge=LEFT)
             rows.add(VGroup(dice, count))
         self.freq_rows = rows
+        # sit the title + rows on a card (centred, scaled to a consistent height)
+        group = VGroup(self.freq_title, self.freq_rows)
+        group.move_to(ORIGIN).scale(6.6 / group.height)
+        self.freq_card = card_behind(group, pad=0.5)
 
     # ── a. 6^k build-up: each k-group spawns 6 (k+1)-groups (append 1..6) ───────
     def _grow(self, parents, children, k, run_time, lag_ratio=0.002):
@@ -421,6 +426,7 @@ class Dice(YahtzeeScene):
         self._setup_frequency()                 # owns freq_* (s240/six_yz carried)
         self.play(FadeOut(self.s240), FadeOut(self.six_yz),
                   FadeOut(self.s240_label), FadeOut(self.six_label), run_time=0.6)
+        self.play(FadeIn(self.freq_card), run_time=0.5)
         self.play(FadeIn(self.freq_title, shift=DOWN * 0.2), run_time=0.5)
         self.play(LaggedStart(*[FadeIn(r, shift=RIGHT * 0.2)
                                 for r in self.freq_rows],
