@@ -1,313 +1,215 @@
 """Dynamic-programming example numbers for scene 04.
 
-Scene 04 walks through the backward-induction (DP) argument on the LAST turn of
-a solo game, where the whole turn is spent going all-out for ONE open box. Every
-EV / probability it shows is therefore an *exact* single-box expectation over the
-reroll structure — no whole-game value function is needed, so (like
-``score_data.py``) this module does NOT import the solver. It re-implements the
-handful of primitives it needs (count-vector scoring + the reroll multinomial)
-directly, matching ``math/dice.py`` and ``math/scoring.py`` exactly:
+Scene 04 walks through the backward-induction (DP) argument. Every EV it shows is
+a REST-OF-GAME expectation ("average points until the end of the game") read from
+the SOLVED game — the same value function and query helpers the notebook uses
+(``math/state_explorer.py`` over ``math/data/state_properties``). This module does
+NOT reinvent the reroll math; it calls the shared helpers and persists the handful
+of numbers the scene renders to ``dp_cache.json``.
 
-  * dice are 6-vectors of counts (index 0 = Ones … index 5 = Sixes);
-  * a reroll of ``n`` dice enumerates 6^n equally-likely rolls, and every
-    distribution is expressed over the constant denominator 6^5 = 7776.
+Two reduced game states drive the scene (upper_total capped at 63, Yahtzee already
+used so not eligible — i.e. deep into a realistic game):
+  * ``state_1box``  — everything filled EXCEPT Large Straight (the running example).
+  * ``state_2box``  — everything filled EXCEPT 4-of-a-Kind AND Large Straight.
+
+Because Large Straight is the only open box in ``state_1box``, its final-roll value
+is exactly 40 or 0 (joker included: once Yahtzee is used, a rolled five-of-a-kind
+forces a 40 into Large Straight), so a keep's ``p40 = ev / 40`` and ``p0 = 1-p40``.
 
 Category indices follow the SOLVER order (constants.py), NOT the scorecard:
 Ones..Sixes = 0..5, 3Kind=6, 4Kind=7, FullHouse=8, SmStraight=9, LgStraight=10,
 Chance=11, Yahtzee=12.
 
-Public API (all values are exact rationals evaluated in float):
-  * ``ev_keep(dice, keep, cat, rerolls)``    – EV of keeping ``keep`` with 1 or 2
-                                               rerolls remaining, going for ``cat``.
-  * ``score_dist_keep(dice, keep, cat)``     – {points: prob} after the LAST reroll.
-  * ``best_keep(dice, cat, rerolls)``        – (keep_vec, EV) maximising ``ev_keep``.
-  * ``turn_value(cat)``                      – whole last-turn EV, all-out for ``cat``.
-  * ``scene04_numbers()``                    – the specific bundle the scene renders,
-                                               cached to ``dp_cache.json`` (the
-                                               ``turn_value`` sweep is the only slow
-                                               part, so it is what gets persisted).
-
-Everything cheap is ``lru_cache``d in-process; only the per-category whole-turn
-values are persisted to disk.
+Public API:
+  * ``values_to_vec(values)``  – [1,2,3,4,6] → (1,1,1,1,0,1) count-vector.
+  * ``scene04_numbers()``      – the display bundle, cached to ``dp_cache.json``
+                                 (regenerated from the solver when the cache is
+                                 absent; render never imports the solver).
 """
 from pathlib import Path
-from itertools import product
-from functools import lru_cache
 import json
-import numpy as np
+import os
+import sys
 
-# ── constants (mirrored from math/constants.py) ───────────────────────────────
-SIDES = 6
-N_DICE = 5
-DENOM = SIDES ** N_DICE            # 7776 — every distribution's denominator
-
-FULL_HOUSE_POINTS = 25
-SMALL_STRAIGHT_POINTS = 30
-LARGE_STRAIGHT_POINTS = 40
-YAHTZEE_POINTS = 50
-
-# solver category indices
+# ── solver category indices (mirrored from math/constants.py) ─────────────────
 ONES, TWOS, THREES, FOURS, FIVES, SIXES = range(6)
 THREE_KIND, FOUR_KIND, FULL_HOUSE = 6, 7, 8
 SMALL_STRAIGHT, LARGE_STRAIGHT, CHANCE, YAHTZEE = 9, 10, 11, 12
+YAHTZEE_POINTS = 50
+
+# solver category NAMES, in solver order (must match math/constants.py exactly).
+CATEGORY_NAMES = [
+    "Ones", "Twos", "Threes", "Fours", "Fives", "Sixes",
+    "3Kind", "4Kind", "FullHouse", "SmStraight", "LgStraight", "Chance", "Yahtzee",
+]
 
 _CACHE_PATH = Path(__file__).resolve().parent / "dp_cache.json"
-# solver value-iteration output: V(state) = expected remaining points, one shard
-# per (level, 13-bit filled mask), rows keyed by (upper_total, yahtzee_eligible).
-_STATE_DIR = Path(__file__).resolve().parents[2] / "math" / "data" / "state_properties"
+_MATH_DIR = Path(__file__).resolve().parents[2] / "math"
 
 
-# ── dice helpers ──────────────────────────────────────────────────────────────
+# ── pure dice helper (no solver) ──────────────────────────────────────────────
 def values_to_vec(values):
     """[1,2,3,4,6] → (1,1,1,1,0,1) count-vector (Ones..Sixes)."""
-    v = [0] * SIDES
+    v = [0] * 6
     for x in values:
         v[x - 1] += 1
     return tuple(v)
 
 
-def _vsum(vec):
-    return sum((i + 1) * c for i, c in enumerate(vec))
+# ── solver-backed cache generation (only runs when the cache is missing) ──────
+# The named keeps the scene cycles through, as value-tuples.
+_SECOND_REROLL_ROLL = [1, 2, 3, 4, 6]          # beat b/c
+_SECOND_REROLL_KEEPS = {"1234": (1, 2, 3, 4), "34": (3, 4),
+                        "234": (2, 3, 4), "246": (2, 4, 6)}
+_FIRST_REROLL_ROLL = [1, 2, 4, 4, 6]           # beat e
+_FIRST_REROLL_KEEPS = {"124": (1, 2, 4), "24": (2, 4), "246": (2, 4, 6)}
 
+_OTHER_ROLLS = [[1, 2, 4, 4, 5], [3, 3, 4, 5, 5], [1, 1, 1, 2, 3]]   # beat d (stage B)
+_TURN_EV_ROLLS = [[1, 2, 4, 4, 6], [1, 2, 3, 4, 6], [2, 3, 4, 5, 5]]  # beat f (stage A)
 
-def score(vec, cat):
-    """Points for count-vector ``vec`` scored in solver category ``cat``
-    (matches math/scoring.py exactly)."""
-    if cat < 6:
-        return (cat + 1) * vec[cat]
-    if cat == THREE_KIND:
-        return _vsum(vec) if max(vec) >= 3 else 0
-    if cat == FOUR_KIND:
-        return _vsum(vec) if max(vec) >= 4 else 0
-    if cat == FULL_HOUSE:
-        return FULL_HOUSE_POINTS if ((3 in vec and 2 in vec) or (5 in vec)) else 0
-    if cat == SMALL_STRAIGHT:
-        ok = vec[0] * vec[1] * vec[2] * vec[3] or vec[1] * vec[2] * vec[3] * vec[4] \
-            or vec[2] * vec[3] * vec[4] * vec[5]
-        return SMALL_STRAIGHT_POINTS if ok else 0
-    if cat == LARGE_STRAIGHT:
-        ok = vec[0] * vec[1] * vec[2] * vec[3] * vec[4] \
-            or vec[1] * vec[2] * vec[3] * vec[4] * vec[5]
-        return LARGE_STRAIGHT_POINTS if ok else 0
-    if cat == CHANCE:
-        return _vsum(vec)
-    if cat == YAHTZEE:
-        return YAHTZEE_POINTS if max(vec) >= 5 else 0
-    raise ValueError(f"bad category {cat}")
+# beat h montage: (roll, stage). Stage B rolls (2nd reroll, 1 left) are shown in the
+# upper row; stage A rolls (1st reroll, 2 left) in the lower row. Chosen so the
+# rest-of-game EV climbs toward the turn value (21.2) as the montage walks backward.
+_MONTAGE = [([1, 2, 4, 4, 6], "B"), ([2, 3, 5, 5, 6], "B"),
+            ([1, 1, 4, 5, 6], "A"), ([3, 3, 3, 4, 5], "A")]
 
-
-@lru_cache(maxsize=None)
-def _reroll_dist(keep):
-    """Distribution over final count-vectors after rerolling all non-kept dice,
-    as a tuple of (final_vec, weight) with weights summing to DENOM (6^5)."""
-    ksum = sum(keep)
-    n_reroll = N_DICE - ksum
-    if n_reroll == 0:
-        return ((keep, DENOM),)
-    acc = {}
-    scale = SIDES ** ksum          # so the total weight is 6^5, not 6^n_reroll
-    for roll in product(range(SIDES), repeat=n_reroll):
-        v = list(keep)
-        for face in roll:
-            v[face] += 1
-        v = tuple(v)
-        acc[v] = acc.get(v, 0) + scale
-    return tuple(acc.items())
-
-
-@lru_cache(maxsize=None)
-def _sub_vecs(dice):
-    """All keep-subsets of ``dice`` (each face 0..count), as count-vectors."""
-    return tuple(product(*[range(c + 1) for c in dice]))
-
-
-# ── single-box expectations (the whole scene lives here) ───────────────────────
-def score_dist_keep(dice, keep, cat):
-    """{points: probability} for the FINAL dice after keeping ``keep`` (one reroll
-    left) and scoring ``cat``. ``dice`` is unused for the math but kept in the
-    signature so callers read naturally."""
-    acc = {}
-    for v, w in _reroll_dist(tuple(keep)):
-        pts = score(v, cat)
-        acc[pts] = acc.get(pts, 0) + w
-    return {p: w / DENOM for p, w in acc.items()}
-
-
-@lru_cache(maxsize=None)
-def _ev_one_reroll(keep, cat):
-    return sum(w * score(v, cat) for v, w in _reroll_dist(keep)) / DENOM
-
-
-@lru_cache(maxsize=None)
-def _value_pre_last_reroll(dice, cat):
-    """Best EV obtainable from post-first-reroll dice ``dice`` with ONE reroll
-    still to come (choose the keep that maximises the last-reroll EV)."""
-    return max(_ev_one_reroll(k, cat) for k in _sub_vecs(dice))
-
-
-@lru_cache(maxsize=None)
-def _ev_two_reroll(keep, cat):
-    """EV of keeping ``keep`` with TWO rerolls remaining: reroll now, then play
-    the last reroll optimally from whatever we land on."""
-    return sum(w * _value_pre_last_reroll(v, cat)
-               for v, w in _reroll_dist(keep)) / DENOM
-
-
-@lru_cache(maxsize=None)
-def _value_post_first_roll(dice, cat):
-    """Best EV from a fresh roll ``dice`` with two rerolls remaining."""
-    return max(_ev_two_reroll(k, cat) for k in _sub_vecs(dice))
-
-
-def ev_keep(dice, keep, cat, rerolls):
-    """EV of keeping ``keep`` from ``dice``, going all-out for ``cat``, with
-    ``rerolls`` (1 or 2) rerolls remaining."""
-    keep = tuple(keep)
-    if rerolls == 1:
-        return _ev_one_reroll(keep, cat)
-    if rerolls == 2:
-        return _ev_two_reroll(keep, cat)
-    raise ValueError("rerolls must be 1 or 2")
-
-
-def best_keep(dice, cat, rerolls):
-    """(keep_vec, EV) maximising ``ev_keep`` over all keep-subsets of ``dice``."""
-    dice = tuple(dice)
-    best, best_ev = None, -1.0
-    for k in _sub_vecs(dice):
-        ev = ev_keep(dice, k, cat, rerolls)
-        if ev > best_ev:
-            best, best_ev = k, ev
-    return best, best_ev
-
-
-@lru_cache(maxsize=None)
-def _all_initial_states():
-    """The 252 distinct opening rolls with their weights (sum = DENOM)."""
-    acc = {}
-    for roll in product(range(SIDES), repeat=N_DICE):
-        v = [0] * SIDES
-        for face in roll:
-            v[face] += 1
-        v = tuple(v)
-        acc[v] = acc.get(v, 0) + 1
-    return tuple(acc.items())
-
-
-def turn_value(cat):
-    """Expected points from spending a whole last turn (3 rolls, 2 rerolls) all
-    going for a single open box ``cat``, under optimal keep decisions."""
-    return sum(w * _value_post_first_roll(v, cat)
-               for v, w in _all_initial_states()) / DENOM
-
-
-# ── whole-game EV-remaining from the solver value function V(state) ───────────
-def ev_remaining(filled):
-    """Expected remaining points under optimal play from a scorecard state.
-
-    ``filled`` is {solver_cat: points} for the FILLED boxes (open boxes omitted).
-    The state reduces to (filled_mask, upper_total capped at 63, yahtzee_eligible)
-    exactly as ``math/reduced_game_state.py`` defines it; the value is read from
-    the value-iteration shard for that state (V). The empty card gives ≈254.588,
-    a full card gives 0."""
-    mask = upper = 0
-    eligible = False
-    for cat, pts in filled.items():
-        mask |= (1 << cat)
-        if cat <= SIXES:
-            upper += pts
-        if cat == YAHTZEE and pts == YAHTZEE_POINTS:
-            eligible = True
-    upper = min(upper, 63)
-    level = bin(mask).count("1")
-    path = _STATE_DIR / f"level_{level:02d}" / f"{mask:013b}.npz"
-    with np.load(path) as z:
-        rows = np.where((z["upper_total"] == upper)
-                        & (z["yahtzee_eligible"] == eligible))[0]
-        if len(rows) == 0:
-            raise KeyError((level, mask, upper, eligible))
-        return float(z["V"][rows[0]])
-
-
-# A representative FULL example card + the order boxes are emptied for the
-# backward sweep (solver category order). V climbs from ~0 (full) to ~254.6.
+# beat i backward sweep: a FULL example card (solver order) emptied box by box; the
+# interleaved order keeps top- and bottom-section boxes alternating. All-solver V.
 _SWEEP_FULL = {ONES: 3, TWOS: 6, THREES: 9, FOURS: 12, FIVES: 15, SIXES: 18,
                THREE_KIND: 22, FOUR_KIND: 24, FULL_HOUSE: 25, SMALL_STRAIGHT: 30,
                LARGE_STRAIGHT: 40, CHANCE: 17, YAHTZEE: 50}
-# interleave bottom-section and top-section boxes so the sweep doesn't empty the
-# whole bottom before touching the top.
 _SWEEP_ORDER = [FOUR_KIND, ONES, YAHTZEE, TWOS, THREE_KIND, THREES, CHANCE, FOURS,
                 FULL_HOUSE, FIVES, LARGE_STRAIGHT, SIXES, SMALL_STRAIGHT]
 
 
-def sweep_sequence():
-    """[{'emptied': cat|None, 'remaining': V}, …] as the card empties box by box,
-    ending at the empty card (V ≈ 254.588). All values are exact solver V."""
-    filled = dict(_SWEEP_FULL)
-    seq = [{"emptied": None, "remaining": ev_remaining(filled)}]
-    for cat in _SWEEP_ORDER:
-        del filled[cat]
-        seq.append({"emptied": cat, "remaining": ev_remaining(filled)})
-    return seq
+def _keep_ev_by_values(df, value_tuple):
+    """EV of the keep whose kept dice equal ``value_tuple`` in a keep_alternatives df."""
+    for _, r in df.iterrows():
+        if tuple(int(x) for x in r["keep"]) == tuple(value_tuple):
+            return float(r["EV"])
+    raise KeyError(f"keep {value_tuple} not legal for this roll")
 
 
-# ── the concrete bundle the scene renders (persisted) ─────────────────────────
 def _compute_scene04():
-    ls = LARGE_STRAIGHT
-    # beat 2/3: last reroll (1 left), dice 12346, several keeps for Lg Straight.
-    d_ls = values_to_vec([1, 2, 3, 4, 6])
-    keeps_ls = {
-        "1234": values_to_vec([1, 2, 3, 4]),
-        "34":   values_to_vec([3, 4]),
-        "234":  values_to_vec([2, 3, 4]),
-        "246":  values_to_vec([2, 4, 6]),
-    }
-    second_reroll = {}
-    for name, k in keeps_ls.items():
-        dist = score_dist_keep(d_ls, k, ls)
-        second_reroll[name] = {
-            "p40": dist.get(40, 0.0),
-            "p0": dist.get(0, 0.0),
-            "ev": ev_keep(d_ls, k, ls, 1),
+    """Compute the whole display bundle from the solved game via state_explorer.
+
+    The solver data paths are relative to ``math/`` and ``precomputed`` loads
+    pickles from ``data/`` at import, so we chdir into ``math/`` for the duration
+    (the state_explorer contract) and restore cwd afterwards.
+    """
+    prev_cwd = os.getcwd()
+    if str(_MATH_DIR) not in sys.path:
+        sys.path.insert(0, str(_MATH_DIR))
+    os.chdir(_MATH_DIR)
+    try:
+        import state_explorer as se
+
+        def open_state(open_names, upper=63, elig=False):
+            filled = [c for c in CATEGORY_NAMES if c not in open_names]
+            return se.ReducedGameState(
+                filled_mask=se.mask_from_categories(filled),
+                upper_total=upper, yahtzee_eligible=elig,
+            )
+
+        state_1box = open_state({"LgStraight"})
+        state_2box = open_state({"4Kind", "LgStraight"})
+
+        # beat b/c: roll 12346, second reroll (stage B, 1 left), named keeps.
+        dfB = se.keep_alternatives(state_1box, _SECOND_REROLL_ROLL, "B")
+        second_reroll = {}
+        for name, kv in _SECOND_REROLL_KEEPS.items():
+            ev = _keep_ev_by_values(dfB, kv)
+            p40 = ev / 40.0
+            second_reroll[name] = {"p40": p40, "p0": 1.0 - p40, "ev": ev}
+
+        # beat e: roll 12446, first reroll (stage A, 2 left), named keeps (EV only).
+        dfA = se.keep_alternatives(state_1box, _FIRST_REROLL_ROLL, "A")
+        first_reroll = {name: {"ev": _keep_ev_by_values(dfA, kv)}
+                        for name, kv in _FIRST_REROLL_KEEPS.items()}
+
+        # beat d: other rolls, best stage-B keep set forward + its 40/0/avg.
+        other_rolls = []
+        for values in _OTHER_ROLLS:
+            top = se.keep_alternatives(state_1box, values, "B").iloc[0]
+            ev = float(top["EV"])
+            p40 = ev / 40.0
+            other_rolls.append({
+                "values": list(values),
+                "keep_vec": [int(x) for x in top["keep_vec"]],
+                "p40": p40, "p0": 1.0 - p40, "ev": ev,
+            })
+
+        # beat f: first rolls, best stage-A keep set forward + avg; then the turn EV.
+        turn_ev_rolls = []
+        for values in _TURN_EV_ROLLS:
+            top = se.keep_alternatives(state_1box, values, "A").iloc[0]
+            turn_ev_rolls.append({
+                "values": list(values),
+                "keep_vec": [int(x) for x in top["keep_vec"]],
+                "ev": float(top["EV"]),
+            })
+        turn_ev = se.state_value(state_1box)
+
+        # beat g: box choice on roll 11134 — fill 4-Kind vs Large Straight. Each
+        # "avg after" is 0 (the roll scores 0 in both) + the continuation value of
+        # keeping the OTHER box open (rest-of-game).
+        ca = se.category_alternatives(state_2box, [1, 1, 1, 3, 4])
+
+        def cat_row(name):
+            r = ca[ca["category"] == name].iloc[0]
+            now = float(r["score_points"])
+            after = float(r["continuation_EV"])
+            return {"now": now, "after": after, "total": float(r["total_EV"])}
+
+        box_choice = {"fill_4kind": cat_row("4Kind"),
+                      "fill_lgstraight": cat_row("LgStraight")}
+
+        # beat h: montage — per roll, the optimal keep at its stage + rest-of-game EV.
+        montage = []
+        for values, stage in _MONTAGE:
+            ir = se.inspect_roll(state_2box, values)
+            row = ir[ir["stage"].str.startswith(stage)].iloc[0]
+            montage.append({
+                "values": list(values), "stage": stage,
+                "keep_vec": [int(x) for x in row["action_raw"]],
+                "ev": float(row["EV"]),
+            })
+        montage_turn_ev = se.state_value(state_2box)
+
+        # beat i: backward sweep — real solver V as the card empties box by box.
+        def V_of(filled):
+            mask = upper = 0
+            elig = False
+            for cat, pts in filled.items():
+                mask |= (1 << cat)
+                if cat <= SIXES:
+                    upper += pts
+                if cat == YAHTZEE and pts == YAHTZEE_POINTS:
+                    elig = True
+            upper = min(upper, 63)
+            st = se.ReducedGameState(filled_mask=mask, upper_total=upper,
+                                     yahtzee_eligible=elig)
+            return se.state_value(st)
+
+        filled = dict(_SWEEP_FULL)
+        sweep = [{"emptied": None, "remaining": V_of(filled)}]
+        for cat in _SWEEP_ORDER:
+            del filled[cat]
+            sweep.append({"emptied": cat, "remaining": V_of(filled)})
+
+        return {
+            "second_reroll": second_reroll,     # keep-name → {p40, p0, ev}
+            "first_reroll": first_reroll,       # keep-name → {ev}
+            "other_rolls": other_rolls,         # [{values, keep_vec, p40, p0, ev}]
+            "turn_ev_rolls": turn_ev_rolls,     # [{values, keep_vec, ev}]
+            "turn_ev": turn_ev,                 # state_value(state_1box) ≈ 10.61
+            "box_choice": box_choice,           # fill_4kind / fill_lgstraight
+            "montage": montage,                 # [{values, stage, keep_vec, ev}]
+            "montage_turn_ev": montage_turn_ev, # state_value(state_2box) ≈ 21.22
+            "sweep": sweep,                     # [{emptied, remaining}] → empty card
         }
-
-    # beat 4: first reroll (2 left), dice 12446, keeps for Lg Straight (EV only).
-    d_ls2 = values_to_vec([1, 2, 4, 4, 6])
-    keeps_ls2 = {
-        "124": values_to_vec([1, 2, 4]),
-        "24":  values_to_vec([2, 4]),
-        "246": values_to_vec([2, 4, 6]),
-    }
-    first_reroll = {name: {"ev": ev_keep(d_ls2, k, ls, 2)}
-                    for name, k in keeps_ls2.items()}
-
-    # beat 6: box choice on the second-to-last turn. Card is full except 4-of-a-
-    # Kind and Large Straight (3-of-a-Kind is already filled). 11134 scores 0 in
-    # BOTH open boxes, so it's a "which to zero out" decision: "avg after" =
-    # 0 + whole-last-turn EV of the box we keep OPEN.
-    d_box = values_to_vec([1, 1, 1, 3, 4])
-    tv_ls = turn_value(LARGE_STRAIGHT)
-    tv_4k = turn_value(FOUR_KIND)
-    box_choice = {
-        # zero 4-of-a-Kind now (0), keep Large Straight open for the last turn
-        "fill_4kind": {"now": score(d_box, FOUR_KIND), "after": tv_ls,
-                       "total": score(d_box, FOUR_KIND) + tv_ls},
-        # zero Large Straight now (0), keep 4-of-a-Kind open for the last turn
-        "fill_lgstraight": {"now": score(d_box, LARGE_STRAIGHT), "after": tv_4k,
-                            "total": score(d_box, LARGE_STRAIGHT) + tv_4k},
-    }
-
-    return {
-        "second_reroll": second_reroll,   # keep-name → {p40, p0, ev}
-        "first_reroll": first_reroll,     # keep-name → {ev}
-        "box_choice": box_choice,
-        "sweep": sweep_sequence(),        # [{emptied, remaining}, …] → empty card
-        "turn_values": {                  # handy reference for other beats
-            "large_straight": tv_ls,
-            "three_kind": turn_value(THREE_KIND),
-            "four_kind": tv_4k,
-        },
-    }
+    finally:
+        os.chdir(prev_cwd)
 
 
 def scene04_numbers():
@@ -321,4 +223,6 @@ def scene04_numbers():
 
 if __name__ == "__main__":
     import pprint
-    pprint.pprint(_compute_scene04())
+    if _CACHE_PATH.exists():
+        _CACHE_PATH.unlink()
+    pprint.pprint(scene04_numbers())

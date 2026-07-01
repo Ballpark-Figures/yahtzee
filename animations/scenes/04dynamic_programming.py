@@ -150,21 +150,29 @@ class DynamicProgramming(YahtzeeScene):
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def intro_card(self, run_time=1.0):
-        # The near-full card fades in ALREADY filled (so the top-bonus bar never
-        # animates up), together with the dice dropping in from the TOP — no roll
-        # sequence. dice 12345 are staged at the top row; Lg Straight is open.
+        # Three separate script beats, in order, with delays between (matching the
+        # script's paragraph breaks): 1. empty scorecard comes on, 2. dice come on
+        # (from the TOP), 3. the card fills out. The fill is a full filled card
+        # FADED IN over the empty one, so the values + bar appear at their FINAL
+        # state — the bar never grows.
+        empty = get_scorecard(center=LEFT_SC, scores=[None] * 14)
         self.card = get_scorecard(center=LEFT_SC, scores=list(FILL_LIST))
         self.board = DiceBoard()
         for i, d in enumerate(self.board.dice):
             d.set_value([1, 2, 3, 4, 5][i])
             d.move_to(slot_point(3, i))
-        self.play(FadeIn(self.card, shift=RIGHT * 1.5),
-                  FadeIn(self.board.lines),
-                  *[FadeIn(d, shift=DOWN * 0.7) for d in self.board.dice],
-                  run_time=run_time)
+
+        self.play(FadeIn(empty, shift=RIGHT * 1.5), run_time=run_time)     # 1. empty card
+        self.wait(0.7)
+        self.play(FadeIn(self.board.lines),                               # 2. dice from top
+                  *[FadeIn(d, shift=DOWN * 0.7) for d in self.board.dice], run_time=0.8)
+        self.wait(0.7)
+        self.add(self.card)                                               # 3. fill (no bar grow)
+        self.play(FadeIn(self.card), run_time=1.0)
+        self.remove(empty)
         self.wait(0.3)
 
-        self.card.large_straight(self, self.board.dice, y=BAND_YS[3])   # score the final dice
+        self.card.large_straight(self, self.board.dice, y=BAND_YS[3])     # score the final dice
         self.dice = self.board.dice
         self.wait(0.6)
 
@@ -200,10 +208,11 @@ class DynamicProgramming(YahtzeeScene):
     TURN_FS = 40
     TURN_CX, TURN_NX = 3.45, 3.60
 
-    def _land_turn_ev(self, dice, lbl, num, prev, *, run_time):
+    def _land_turn_ev(self, dice, lbl, num, prev, turn, *, run_time):
         """Move `dice` down to the bottom row (band 0) and, AT THE SAME TIME, the
         Avg pts (lbl+num) down to the centre of the 3rd row (band 1), enlarged;
-        then count the number to the whole-turn EV. Shared by f and the montage."""
+        then count the number to the whole-turn EV `turn`. Shared by f and the
+        montage (each passes its own rest-of-game turn value)."""
         big_lbl = self._label("Avg pts:", self.TURN_CX, BAND_YS[1], fs=self.TURN_FS, anchor=RIGHT)
         self.play(
             *[dice[i].animate.move_to(slot_point(0, i)) for i in range(5)],
@@ -212,7 +221,6 @@ class DynamicProgramming(YahtzeeScene):
                 [self.TURN_NX, BAND_YS[1], 0], aligned_edge=LEFT),
             run_time=run_time,
         )
-        turn = self.nums["turn_values"]["large_straight"]
         self._count([{"mob": num, "fmt": self._ev, "x": self.TURN_NX, "y": BAND_YS[1],
                       "start": prev, "target": turn, "color": SCORE_GREEN, "fs": self.TURN_FS}], 0.9)
 
@@ -264,14 +272,15 @@ class DynamicProgramming(YahtzeeScene):
         # the Avg number stays GREEN for these (best-keep) examples (number only)
         # script: "3 other dice configurations with their best dice combos forward"
         # — varied, and NOT all four-dice keeps (4 / 3 / 2 kept respectively).
-        for values in ([1, 2, 4, 4, 5], [3, 3, 4, 5, 5], [1, 1, 1, 2, 3]):
+        # Rolls + best keeps + rest-of-game numbers come from the solver cache.
+        for entry in self.nums["other_rolls"]:
+            values, keep_vec = entry["values"], entry["keep_vec"]
+            ev = entry["ev"]
             self._regroup(self.dice, 2, run_time=0.5)
             morph_dice(self, self.dice, values, run_time=0.5)
-            keep_vec, ev = dp.best_keep(dp.values_to_vec(values), dp.LARGE_STRAIGHT, 1)
             self._show_keep(self.dice, self._keep_indices(values, keep_vec),
                             base_band=2, run_time=run_time)
-            dist = dp.score_dist_keep(None, keep_vec, dp.LARGE_STRAIGHT)
-            p40, p0 = dist.get(40, 0.0) * 100, dist.get(0, 0.0) * 100
+            p40, p0 = entry["p40"] * 100, entry["p0"] * 100
             (x40, y40), (x0, y0), (xev, yev) = (self._num_pos["p40"],
                                                 self._num_pos["p0"], self._num_pos["ev"])
             self._count([
@@ -292,14 +301,15 @@ class DynamicProgramming(YahtzeeScene):
     def first_reroll(self, run_time=0.6):
         self.play(FadeOut(VGroup(self.lbl_p40, self.lbl_p0, self.n_p40, self.n_p0)),
                   run_time=0.4)                                    # avg only now
-        self._regroup(self.dice, 1, run_time=run_time)            # drop to band 1
-        morph_dice(self, self.dice, [1, 2, 4, 4, 6], run_time=0.5)
-        # the Avg label + number GLIDE to band 2 (label right-anchored, number
-        # left-anchored → they stay vertically aligned); number back to black.
+        # move the dice DOWN to band 1 (3rd row) AND the Avg down to band 2 (2nd
+        # row) AT THE SAME TIME (label right-anchored / number left-anchored so
+        # they stay vertically aligned; number back to black).
         by = BAND_YS[2]
-        self.play(self.lbl_ev.animate.move_to([self.ODDS_CX, by, 0], aligned_edge=RIGHT),
+        self.play(*[self.dice[i].animate.move_to(slot_point(1, i)) for i in range(5)],
+                  self.lbl_ev.animate.move_to([self.ODDS_CX, by, 0], aligned_edge=RIGHT),
                   self.n_ev.animate.set_color(BLACK).move_to([self.ODDS_NX, by, 0], aligned_edge=LEFT),
                   run_time=0.5)
+        morph_dice(self, self.dice, [1, 2, 4, 4, 6], run_time=0.5)
         self.ev_y = by
 
         keep_idx = {"124": [0, 1, 2], "24": [1, 2], "246": [1, 2, 4]}
@@ -324,10 +334,12 @@ class DynamicProgramming(YahtzeeScene):
         # Avg pts (green number) — reusing the same panel label/number from e.
         by = BAND_YS[2]
         prev = self.n_ev_val
-        for values in ([1, 2, 4, 4, 6], [2, 3, 5, 5, 6], [1, 1, 3, 4, 5]):
+        # distinct rest-of-game EVs so the number changes (7.41 / 12.22 / 22.22);
+        # rolls + best stage-A keeps come from the solver cache.
+        for entry in self.nums["turn_ev_rolls"]:
+            values, keep_vec, ev = entry["values"], entry["keep_vec"], entry["ev"]
             self._regroup(self.dice, 1, run_time=0.4)
             morph_dice(self, self.dice, values, run_time=0.5)
-            keep_vec, ev = dp.best_keep(dp.values_to_vec(values), dp.LARGE_STRAIGHT, 2)
             self._show_keep(self.dice, self._keep_indices(values, keep_vec),
                             base_band=1, run_time=run_time)
             self._count([{"mob": self.n_ev, "fmt": self._ev, "x": self.ODDS_NX, "y": by,
@@ -338,7 +350,8 @@ class DynamicProgramming(YahtzeeScene):
 
         # END: dice to the beginning (band 0) + Avg pts to the middle of the 3rd
         # row, bigger, its number becoming the whole-turn EV (text stays "Avg pts:").
-        self._land_turn_ev(self.dice, self.lbl_ev, self.n_ev, prev, run_time=run_time)
+        self._land_turn_ev(self.dice, self.lbl_ev, self.n_ev, prev,
+                           self.nums["turn_ev"], run_time=run_time)
         self.turn_lbl, self.turn_num = self.lbl_ev, self.n_ev
         self.wait(0.6)
 
@@ -361,22 +374,23 @@ class DynamicProgramming(YahtzeeScene):
         cls = self.card.value_cells[10].get_center()              # Lg Straight
         z4 = self._label("0", c4[0], c4[1], color=GRAY, anchor=ORIGIN)
         zls = self._label("0", cls[0], cls[1], color=GRAY, anchor=ORIGIN)
-        # HORIZONTAL arrows from the card's right edge (level with each box) out
-        # into the open area; the Avg-after EV sits at the far (right) end of each.
-        card_rx = self.card.get_right()[0] + 0.05
-        head_x = 2.1
-        ar4 = Arrow([card_rx, c4[1], 0], [head_x, c4[1], 0], color=BLACK,
-                    buff=0, stroke_width=3.5, max_tip_length_to_length_ratio=0.06)
-        arls = Arrow([card_rx, cls[1], 0], [head_x, cls[1], 0], color=BLACK,
-                     buff=0, stroke_width=3.5, max_tip_length_to_length_ratio=0.06)
+        # HORIZONTAL arrows pointing LEFT — the arrowHEADS sit at the right edge of
+        # each open box; the base (right) end carries the "Avg points after" words.
+        head4 = self.card.value_cells[7].get_right()
+        headls = self.card.value_cells[10].get_right()
+        base_x = 2.1
+        ar4 = Arrow([base_x, c4[1], 0], head4, color=BLACK,
+                    buff=0, stroke_width=3.5, max_tip_length_to_length_ratio=0.05)
+        arls = Arrow([base_x, cls[1], 0], headls, color=BLACK,
+                     buff=0, stroke_width=3.5, max_tip_length_to_length_ratio=0.05)
         self.play(FadeIn(z4), FadeIn(zls), GrowArrow(ar4), GrowArrow(arls), run_time=0.6)
         self.wait(0.8)                                             # beat before the EVs
 
         box = self.nums["box_choice"]
         ev4 = box["fill_4kind"]["total"]          # zero 4-Kind, keep Lg Straight open
         evls = box["fill_lgstraight"]["total"]    # zero Lg Straight, keep 4-Kind open
-        lab4 = self._label(f"Avg points after: {ev4:.1f}", head_x + 0.25, c4[1], anchor=LEFT, fs=24)
-        labls = self._label(f"Avg points after: {evls:.1f}", head_x + 0.25, cls[1], anchor=LEFT, fs=24)
+        lab4 = self._label(f"Avg points after: {ev4:.1f}", base_x + 0.2, c4[1], anchor=LEFT, fs=24)
+        labls = self._label(f"Avg points after: {evls:.1f}", base_x + 0.2, cls[1], anchor=LEFT, fs=24)
         self.play(FadeIn(lab4), FadeIn(labls), run_time=0.5)
         self.wait(0.6)
 
@@ -400,19 +414,24 @@ class DynamicProgramming(YahtzeeScene):
     def keep_montage(self, run_time=0.6):
         self.card.transition(self, {7: None}, run_time=0.6)       # 4-Kind unfilled again
         dice = [get_die(1) for _ in range(5)]                     # same size as always
+        montage = self.nums["montage"]                            # solver, 2-open-box state
 
         # the EV panel (Avg pts: <green number>), right of the kept dice, one row up
         ev_lbl = self._label("Avg pts:", self.ODDS_CX, BAND_YS[3], fs=self.ODDS_FS, anchor=RIGHT)
         ev_num = self._label("0.00", self.ODDS_NX, BAND_YS[3], color=SCORE_GREEN, fs=self.ODDS_FS)
         for s, d in enumerate(dice):                              # reveal in row 2 (band 2)
-            d.set_value([1, 2, 4, 4, 6][s])
+            d.set_value(montage[0]["values"][s])
             d.move_to(slot_point(2, s))
         self.play(*[FadeIn(d) for d in dice], FadeIn(ev_lbl), FadeIn(ev_num), run_time=0.5)
 
         prev = [0.0]
 
-        def _roll(values, base_band, ev_band, *, move_avg=False):
-            keep_vec, ev = dp.best_keep(dp.values_to_vec(values), dp.LARGE_STRAIGHT, 2)
+        def _roll(entry, *, move_avg):
+            values, keep_vec, ev = entry["values"], entry["keep_vec"], entry["ev"]
+            # 2nd-reroll (stage B) rolls sit in row 2 (band 2), EV in row 1 above;
+            # 1st-reroll (stage A) rolls sit in row 3 (band 1), EV in row 2 above.
+            base_band = 2 if entry["stage"] == "B" else 1
+            ev_band = base_band + 1
             # flatten the dice at `base_band`; on a row change, the avg moves down
             # to `ev_band` AT THE SAME TIME (not first).
             anims = [dice[i].animate.move_to(slot_point(base_band, i)) for i in range(5)]
@@ -429,16 +448,19 @@ class DynamicProgramming(YahtzeeScene):
             prev[0] = ev
             self.wait(0.25)
 
-        # row 2 dice (band 2), EV in row 1 (band 3, above)
-        _roll([1, 2, 4, 4, 6], 2, 3)
-        _roll([2, 3, 5, 5, 6], 2, 3)
-        # go DOWN together — dice to row 3 (band 1), EV to row 2 (band 2)
-        _roll([1, 2, 3, 5, 5], 1, 2, move_avg=True)
-        _roll([2, 4, 4, 5, 6], 1, 2)
+        # walk the montage backward: the two 2nd-reroll rolls (row 2), then the two
+        # 1st-reroll rolls (row 3) — dropping a row (and moving the avg down with
+        # the dice) exactly when the reroll stage changes from B to A.
+        prev_band = 2
+        for entry in montage:
+            base_band = 2 if entry["stage"] == "B" else 1
+            _roll(entry, move_avg=(base_band != prev_band))
+            prev_band = base_band
 
         # end like f: dice down to the bottom row + avg to the middle of the 3rd
-        # row (bigger), together, its number becoming the whole-turn EV.
-        self._land_turn_ev(dice, ev_lbl, ev_num, prev[0], run_time=run_time)
+        # row (bigger), together, its number becoming the whole-turn EV (≈21.2).
+        self._land_turn_ev(dice, ev_lbl, ev_num, prev[0],
+                           self.nums["montage_turn_ev"], run_time=run_time)
         self.wait(0.8)
         self.play(FadeOut(VGroup(*dice, ev_lbl, ev_num)), run_time=0.4)   # clear before the sweep
         self.wait(0.2)
