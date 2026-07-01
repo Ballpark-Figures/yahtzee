@@ -196,6 +196,26 @@ class DynamicProgramming(YahtzeeScene):
         by = BAND_YS[base_band + 1]
         return by + 0.5, by, by - 0.5
 
+    # the whole-turn EV lands in the MIDDLE of the 3rd row (band 1), bigger.
+    TURN_FS = 40
+    TURN_CX, TURN_NX = 3.45, 3.60
+
+    def _land_turn_ev(self, dice, lbl, num, prev, *, run_time):
+        """Move `dice` down to the bottom row (band 0) and, AT THE SAME TIME, the
+        Avg pts (lbl+num) down to the centre of the 3rd row (band 1), enlarged;
+        then count the number to the whole-turn EV. Shared by f and the montage."""
+        big_lbl = self._label("Avg pts:", self.TURN_CX, BAND_YS[1], fs=self.TURN_FS, anchor=RIGHT)
+        self.play(
+            *[dice[i].animate.move_to(slot_point(0, i)) for i in range(5)],
+            Transform(lbl, big_lbl),
+            num.animate.scale(self.TURN_FS / self.ODDS_FS).move_to(
+                [self.TURN_NX, BAND_YS[1], 0], aligned_edge=LEFT),
+            run_time=run_time,
+        )
+        turn = self.nums["turn_values"]["large_straight"]
+        self._count([{"mob": num, "fmt": self._ev, "x": self.TURN_NX, "y": BAND_YS[1],
+                      "start": prev, "target": turn, "color": SCORE_GREEN, "fs": self.TURN_FS}], 0.9)
+
     def _build_probs_panel(self, base_band):
         yt, ym, yb = self._panel_ys(base_band)
         self._num_pos = {"p40": (self.ODDS_NX, yt), "p0": (self.ODDS_NX, ym),
@@ -316,18 +336,9 @@ class DynamicProgramming(YahtzeeScene):
             prev = ev
             self.wait(0.4)
 
-        # END THE SAME WAY: dice back to the beginning (band 0); the Avg pts moves
-        # once more and its number becomes the whole-turn EV (text stays "Avg pts:").
-        turn = self.nums["turn_values"]["large_straight"]
-        by1 = BAND_YS[1]
-        self.play(
-            *[self.dice[i].animate.move_to(slot_point(0, i)) for i in range(5)],
-            self.lbl_ev.animate.move_to([self.ODDS_CX, by1, 0], aligned_edge=RIGHT),
-            self.n_ev.animate.move_to([self.ODDS_NX, by1, 0], aligned_edge=LEFT),
-            run_time=run_time,
-        )
-        self._count([{"mob": self.n_ev, "fmt": self._ev, "x": self.ODDS_NX, "y": by1,
-                      "start": prev, "target": turn, "color": SCORE_GREEN, "fs": self.ODDS_FS}], 0.9)
+        # END: dice to the beginning (band 0) + Avg pts to the middle of the 3rd
+        # row, bigger, its number becoming the whole-turn EV (text stays "Avg pts:").
+        self._land_turn_ev(self.dice, self.lbl_ev, self.n_ev, prev, run_time=run_time)
         self.turn_lbl, self.turn_num = self.lbl_ev, self.n_ev
         self.wait(0.6)
 
@@ -350,33 +361,27 @@ class DynamicProgramming(YahtzeeScene):
         cls = self.card.value_cells[10].get_center()              # Lg Straight
         z4 = self._label("0", c4[0], c4[1], color=GRAY, anchor=ORIGIN)
         zls = self._label("0", cls[0], cls[1], color=GRAY, anchor=ORIGIN)
-        # DARK lines (so they're visible on the blue bg), starting at the card's
-        # right edge level with each box and running out to DIFFERENT dice so they
-        # diverge (don't overlap).
+        # HORIZONTAL arrows from the card's right edge (level with each box) out
+        # into the open area; the Avg-after EV sits at the far (right) end of each.
         card_rx = self.card.get_right()[0] + 0.05
-        s4 = np.array([card_rx, c4[1], 0.0])
-        sls = np.array([card_rx, cls[1], 0.0])
-        e4 = self.dice[1].get_bottom()
-        els = self.dice[3].get_bottom()
-        ln4 = Line(s4, e4, stroke_color=BLACK, stroke_width=3.0)
-        lnls = Line(sls, els, stroke_color=BLACK, stroke_width=3.0)
-        self.play(FadeIn(z4), FadeIn(zls), Create(ln4), Create(lnls), run_time=0.6)
+        head_x = 2.1
+        ar4 = Arrow([card_rx, c4[1], 0], [head_x, c4[1], 0], color=BLACK,
+                    buff=0, stroke_width=3.5, max_tip_length_to_length_ratio=0.06)
+        arls = Arrow([card_rx, cls[1], 0], [head_x, cls[1], 0], color=BLACK,
+                     buff=0, stroke_width=3.5, max_tip_length_to_length_ratio=0.06)
+        self.play(FadeIn(z4), FadeIn(zls), GrowArrow(ar4), GrowArrow(arls), run_time=0.6)
         self.wait(0.8)                                             # beat before the EVs
 
         box = self.nums["box_choice"]
         ev4 = box["fill_4kind"]["total"]          # zero 4-Kind, keep Lg Straight open
         evls = box["fill_lgstraight"]["total"]    # zero Lg Straight, keep 4-Kind open
-        # each EV sits just above a point ON its line, at well-separated heights
-        up = np.array([0.0, 0.28, 0.0])
-        p4 = s4 + 0.60 * (e4 - s4) + up
-        pls = sls + 0.32 * (els - sls) + up
-        lab4 = self._label(f"Avg points after: {ev4:.1f}", p4[0], p4[1], anchor=ORIGIN, fs=24)
-        labls = self._label(f"Avg points after: {evls:.1f}", pls[0], pls[1], anchor=ORIGIN, fs=24)
+        lab4 = self._label(f"Avg points after: {ev4:.1f}", head_x + 0.25, c4[1], anchor=LEFT, fs=24)
+        labls = self._label(f"Avg points after: {evls:.1f}", head_x + 0.25, cls[1], anchor=LEFT, fs=24)
         self.play(FadeIn(lab4), FadeIn(labls), run_time=0.5)
         self.wait(0.6)
 
         # zero out the LOWER-EV box (keep the higher-value one open) → the 4-Kind
-        self.play(FadeOut(VGroup(ln4, lnls, z4, zls, lab4, labls)), run_time=0.4)
+        self.play(FadeOut(VGroup(ar4, arls, z4, zls, lab4, labls)), run_time=0.4)
         zero_row = 7 if ev4 >= evls else 10
         self.card.animate_zero_score(self, zero_row, self.dice)
         self.wait(0.4)
@@ -406,36 +411,36 @@ class DynamicProgramming(YahtzeeScene):
 
         prev = [0.0]
 
-        def _stage(rolls, base_band, ev_band):
-            for values in rolls:
-                self._regroup(dice, base_band, run_time=0.35)
-                morph_dice(self, dice, values, run_time=0.4)
-                keep_vec, ev = dp.best_keep(dp.values_to_vec(values), dp.LARGE_STRAIGHT, 2)
-                self._show_keep(dice, self._keep_indices(values, keep_vec),
-                                base_band=base_band, run_time=run_time)   # SET FORWARD
-                self._count([{"mob": ev_num, "fmt": self._ev, "x": self.ODDS_NX,
-                              "y": BAND_YS[ev_band], "start": prev[0], "target": ev,
-                              "color": SCORE_GREEN, "fs": self.ODDS_FS}], 0.5)
-                prev[0] = ev
-                self.wait(0.25)
+        def _roll(values, base_band, ev_band, *, move_avg=False):
+            keep_vec, ev = dp.best_keep(dp.values_to_vec(values), dp.LARGE_STRAIGHT, 2)
+            # flatten the dice at `base_band`; on a row change, the avg moves down
+            # to `ev_band` AT THE SAME TIME (not first).
+            anims = [dice[i].animate.move_to(slot_point(base_band, i)) for i in range(5)]
+            if move_avg:
+                anims += [ev_lbl.animate.move_to([self.ODDS_CX, BAND_YS[ev_band], 0], aligned_edge=RIGHT),
+                          ev_num.animate.move_to([self.ODDS_NX, BAND_YS[ev_band], 0], aligned_edge=LEFT)]
+            self.play(*anims, run_time=0.4)
+            morph_dice(self, dice, values, run_time=0.4)
+            self._show_keep(dice, self._keep_indices(values, keep_vec),
+                            base_band=base_band, run_time=run_time)          # SET FORWARD
+            self._count([{"mob": ev_num, "fmt": self._ev, "x": self.ODDS_NX,
+                          "y": BAND_YS[ev_band], "start": prev[0], "target": ev,
+                          "color": SCORE_GREEN, "fs": self.ODDS_FS}], 0.5)
+            prev[0] = ev
+            self.wait(0.25)
 
-        _stage([[1, 2, 4, 4, 6], [2, 3, 5, 5, 6]], base_band=2, ev_band=3)  # row 2 / EV row 1
-        # go DOWN: the EV glides to row 2 (band 2)
-        self.play(ev_lbl.animate.move_to([self.ODDS_CX, BAND_YS[2], 0], aligned_edge=RIGHT),
-                  ev_num.animate.move_to([self.ODDS_NX, BAND_YS[2], 0], aligned_edge=LEFT),
-                  run_time=0.4)
-        _stage([[1, 2, 3, 5, 5], [2, 4, 4, 5, 6]], base_band=1, ev_band=2)  # row 3 / EV row 2
+        # row 2 dice (band 2), EV in row 1 (band 3, above)
+        _roll([1, 2, 4, 4, 6], 2, 3)
+        _roll([2, 3, 5, 5, 6], 2, 3)
+        # go DOWN together — dice to row 3 (band 1), EV to row 2 (band 2)
+        _roll([1, 2, 3, 5, 5], 1, 2, move_avg=True)
+        _roll([2, 4, 4, 5, 6], 1, 2)
 
-        # the whole-turn EV, at the bottom (row 4 / band 0)
-        turn = self.nums["turn_values"]["large_straight"]
-        self.play(FadeOut(VGroup(*dice)),
-                  ev_lbl.animate.move_to([self.ODDS_CX, BAND_YS[0], 0], aligned_edge=RIGHT),
-                  ev_num.animate.move_to([self.ODDS_NX, BAND_YS[0], 0], aligned_edge=LEFT),
-                  run_time=0.5)
-        self._count([{"mob": ev_num, "fmt": self._ev, "x": self.ODDS_NX, "y": BAND_YS[0],
-                      "start": prev[0], "target": turn, "color": SCORE_GREEN, "fs": self.ODDS_FS}], 0.6)
+        # end like f: dice down to the bottom row + avg to the middle of the 3rd
+        # row (bigger), together, its number becoming the whole-turn EV.
+        self._land_turn_ev(dice, ev_lbl, ev_num, prev[0], run_time=run_time)
         self.wait(0.8)
-        self.play(FadeOut(VGroup(ev_lbl, ev_num)), run_time=0.4)   # clear before the sweep
+        self.play(FadeOut(VGroup(*dice, ev_lbl, ev_num)), run_time=0.4)   # clear before the sweep
         self.wait(0.2)
 
     # ══════════════════════════════════════════════════════════════════════════
