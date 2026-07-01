@@ -21,6 +21,10 @@ X_TICK_STEP = 50
 # y-axis rescales per histogram so the tallest bar fills this fraction of the box;
 # y-ticks are value-keyed, so "1%" slides to its new height and "1.5%" fades in.
 Y_HEADROOM = 0.9
+# fixed % grid — spans all peaks (flat N=1 ~1.3% up to the peaky big-N ~3.7%);
+# ticks above a given plot's scale fade out at the top
+Y_TICKS = (0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5)
+TITLE_MAXW = 11.0          # scale the counting title down if it would overrun this
 
 BASE_COLOR = ACCENT_FILL   # bars
 MED_COLOR  = ACCENT_GOLD   # median-bar highlight
@@ -32,8 +36,10 @@ TITLE_Y  = BOX_TOP + 0.85
 SHELF_Y    = BOX_TOP - 0.2
 MED_ANCHOR = [PLOT_C[0] + PLOT_W * 0.20, SHELF_Y, 0]
 
-# each histogram = best of N opponents (max of N scores); N=1 is the single plot
-SERIES = [1, 2, 3, 5]
+# each histogram = best of N opponents (max of N scores); N=1 is the single plot.
+# Values follow the script's beats (10, then the population beats 79/5000/1M/8.3B);
+# the perfect-game count is deferred (not computed yet).
+SERIES = [1, 2, 3, 5, 10, 79, 5000, 1_000_000, 8_300_000_000]
 
 
 class Multiplayer(YahtzeeScene):
@@ -59,6 +65,7 @@ class Multiplayer(YahtzeeScene):
             self.dists[n], self.centers[n], self.union[0], self.union[1],
             self.scale_x, center=PLOT_C, width=PLOT_W, height=PLOT_H,
             bar_color=BASE_COLOR, x_tick_step=X_TICK_STEP, y_headroom=Y_HEADROOM,
+            y_tick_values=Y_TICKS,
             y_axis_label="Frequency (%)", x_axis_label="Score", title=None,
             median=sd.maxN_median(n), median_color=MED_COLOR,
             median_label_anchor=MED_ANCHOR,
@@ -73,8 +80,13 @@ class Multiplayer(YahtzeeScene):
     def _count_title(self, n):
         # one string (not arranged pieces) so the baseline is consistent; the
         # counter rebuilds it each frame anyway
-        m = crisp_text(f"Best of {n} opponents", font=FONT,
-                       font_size=FONT_SIZE_LG, color=BLACK)
+        # Plain Text (not crisp_text): crisp_text supersamples to a huge font that
+        # Pango WRAPS for long strings, so the width can't be measured. A plain
+        # Text stays one line; scale it down so big-N titles fit.
+        m = Text(f"Best of {n:,} opponents", font=FONT, font_size=FONT_SIZE_LG,
+                 color=BLACK)
+        if m.width > TITLE_MAXW:
+            m.scale(TITLE_MAXW / m.width)
         m.move_to([PLOT_C[0], TITLE_Y, 0])
         return m
 
@@ -146,7 +158,9 @@ class Multiplayer(YahtzeeScene):
         self.wait(0.5)
 
     # ════════════════════════════════════════════════════════════════════════
-    # b–d : best-of-N — morph+pan, median counts up, title N counts on log scale
+    # b–i : best-of-N — morph+pan, median counts up, title N counts on log scale.
+    # Later beats (79, 5000, 1M, 8.3B) are the script's population games; the pans
+    # get big and the title number climbs on a log scale.
     # ════════════════════════════════════════════════════════════════════════
     @subscene
     def best_of_2(self, run_time=2.0):
@@ -161,4 +175,29 @@ class Multiplayer(YahtzeeScene):
     @subscene
     def best_of_5(self, run_time=2.0):
         self._transition(5, count_title=True, run_time=run_time)
+        self.wait(0.5)
+
+    @subscene
+    def best_of_10(self, run_time=2.0):
+        self._transition(10, count_title=True, run_time=run_time)
+        self.wait(0.5)
+
+    @subscene
+    def best_of_79(self, run_time=2.0):
+        self._transition(79, count_title=True, run_time=run_time)
+        self.wait(0.5)
+
+    @subscene
+    def best_of_5000(self, run_time=2.5):
+        self._transition(5000, count_title=True, run_time=run_time)
+        self.wait(0.5)
+
+    @subscene
+    def best_of_1000000(self, run_time=2.5):
+        self._transition(1_000_000, count_title=True, run_time=run_time)
+        self.wait(0.5)
+
+    @subscene
+    def best_of_8300000000(self, run_time=3.0):
+        self._transition(8_300_000_000, count_title=True, run_time=run_time)
         self.wait(0.5)

@@ -107,29 +107,39 @@ def score_distribution():
     return _dist()
 
 
-def maxN_distribution(n):
-    """{score: prob} for the MAXIMUM of ``n`` i.i.d. optimal-play final scores —
-    i.e. the best of ``n`` players (used in scene 13). Derived from the single
-    distribution's CDF: P(max = s) = F(s)^n - F(s-1)^n."""
+def _maxN_pmf_cdf(n):
+    """(scores, pmf, cdf) for the MAXIMUM of ``n`` i.i.d. optimal-play final
+    scores — i.e. the best of ``n`` players (scene 13). P(max ≤ x) = CDF(x)^n,
+    computed in LOG space (``exp(n·log1p(-tail))``) exactly as the math notebook
+    (``max_score_distribution_table``) so it stays precise for huge ``n`` — a
+    naive CDF**n rounds the tiny right-tail probabilities away."""
     base = score_distribution()
     smin, smax = min(base), max(base)
     scores = np.arange(smin, smax + 1)
-    pmf = np.array([base.get(int(s), 0.0) for s in scores])
-    pmf = pmf / pmf.sum()
-    cdf_n = np.cumsum(pmf) ** n
-    pn = np.diff(np.concatenate([[0.0], cdf_n]))
-    return {int(s): float(p) for s, p in zip(scores, pn)}
+    base_prob = np.array([base.get(int(s), 0.0) for s in scores], dtype=np.float64)
+    base_prob = base_prob / base_prob.sum()
+
+    tail_gt = np.zeros_like(base_prob)              # tail_gt[i] = P(score > s_i)
+    tail_gt[:-1] = np.cumsum(base_prob[:0:-1])[::-1]
+    tail_ge = tail_gt + base_prob                   # tail_ge[i] = P(score >= s_i)
+
+    log_cdf = n * np.log1p(-tail_gt)                # P(max <= s_i)
+    log_prev = n * np.log1p(-tail_ge)              # P(max <= s_{i-1})
+    cdf_n = np.exp(log_cdf)
+    pmf_n = np.maximum(np.exp(log_cdf) * (-np.expm1(log_prev - log_cdf)), 0.0)
+    return scores, pmf_n, cdf_n
+
+
+def maxN_distribution(n):
+    """{score: prob} for the best of ``n`` players (see ``_maxN_pmf_cdf``)."""
+    scores, pmf_n, _ = _maxN_pmf_cdf(n)
+    return {int(s): float(p) for s, p in zip(scores, pmf_n)}
 
 
 def maxN_median(n):
     """Median score of the best of ``n`` players (smallest score with CDF ≥ ½)."""
-    dist = maxN_distribution(n)
-    cum = 0.0
-    for s in sorted(dist):
-        cum += dist[s]
-        if cum >= 0.5:
-            return s
-    return max(dist)
+    scores, _, cdf_n = _maxN_pmf_cdf(n)
+    return int(scores[np.searchsorted(cdf_n, 0.5)])
 
 
 def overlay_by_yahtzee(n_extra):
