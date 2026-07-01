@@ -27,9 +27,8 @@ Y_HEADROOM = 0.9
 Y_TICKS = (0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 15, 20, 25, 30, 40, 50)
 TITLE_MAXW = 11.0          # scale the counting title down if it would overrun this
 NUM_MAXW   = 12.0          # width cap for the finale number on its own line
-NUM_MAXH   = 0.48          # height cap so the stacked number clears "Best of"/"opponents"
-STACK_MID  = 3.0           # finale: y of the number line in the stacked title
-STACK_GAP  = 0.72          # finale: gap from the number line to "Best of"/"opponents"
+STACK_MID  = 3.25          # finale: y of the number line in the stacked title
+STACK_GAP  = 0.88          # finale: gap from the number line to "Best of"/"opponents"
 
 BASE_COLOR = ACCENT_FILL   # bars
 MED_COLOR  = ACCENT_GOLD   # median-bar highlight
@@ -71,6 +70,7 @@ class Multiplayer(YahtzeeScene):
         span = max(hi - lo for lo, hi in ranges.values())   # widest fills the box
         self.scale_x = PLOT_W / span
         self.centers = {n: (lo + hi) / 2 for n, (lo, hi) in ranges.items()}
+        self.means = {}
 
     def _dist(self, n):
         if n not in self.dists:
@@ -83,23 +83,37 @@ class Multiplayer(YahtzeeScene):
             self.centers[n] = (lo + hi) / 2
         return self.centers[n]
 
+    def _mean(self, n):
+        """Mean (expected score) of the best-of-n distribution. Unlike the median or
+        the trimmed-range centre — both of which JUMP as the tails / CDF-crossing
+        shift — the mean is a smooth, continuous function of n. Anchoring the pan's
+        window-centre to it makes the slide smooth; the median highlight still snaps
+        to its own bar on top of that smooth pan."""
+        if n not in self.means:
+            d = self._dist(n)
+            tot = sum(d.values())
+            self.means[n] = (sum(s * p for s, p in d.items()) / tot) if tot else 0.0
+        return self.means[n]
+
     def _wc(self, nb, prev_n, n):
-        """Window-centre for an intermediate plot on a SMOOTH straight glide from the
-        start beat's centre to the end beat's centre (in log-N fraction). With the
-        eased sub-morph timing this makes the live window-centre = c0 + smooth(t)·Δ —
-        ONE continuous slide, so the median glides from its start to its end position
-        instead of the pan lurching between per-checkpoint centres."""
+        """Pan window-centre for an intermediate plot: follow the smooth MEAN, plus a
+        framing offset (range-centre − mean) LERPED between the beat's endpoints so
+        the right-skewed distribution stays boxed — pure mean-centring would push the
+        long high-score tail off the right edge. The mean is smooth in n (the median /
+        range-centre JUMP), so the pan slides smoothly; the median highlight still
+        snaps to its own bar on top of that smooth pan."""
         lp = np.log(float(prev_n))
-        span = np.log(float(n)) - lp
-        fr = (np.log(float(nb)) - lp) / span if span else 1.0
-        c0, c1 = self._center(prev_n), self._center(n)
-        return c0 + fr * (c1 - c0)
+        sp = np.log(float(n)) - lp
+        fr = (np.log(float(nb)) - lp) / sp if sp else 1.0
+        o0 = self._center(prev_n) - self._mean(prev_n)
+        o1 = self._center(n) - self._mean(n)
+        return self._mean(nb) + o0 + fr * (o1 - o0)
 
     def _build(self, n, wc=None):
         """The bars/axes/ticks ONLY — no median callout (the highlight bar, dashed
         leader, and "Median NNN" label are all scene-owned). ``wc`` overrides the
-        window-centre so a beat can place its intermediate plots on a SMOOTH glide
-        (defaults to the plot's natural range-centre)."""
+        window-centre (a beat glides it via _wc, anchored to the smooth mean);
+        defaults to the range-centre so a RESTING plot is boxed."""
         return get_panning_histogram(
             self._dist(n), wc if wc is not None else self._center(n),
             self.union[0], self.union[1],
@@ -133,8 +147,6 @@ class Multiplayer(YahtzeeScene):
         m = Text(f"{n:,}", font=FONT, font_size=FONT_SIZE_LG, color=BLACK)
         if m.width > NUM_MAXW:
             m.scale(NUM_MAXW / m.width)
-        if m.height > NUM_MAXH:                          # keep it off "Best of"/"opponents"
-            m.scale(NUM_MAXH / m.height)
         return m
 
     def _med_label(self, med):
