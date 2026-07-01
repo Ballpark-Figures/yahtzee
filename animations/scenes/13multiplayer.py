@@ -238,6 +238,36 @@ class Multiplayer(YahtzeeScene):
             out.append((run_time * dt, rate))
         return out
 
+    def _morph_chain(self, seq, meds, beat, prev_n, n, mt, nt, run_time,
+                     gt=None, extra_first=()):
+        """The shared checkpoint-morph loop used by EVERY beat and the finale: each
+        sub-morph builds the next mean-anchored plot, morph_panning's it, and advances
+        the median tracker ``mt`` and the log-count tracker ``nt`` on that sub-morph's
+        eased rate; the dashed leader fades off early in the first step. ``gt`` (if
+        given) advances 0..1 in REAL time for the finale's reflow; ``extra_first`` is
+        extra anims folded into the first step (e.g. a title crossfade). The caller
+        attaches the median_label / med_hl / title / reflow updaters to these trackers
+        before calling and tears them down after; ``self.plot`` ends on the last plot."""
+        elapsed = 0.0
+        for i in range(len(seq) - 1):
+            nb, mb = seq[i + 1], meds[i + 1]
+            new = self._build(nb, wc=self._wc(nb, prev_n, n))
+            rt, rate = beat[i]
+            anims = morph_panning(self.plot, new)
+            for a in anims:
+                a.rate_func = rate                      # slice of smooth (eased over the beat)
+            anims.append(mt.animate(rate_func=rate).set_value(mb))
+            anims.append(nt.animate(rate_func=rate).set_value(np.log(float(nb))))
+            if gt is not None:
+                elapsed += rt
+                anims.append(gt.animate(rate_func=linear).set_value(min(1.0, elapsed / run_time)))
+            if i == 0:                                   # leader off early — no static pause
+                anims.append(FadeOut(self.med_lead,
+                                     rate_func=squish_rate_func(smooth, 0.0, 0.25)))
+                anims += list(extra_first)
+            self.play(*anims, run_time=rt)
+            self.plot = new
+
     def _transition(self, n, count_title, run_time=3.0, lead_in=0.5):
         """One ``run_time``-second beat-to-beat animation that morphs THROUGH the
         intermediate checkpoints (real best-of-N distributions whose median crosses
@@ -249,43 +279,30 @@ class Multiplayer(YahtzeeScene):
         prev_n, m0, m1 = self.cur_n, self.cur_median, sd.maxN_median(n)
         seq, meds = self._beat_seq(prev_n, n, m0, m1)
         beat = self._eased_beat(seq, run_time)
+        mt = ValueTracker(m0)
+        nt = ValueTracker(np.log(float(prev_n)))
+        self.median_label.add_updater(
+            lambda mob: mob.become(self._med_label(round(mt.get_value()))))
+        self.med_hl.add_updater(                         # snap onto the counter's bar
+            lambda h: h.become(self._med_hl_for(round(mt.get_value()))))
 
-        for i in range(len(seq) - 1):
-            na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
-            new = self._build(nb, wc=self._wc(nb, prev_n, n))
-            rt, rate = beat[i]
+        if count_title:                                  # single-line title counts N
+            self.title.add_updater(lambda mob: mob.become(
+                self._count_title(int(round(np.exp(nt.get_value()))))))
+            extra_first = ()
+        else:                                            # first count-title beat (1->2):
+            new_title = self._count_title(n)             # crossfade plain -> counting title
+            extra_first = [FadeOut(self.title), FadeIn(new_title)]
 
-            mt = ValueTracker(ma)
-            self.median_label.add_updater(
-                lambda mob, mt=mt: mob.become(self._med_label(round(mt.get_value()))))
-            self.med_hl.add_updater(                     # snap onto the counter's bar
-                lambda h, mt=mt: h.become(self._med_hl_for(round(mt.get_value()))))
-            anims = morph_panning(self.plot, new)
-            for a in anims:
-                a.rate_func = rate                      # slice of smooth (eased over the beat)
-            anims.append(mt.animate(rate_func=rate).set_value(mb))
-            if i == 0:                                   # leader fades off early in the
-                anims.append(FadeOut(self.med_lead,      # first step — no static pause
-                                     rate_func=squish_rate_func(smooth, 0.0, 0.25)))
+        self._morph_chain(seq, meds, beat, prev_n, n, mt, nt, run_time,
+                          extra_first=extra_first)
 
-            if count_title:
-                nt = ValueTracker(np.log(float(na)))
-                self.title.add_updater(lambda mob, nt=nt: mob.become(
-                    self._count_title(int(round(np.exp(nt.get_value()))))))
-                anims.append(nt.animate(rate_func=rate).set_value(np.log(float(nb))))
-                self.play(*anims, run_time=rt)
-                self.title.clear_updaters()
-            else:
-                new_title = self._count_title(nb)       # 1->2: crossfade structure
-                anims += [FadeOut(self.title), FadeIn(new_title)]
-                self.play(*anims, run_time=rt)
-                self.title = new_title
-                count_title = True
-
-            self.median_label.clear_updaters()
-            self.med_hl.clear_updaters()
-            self.plot = new
-
+        self.median_label.clear_updaters()
+        self.med_hl.clear_updaters()
+        if count_title:
+            self.title.clear_updaters()
+        else:
+            self.title = new_title
         self.median_label.become(self._med_label(m1))
         self.med_hl.become(self._med_hl_for(m1))
         self.title.become(self._count_title(n))
@@ -371,7 +388,6 @@ class Multiplayer(YahtzeeScene):
         n = self.n_perfect
         prev_n, m0, m1 = self.cur_n, self.cur_median, sd.maxN_median(n)
         seq, meds = self._beat_seq(prev_n, n, m0, m1)
-        log_total = np.log(float(n)) - np.log(float(prev_n))
         beat = self._eased_beat(seq, run_time)
         cx = PLOT_C[0]
 
@@ -429,26 +445,10 @@ class Multiplayer(YahtzeeScene):
             self._fit_number(int(round(np.exp(nt.get_value()))))
             .move_to(interpolate(num_start, num_end, reflow()))))
 
-        # morph THROUGH the checkpoints; the count EASES (smooth) on a log scale
-        # over the whole beat. Count, pan and median run together every sub-morph
-        # (the number never counts alone); gt advances with REAL time for the reflow.
-        elapsed = 0.0
-        for i in range(len(seq) - 1):
-            na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
-            new = self._build(nb, wc=self._wc(nb, prev_n, n))
-            rt, rate = beat[i]
-            elapsed += rt
-            anims = morph_panning(self.plot, new)
-            for a in anims:
-                a.rate_func = rate
-            anims.append(mt.animate(rate_func=rate).set_value(mb))
-            anims.append(nt.animate(rate_func=rate).set_value(np.log(float(nb))))
-            anims.append(gt.animate(rate_func=linear).set_value(min(1.0, elapsed / run_time)))
-            if i == 0:                                   # leader fades off early in the
-                anims.append(FadeOut(self.med_lead,      # first step — no static pause
-                                     rate_func=squish_rate_func(smooth, 0.0, 0.25)))
-            self.play(*anims, run_time=rt)
-            self.plot = new
+        # the shared morph chain drives the pan / eased log-N count / median snap; gt
+        # (advanced in REAL time by the chain) drives the reflow, so the words settle
+        # EARLY while the count / pan / median run the whole beat.
+        self._morph_chain(seq, meds, beat, prev_n, n, mt, nt, run_time, gt=gt)
 
         for mob in (self.median_label, self.med_hl, pre, suf, num):
             mob.clear_updaters()
@@ -461,5 +461,5 @@ class Multiplayer(YahtzeeScene):
         self.play(Create(self.med_lead), run_time=lead_in)
 
         self.title = VGroup(pre, num, suf)
-        self.cur_n, self.cur_median, self.plot = n, m1, new
+        self.cur_n, self.cur_median = n, m1              # self.plot set by _morph_chain
         self.wait(0.5)
