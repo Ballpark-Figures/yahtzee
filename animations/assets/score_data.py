@@ -142,6 +142,38 @@ def maxN_median(n):
     return int(scores[np.searchsorted(cdf_n, 0.5)])
 
 
+def perfect_score():
+    """The maximum achievable final score under optimal play (a perfect game)."""
+    return max(score_distribution())
+
+
+def prob_any_perfect(n):
+    """P(at least one of ``n`` optimal players scores a perfect game) =
+    1 - (1-p)^n, stably (``-expm1(n·log1p(-p))``)."""
+    base = score_distribution()
+    p = base[max(base)] / sum(base.values())        # P(single game is perfect)
+    return -np.expm1(n * np.log1p(-p))
+
+
+def opponents_for_perfect(threshold=0.5):
+    """Smallest number of best-of-``N`` players for which a perfect game is more
+    likely than not — i.e. P(any perfect) > ``threshold``, equivalently the point
+    where the best-of-N median first reaches the perfect score. Binary search on
+    the monotone 1-(1-p)^N; matches the closed form
+    ``ceil(log1p(-threshold) / log1p(-p))``."""
+    hi = 1
+    while prob_any_perfect(hi) <= threshold:
+        hi *= 2
+    lo = hi // 2 + 1
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if prob_any_perfect(mid) > threshold:
+            hi = mid
+        else:
+            lo = mid + 1
+    return lo
+
+
 def overlay_by_yahtzee(n_extra):
     """Games with exactly ``n_extra`` EXTRA (100-pt) yahtzee bonuses.
     One extra bonus ⇒ yahtzee_units == 2 (the 50 plus one +100)."""
