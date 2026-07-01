@@ -107,6 +107,31 @@ def score_distribution():
     return _dist()
 
 
+def maxN_distribution(n):
+    """{score: prob} for the MAXIMUM of ``n`` i.i.d. optimal-play final scores —
+    i.e. the best of ``n`` players (used in scene 13). Derived from the single
+    distribution's CDF: P(max = s) = F(s)^n - F(s-1)^n."""
+    base = score_distribution()
+    smin, smax = min(base), max(base)
+    scores = np.arange(smin, smax + 1)
+    pmf = np.array([base.get(int(s), 0.0) for s in scores])
+    pmf = pmf / pmf.sum()
+    cdf_n = np.cumsum(pmf) ** n
+    pn = np.diff(np.concatenate([[0.0], cdf_n]))
+    return {int(s): float(p) for s, p in zip(scores, pn)}
+
+
+def maxN_median(n):
+    """Median score of the best of ``n`` players (smallest score with CDF ≥ ½)."""
+    dist = maxN_distribution(n)
+    cum = 0.0
+    for s in sorted(dist):
+        cum += dist[s]
+        if cum >= 0.5:
+            return s
+    return max(dist)
+
+
 def overlay_by_yahtzee(n_extra):
     """Games with exactly ``n_extra`` EXTRA (100-pt) yahtzee bonuses.
     One extra bonus ⇒ yahtzee_units == 2 (the 50 plus one +100)."""
