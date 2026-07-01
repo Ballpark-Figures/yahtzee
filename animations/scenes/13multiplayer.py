@@ -28,7 +28,7 @@ Y_TICKS = (0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 15, 20, 25, 30, 40, 50)
 TITLE_MAXW = 11.0          # scale the counting title down if it would overrun this
 NUM_MAXW   = 12.0          # width cap for the finale number on its own line
 STACK_MID  = 3.0           # finale: y of the number line in the stacked title
-STACK_GAP  = 0.7           # finale: gap from the number line to "Best of"/"opponents"
+STACK_GAP  = 0.72          # finale: gap from the number line to "Best of"/"opponents"
 
 BASE_COLOR = ACCENT_FILL   # bars
 MED_COLOR  = ACCENT_GOLD   # median-bar highlight
@@ -218,12 +218,13 @@ class Multiplayer(YahtzeeScene):
         self.wait(0.5)
 
     @subscene
-    def best_of_perfect(self, move_time=1.6, count_time=3.0):
-        """Finale, two phases. PHASE A (``move_time``): the one-line title splits and
-        REFLOWS — "Best of" rises, the number slides to the centre line, "opponents"
-        drops — while the plot pans to the perfect-game spike and the median reaches
-        1575; everything settles here. PHASE B (``count_time``): the SAME number then
-        keeps counting continuously up to N* (~5.07e19) on the settled plot."""
+    def best_of_perfect(self, run_time=4.5, settle=0.35):
+        """Finale. ONE play: the number counts continuously up to N* (~5.07e19) over
+        the whole ``run_time``, while the title reflows — "Best of" up, number to the
+        centre line, "opponents" down (all full-size, moved into the top room) — and
+        the plot pans to the perfect-game spike and the median reaches 1575. Those
+        MOTIONS use a rate func that finishes by ``settle``*run_time, so they settle
+        early while the count keeps going."""
         n = self.n_perfect
         new = self._build(n)
         m1 = sd.maxN_median(n)
@@ -238,39 +239,38 @@ class Multiplayer(YahtzeeScene):
         num = self._fit_number(self.cur_n)
         pre.move_to([old.get_left()[0] + pre.width / 2, oy, 0])
         suf.move_to([old.get_right()[0] - suf.width / 2, oy, 0])
-        num.move_to([(pre.get_right()[0] + suf.get_left()[0]) / 2, oy, 0])
+        num_start = np.array([(pre.get_right()[0] + suf.get_left()[0]) / 2, oy, 0])
+        num_end = np.array([cx, STACK_MID, 0])
+        num.move_to(num_start)
         self.remove(old)
         self.add(pre, num, suf)
 
-        # stacked targets ("Best of"/"opponents" shrink a little as they move out)
-        pre_t = Text("Best of", font=FONT, font_size=FONT_SIZE_MD,
-                     color=BLACK).move_to([cx, STACK_MID + STACK_GAP, 0])
-        suf_t = Text("opponents", font=FONT, font_size=FONT_SIZE_MD,
-                     color=BLACK).move_to([cx, STACK_MID - STACK_GAP, 0])
-
-        # ── PHASE A: reflow + pan + median, all finishing together ──
+        nt = ValueTracker(np.log(float(self.cur_n)))   # value: counts the whole time
+        pt = ValueTracker(0.0)                          # number's move (settles early)
         mt = ValueTracker(self.cur_median)
-        self.median_label.add_updater(
-            lambda mob: mob.become(self._med_label(round(mt.get_value()))))
-        self.play(
-            Transform(pre, pre_t),
-            Transform(suf, suf_t),
-            num.animate.move_to([cx, STACK_MID, 0]),
-            *morph_panning(self.plot, new),
-            mt.animate.set_value(m1),
-            run_time=move_time,
-        )
-        self.median_label.clear_updaters()
-        self.median_label.become(self._med_label(m1))
-
-        # ── PHASE B: the number keeps climbing to N* on the settled finale ──
-        nt = ValueTracker(np.log(float(self.cur_n)))   # n* > int64; log via float
         num.add_updater(lambda m: m.become(
             self._fit_number(int(round(np.exp(nt.get_value()))))
-            .move_to([cx, STACK_MID, 0])))
-        self.play(nt.animate.set_value(np.log(float(n))), run_time=count_time)
+            .move_to(interpolate(num_start, num_end, pt.get_value()))))
+        self.median_label.add_updater(
+            lambda mob: mob.become(self._med_label(round(mt.get_value()))))
+
+        ease = squish_rate_func(smooth, 0.0, settle)   # motions done by settle*run_time
+        panning = morph_panning(self.plot, new)
+        for a in panning:
+            a.rate_func = ease
+        self.play(
+            pre.animate(rate_func=ease).move_to([cx, STACK_MID + STACK_GAP, 0]),
+            suf.animate(rate_func=ease).move_to([cx, STACK_MID - STACK_GAP, 0]),
+            pt.animate(rate_func=ease).set_value(1.0),
+            mt.animate(rate_func=ease).set_value(m1),
+            *panning,
+            nt.animate(rate_func=linear).set_value(np.log(float(n))),
+            run_time=run_time,
+        )
         num.clear_updaters()
-        num.become(self._fit_number(n).move_to([cx, STACK_MID, 0]))
+        num.become(self._fit_number(n).move_to(num_end))
+        self.median_label.clear_updaters()
+        self.median_label.become(self._med_label(m1))
 
         self.title = VGroup(pre, num, suf)
         self.cur_n, self.cur_median, self.plot = n, m1, new
