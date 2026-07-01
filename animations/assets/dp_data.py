@@ -73,18 +73,21 @@ _TURN_EV_ROLLS = [[1, 2, 4, 4, 6], [1, 2, 3, 4, 6], [2, 3, 4, 5, 5]]  # beat f (
 _MONTAGE = [([1, 2, 4, 4, 6], "B"), ([2, 3, 5, 5, 6], "B"),
             ([1, 1, 4, 5, 6], "A"), ([3, 3, 3, 4, 5], "A")]
 
-# beat i backward sweep: an example card (solver order) that STARTS with 4-Kind and
-# Large Straight already removed (continuing the montage's two-open-box turn), then
-# empties box by box until the card is empty. The interleaved order keeps top- and
-# bottom-section boxes alternating. All-solver V.
-_SWEEP_FULL = {ONES: 3, TWOS: 6, THREES: 9, FOURS: 12, FIVES: 15, SIXES: 18,
-               THREE_KIND: 22, FOUR_KIND: 24, FULL_HOUSE: 25, SMALL_STRAIGHT: 30,
-               LARGE_STRAIGHT: 40, CHANCE: 17, YAHTZEE: 50}
-# already removed before the sweep starts (shown as the opening card state).
-_SWEEP_PRE_REMOVED = [FOUR_KIND, LARGE_STRAIGHT]
-# the remaining boxes, removed one at a time until the card is empty.
-_SWEEP_ORDER = [ONES, YAHTZEE, TWOS, THREE_KIND, THREES, CHANCE, FOURS,
-                FULL_HOUSE, FIVES, SIXES, SMALL_STRAIGHT]
+# beat i backward sweep: continues the montage's turn on the SAME running-example
+# card (beats a-h, i.e. the scene's FILL_LIST) — which already has 4-Kind and Large
+# Straight open — then empties the remaining boxes one at a time until the card is
+# bare. So it opens at the montage's turn value (V ≈ 21.2) and climbs to 254.6.
+# The 11 boxes filled at the start (solver order; the FILL_LIST values minus the two
+# open boxes). upper = 63; Yahtzee scratched to 0, so NOT bonus-eligible.
+_SWEEP_FILLED = {ONES: 2, TWOS: 6, THREES: 9, FOURS: 12, FIVES: 10, SIXES: 24,
+                 THREE_KIND: 22, FULL_HOUSE: 25, SMALL_STRAIGHT: 30,
+                 CHANCE: 17, YAHTZEE: 0}
+# the remaining boxes, removed one at a time until the card is empty. Order chosen
+# so the expected-remaining value climbs MONOTONICALLY (removing a well-scored upper
+# box can otherwise dip V, since it lowers the reduced state's upper-total): clear
+# the lower-section boxes first, then the top section, so the number only ever rises.
+_SWEEP_ORDER = [YAHTZEE, FULL_HOUSE, THREE_KIND, SIXES, TWOS, ONES, THREES,
+                FOURS, FIVES, CHANCE, SMALL_STRAIGHT]
 
 
 def _keep_ev_by_values(df, value_tuple):
@@ -196,9 +199,7 @@ def _compute_scene04():
                                      yahtzee_eligible=elig)
             return se.state_value(st)
 
-        filled = dict(_SWEEP_FULL)
-        for cat in _SWEEP_PRE_REMOVED:      # 4-Kind + Lg Straight already gone
-            del filled[cat]
+        filled = dict(_SWEEP_FILLED)        # 4-Kind + Lg Straight already open
         sweep = [{"emptied": None, "remaining": V_of(filled)}]
         for cat in _SWEEP_ORDER:            # empty the rest until the card is bare
             del filled[cat]

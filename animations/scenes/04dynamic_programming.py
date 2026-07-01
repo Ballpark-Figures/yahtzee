@@ -21,10 +21,6 @@ FILL_LIST = [2, 6, 9, 12, 10, 24,          # top = 63 → bonus
              22, 24, 25, 30, None, 0, 17,  # 3K/4K/FH/SmS/(LgS open)/Yahtzee=0/Chance
              None]                          # Yahtzee bonus (n/a)
 
-# beat h sweep: a FULL example card (scorecard order) emptied box by box.
-SWEEP_FULL = {0: 3, 1: 6, 2: 9, 3: 12, 4: 15, 5: 18,
-              6: 22, 7: 24, 8: 25, 9: 30, 10: 40, 11: 50, 12: 17}
-
 GRAY = "#9A9483"          # gray placeholder "0" in an empty candidate box
 
 # solver category (dp_data) → scorecard box index (they differ only at 11/12).
@@ -488,13 +484,9 @@ class DynamicProgramming(YahtzeeScene):
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def backward_sweep(self, run_time=0.8):
-        # reset to the example card but with 4-Kind AND Large Straight ALREADY
-        # removed (continuing from the montage's two-open-box turn); the dice stay
+        # Continue on the SAME running-example card the montage left us — it already
+        # has 4-Kind and Large Straight open (V ≈ 21.2), so no reset. The dice stay
         # at the BOTTOM (band 0) and the running EV sits in the 3rd row (band 2).
-        sweep_start = dict(SWEEP_FULL)
-        sweep_start[7] = None      # 4-Kind already removed
-        sweep_start[10] = None     # Large Straight already removed
-        self.card.transition(self, sweep_start, run_time=0.8)
         example = DiceBoard().dice
         for i, (d, v) in enumerate(zip(example, [3, 3, 5, 2, 6])):
             d.set_value(v)

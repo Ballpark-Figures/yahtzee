@@ -245,46 +245,46 @@
   "sweep": [
     {
       "emptied": null,
-      "remaining": 26.766918182373047
-    },
-    {
-      "emptied": 0,
-      "remaining": 53.23786163330078
+      "remaining": 21.22429656982422
     },
     {
       "emptied": 12,
-      "remaining": 58.70244216918945
-    },
-    {
-      "emptied": 1,
-      "remaining": 62.57756805419922
-    },
-    {
-      "emptied": 6,
-      "remaining": 89.67508697509766
-    },
-    {
-      "emptied": 2,
-      "remaining": 101.41461181640625
-    },
-    {
-      "emptied": 11,
-      "remaining": 134.4606475830078
-    },
-    {
-      "emptied": 3,
-      "remaining": 150.51393127441406
+      "remaining": 31.27800750732422
     },
     {
       "emptied": 8,
-      "remaining": 174.89480590820312
+      "remaining": 49.7025032043457
     },
     {
-      "emptied": 4,
-      "remaining": 194.6669158935547
+      "emptied": 6,
+      "remaining": 74.79573059082031
     },
     {
       "emptied": 5,
+      "remaining": 102.36577606201172
+    },
+    {
+      "emptied": 1,
+      "remaining": 112.3506851196289
+    },
+    {
+      "emptied": 0,
+      "remaining": 124.26423645019531
+    },
+    {
+      "emptied": 2,
+      "remaining": 138.36544799804688
+    },
+    {
+      "emptied": 3,
+      "remaining": 155.38436889648438
+    },
+    {
+      "emptied": 4,
+      "remaining": 181.9252166748047
+    },
+    {
+      "emptied": 11,
       "remaining": 216.55543518066406
     },
     {
