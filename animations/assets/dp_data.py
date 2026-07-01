@@ -52,6 +52,9 @@ THREE_KIND, FOUR_KIND, FULL_HOUSE = 6, 7, 8
 SMALL_STRAIGHT, LARGE_STRAIGHT, CHANCE, YAHTZEE = 9, 10, 11, 12
 
 _CACHE_PATH = Path(__file__).resolve().parent / "dp_cache.json"
+# solver value-iteration output: V(state) = expected remaining points, one shard
+# per (level, 13-bit filled mask), rows keyed by (upper_total, yahtzee_eligible).
+_STATE_DIR = Path(__file__).resolve().parents[2] / "math" / "data" / "state_properties"
 
 
 # ── dice helpers ──────────────────────────────────────────────────────────────
@@ -198,6 +201,54 @@ def turn_value(cat):
                for v, w in _all_initial_states()) / DENOM
 
 
+# ── whole-game EV-remaining from the solver value function V(state) ───────────
+def ev_remaining(filled):
+    """Expected remaining points under optimal play from a scorecard state.
+
+    ``filled`` is {solver_cat: points} for the FILLED boxes (open boxes omitted).
+    The state reduces to (filled_mask, upper_total capped at 63, yahtzee_eligible)
+    exactly as ``math/reduced_game_state.py`` defines it; the value is read from
+    the value-iteration shard for that state (V). The empty card gives ≈254.588,
+    a full card gives 0."""
+    mask = upper = 0
+    eligible = False
+    for cat, pts in filled.items():
+        mask |= (1 << cat)
+        if cat <= SIXES:
+            upper += pts
+        if cat == YAHTZEE and pts == YAHTZEE_POINTS:
+            eligible = True
+    upper = min(upper, 63)
+    level = bin(mask).count("1")
+    path = _STATE_DIR / f"level_{level:02d}" / f"{mask:013b}.npz"
+    with np.load(path) as z:
+        rows = np.where((z["upper_total"] == upper)
+                        & (z["yahtzee_eligible"] == eligible))[0]
+        if len(rows) == 0:
+            raise KeyError((level, mask, upper, eligible))
+        return float(z["V"][rows[0]])
+
+
+# A representative FULL example card + the order boxes are emptied for the
+# backward sweep (solver category order). V climbs from ~0 (full) to ~254.6.
+_SWEEP_FULL = {ONES: 3, TWOS: 6, THREES: 9, FOURS: 12, FIVES: 15, SIXES: 18,
+               THREE_KIND: 22, FOUR_KIND: 24, FULL_HOUSE: 25, SMALL_STRAIGHT: 30,
+               LARGE_STRAIGHT: 40, CHANCE: 17, YAHTZEE: 50}
+_SWEEP_ORDER = [FOUR_KIND, YAHTZEE, THREE_KIND, CHANCE, FULL_HOUSE, LARGE_STRAIGHT,
+                SMALL_STRAIGHT, ONES, SIXES, TWOS, FIVES, THREES, FOURS]
+
+
+def sweep_sequence():
+    """[{'emptied': cat|None, 'remaining': V}, …] as the card empties box by box,
+    ending at the empty card (V ≈ 254.588). All values are exact solver V."""
+    filled = dict(_SWEEP_FULL)
+    seq = [{"emptied": None, "remaining": ev_remaining(filled)}]
+    for cat in _SWEEP_ORDER:
+        del filled[cat]
+        seq.append({"emptied": cat, "remaining": ev_remaining(filled)})
+    return seq
+
+
 # ── the concrete bundle the scene renders (persisted) ─────────────────────────
 def _compute_scene04():
     ls = LARGE_STRAIGHT
@@ -228,28 +279,30 @@ def _compute_scene04():
     first_reroll = {name: {"ev": ev_keep(d_ls2, k, ls, 2)}
                     for name, k in keeps_ls2.items()}
 
-    # beat 6: box choice for 11134 between 3-of-a-kind and 4-of-a-kind (last two
-    # turns). "Avg points after" = points now + whole last-turn EV of the box we
-    # keep open.
+    # beat 6: box choice on the second-to-last turn. Card is full except 4-of-a-
+    # Kind and Large Straight (3-of-a-Kind is already filled). 11134 scores 0 in
+    # BOTH open boxes, so it's a "which to zero out" decision: "avg after" =
+    # 0 + whole-last-turn EV of the box we keep OPEN.
     d_box = values_to_vec([1, 1, 1, 3, 4])
-    tv_3k = turn_value(THREE_KIND)
+    tv_ls = turn_value(LARGE_STRAIGHT)
     tv_4k = turn_value(FOUR_KIND)
     box_choice = {
-        # fill 3-kind now (score it), keep 4-kind for the last turn
-        "fill_3kind": {"now": score(d_box, THREE_KIND), "after": tv_4k,
-                       "total": score(d_box, THREE_KIND) + tv_4k},
-        # zero 4-kind now (11134 makes no 4-kind → 0), keep 3-kind for last turn
-        "fill_4kind": {"now": score(d_box, FOUR_KIND), "after": tv_3k,
-                       "total": score(d_box, FOUR_KIND) + tv_3k},
+        # zero 4-of-a-Kind now (0), keep Large Straight open for the last turn
+        "fill_4kind": {"now": score(d_box, FOUR_KIND), "after": tv_ls,
+                       "total": score(d_box, FOUR_KIND) + tv_ls},
+        # zero Large Straight now (0), keep 4-of-a-Kind open for the last turn
+        "fill_lgstraight": {"now": score(d_box, LARGE_STRAIGHT), "after": tv_4k,
+                            "total": score(d_box, LARGE_STRAIGHT) + tv_4k},
     }
 
     return {
         "second_reroll": second_reroll,   # keep-name → {p40, p0, ev}
         "first_reroll": first_reroll,     # keep-name → {ev}
         "box_choice": box_choice,
+        "sweep": sweep_sequence(),        # [{emptied, remaining}, …] → empty card
         "turn_values": {                  # handy reference for other beats
-            "large_straight": turn_value(LARGE_STRAIGHT),
-            "three_kind": tv_3k,
+            "large_straight": tv_ls,
+            "three_kind": turn_value(THREE_KIND),
             "four_kind": tv_4k,
         },
     }

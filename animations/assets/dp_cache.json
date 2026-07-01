@@ -33,17 +33,75 @@
     }
   },
   "box_choice": {
-    "fill_3kind": {
-      "now": 10,
-      "after": 5.611263427672356,
-      "total": 15.611263427672355
-    },
     "fill_4kind": {
       "now": 0,
-      "after": 15.194661292951617,
-      "total": 15.194661292951617
+      "after": 10.443800669364572,
+      "total": 10.443800669364572
+    },
+    "fill_lgstraight": {
+      "now": 0,
+      "after": 5.611263427672356,
+      "total": 5.611263427672356
     }
   },
+  "sweep": [
+    {
+      "emptied": null,
+      "remaining": 0.0
+    },
+    {
+      "emptied": 7,
+      "remaining": 10.039386749267578
+    },
+    {
+      "emptied": 12,
+      "remaining": 11.895344734191895
+    },
+    {
+      "emptied": 6,
+      "remaining": 35.01664733886719
+    },
+    {
+      "emptied": 11,
+      "remaining": 63.426544189453125
+    },
+    {
+      "emptied": 8,
+      "remaining": 83.50037384033203
+    },
+    {
+      "emptied": 10,
+      "remaining": 106.9610824584961
+    },
+    {
+      "emptied": 9,
+      "remaining": 141.73658752441406
+    },
+    {
+      "emptied": 0,
+      "remaining": 174.69772338867188
+    },
+    {
+      "emptied": 5,
+      "remaining": 192.43350219726562
+    },
+    {
+      "emptied": 1,
+      "remaining": 203.65115356445312
+    },
+    {
+      "emptied": 4,
+      "remaining": 222.80540466308594
+    },
+    {
+      "emptied": 2,
+      "remaining": 237.41455078125
+    },
+    {
+      "emptied": 3,
+      "remaining": 254.5877227783203
+    }
+  ],
   "turn_values": {
     "large_straight": 10.443800669364572,
     "three_kind": 15.194661292951617,
