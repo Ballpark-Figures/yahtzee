@@ -27,7 +27,8 @@ Y_HEADROOM = 0.9
 Y_TICKS = (0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 15, 20, 25, 30, 40, 50)
 TITLE_MAXW = 11.0          # scale the counting title down if it would overrun this
 NUM_MAXW   = 12.0          # width cap for the finale number on its own line
-STACK_GAP  = 0.6           # finale: vertical gap "Best of" / number / "opponents"
+STACK_MID  = 3.0           # finale: y of the number line in the stacked title
+STACK_GAP  = 0.7           # finale: gap from the number line to "Best of"/"opponents"
 
 BASE_COLOR = ACCENT_FILL   # bars
 MED_COLOR  = ACCENT_GOLD   # median-bar highlight
@@ -217,49 +218,60 @@ class Multiplayer(YahtzeeScene):
         self.wait(0.5)
 
     @subscene
-    def best_of_perfect(self, run_time=4.0):
-        """Finale: the count climbs to ~5.07e19 while the title unfolds — "Best of"
-        rises above the (now huge) number, "opponents" drops below — and the median
-        reaches 1575, a perfect game."""
+    def best_of_perfect(self, move_time=1.6, count_time=3.0):
+        """Finale, two phases. PHASE A (``move_time``): the one-line title splits and
+        REFLOWS — "Best of" rises, the number slides to the centre line, "opponents"
+        drops — while the plot pans to the perfect-game spike and the median reaches
+        1575; everything settles here. PHASE B (``count_time``): the SAME number then
+        keeps counting continuously up to N* (~5.07e19) on the settled plot."""
         n = self.n_perfect
         new = self._build(n)
         m1 = sd.maxN_median(n)
         cx = PLOT_C[0]
 
+        # split the current one-line title into movable parts, laid over it so the
+        # hand-off is seamless (same words, same size, same spot)
+        old = self.title
+        oy = old.get_center()[1]
+        pre = Text("Best of", font=FONT, font_size=FONT_SIZE_LG, color=BLACK)
+        suf = Text("opponents", font=FONT, font_size=FONT_SIZE_LG, color=BLACK)
+        num = self._fit_number(self.cur_n)
+        pre.move_to([old.get_left()[0] + pre.width / 2, oy, 0])
+        suf.move_to([old.get_right()[0] - suf.width / 2, oy, 0])
+        num.move_to([(pre.get_right()[0] + suf.get_left()[0]) / 2, oy, 0])
+        self.remove(old)
+        self.add(pre, num, suf)
+
+        # stacked targets ("Best of"/"opponents" shrink a little as they move out)
+        pre_t = Text("Best of", font=FONT, font_size=FONT_SIZE_MD,
+                     color=BLACK).move_to([cx, STACK_MID + STACK_GAP, 0])
+        suf_t = Text("opponents", font=FONT, font_size=FONT_SIZE_MD,
+                     color=BLACK).move_to([cx, STACK_MID - STACK_GAP, 0])
+
+        # ── PHASE A: reflow + pan + median, all finishing together ──
         mt = ValueTracker(self.cur_median)
         self.median_label.add_updater(
             lambda mob: mob.become(self._med_label(round(mt.get_value()))))
-
-        nt = ValueTracker(np.log(float(self.cur_n)))   # n* > int64; log via float
-        ft = ValueTracker(0.0)                          # number's fade-in
-        prefix = crisp_text("Best of", font=FONT, font_size=FONT_SIZE_LG,
-                            color=BLACK).move_to([cx, TITLE_Y + STACK_GAP, 0])
-        suffix = crisp_text("opponents", font=FONT, font_size=FONT_SIZE_LG,
-                            color=BLACK).move_to([cx, TITLE_Y - STACK_GAP, 0])
-        # the number COUNTS (become each frame) — can't be a FadeIn target (its
-        # glyph count changes), so fade it via ft inside the updater instead
-        num = self._fit_number(self.cur_n).move_to([cx, TITLE_Y, 0])
-
-        def _tick_num(m):
-            m.become(self._fit_number(int(round(np.exp(nt.get_value()))))
-                     .move_to([cx, TITLE_Y, 0]))
-            m.set_opacity(ft.get_value())
-        num.set_opacity(0.0)
-        num.add_updater(_tick_num)
-        self.add(num)
-
-        anims = morph_panning(self.plot, new)
-        anims += [mt.animate.set_value(m1), nt.animate.set_value(np.log(float(n))),
-                  ft.animate.set_value(1.0),
-                  FadeOut(self.title),
-                  FadeIn(prefix, shift=UP * STACK_GAP),     # "Best of" moves up
-                  FadeIn(suffix, shift=DOWN * STACK_GAP)]   # "opponents" moves down
-        self.play(*anims, run_time=run_time)
-
-        num.clear_updaters()
-        num.become(self._fit_number(n).move_to([cx, TITLE_Y, 0]))
+        self.play(
+            Transform(pre, pre_t),
+            Transform(suf, suf_t),
+            num.animate.move_to([cx, STACK_MID, 0]),
+            *morph_panning(self.plot, new),
+            mt.animate.set_value(m1),
+            run_time=move_time,
+        )
         self.median_label.clear_updaters()
         self.median_label.become(self._med_label(m1))
-        self.title = VGroup(prefix, num, suffix)
+
+        # ── PHASE B: the number keeps climbing to N* on the settled finale ──
+        nt = ValueTracker(np.log(float(self.cur_n)))   # n* > int64; log via float
+        num.add_updater(lambda m: m.become(
+            self._fit_number(int(round(np.exp(nt.get_value()))))
+            .move_to([cx, STACK_MID, 0])))
+        self.play(nt.animate.set_value(np.log(float(n))), run_time=count_time)
+        num.clear_updaters()
+        num.become(self._fit_number(n).move_to([cx, STACK_MID, 0]))
+
+        self.title = VGroup(pre, num, suf)
         self.cur_n, self.cur_median, self.plot = n, m1, new
         self.wait(0.5)
