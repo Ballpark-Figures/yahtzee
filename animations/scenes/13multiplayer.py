@@ -238,19 +238,17 @@ class Multiplayer(YahtzeeScene):
             out.append((run_time * dt, rate))
         return out
 
-    def _transition(self, n, count_title, run_time=3.0, lead_out=0.25, lead_in=0.5):
+    def _transition(self, n, count_title, run_time=3.0, lead_in=0.5):
         """One ``run_time``-second beat-to-beat animation that morphs THROUGH the
         intermediate checkpoints (real best-of-N distributions whose median crosses
         each multiple of 10). The opponent count N drives it on a LOG scale, EASED
         (manim ``smooth``) over the whole beat, and the median reaches each
         checkpoint's median exactly as N passes that checkpoint's N. The dashed
-        median leader fades OUT for the whole morph (every beat, even single-step
-        ones) then draws back IN at the end; the first step crossfades the title."""
+        median leader fades OUT early in the FIRST step (folded in, so no static
+        pause) and draws back IN at the end; the first step crossfades the title."""
         prev_n, m0, m1 = self.cur_n, self.cur_median, sd.maxN_median(n)
         seq, meds = self._beat_seq(prev_n, n, m0, m1)
         beat = self._eased_beat(seq, run_time)
-
-        self.play(FadeOut(self.med_lead), run_time=lead_out)    # leader off for the morph
 
         for i in range(len(seq) - 1):
             na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
@@ -266,6 +264,9 @@ class Multiplayer(YahtzeeScene):
             for a in anims:
                 a.rate_func = rate                      # slice of smooth (eased over the beat)
             anims.append(mt.animate(rate_func=rate).set_value(mb))
+            if i == 0:                                   # leader fades off early in the
+                anims.append(FadeOut(self.med_lead,      # first step — no static pause
+                                     rate_func=squish_rate_func(smooth, 0.0, 0.25)))
 
             if count_title:
                 nt = ValueTracker(np.log(float(na)))
@@ -358,7 +359,7 @@ class Multiplayer(YahtzeeScene):
         self.wait(0.5)
 
     @subscene
-    def best_of_perfect(self, run_time=3.0, settle=0.35, lead_out=0.25, lead_in=0.5):
+    def best_of_perfect(self, run_time=3.0, settle=0.35, lead_in=0.5):
         """Finale. The SAME beat-through-checkpoints morph as the other beats — the
         opponent count N counts up to N* (~5.07e19) on a LOG scale and the median
         reaches each checkpoint as N passes it — PLUS a one-off title reflow: the
@@ -431,7 +432,6 @@ class Multiplayer(YahtzeeScene):
         # morph THROUGH the checkpoints; the count EASES (smooth) on a log scale
         # over the whole beat. Count, pan and median run together every sub-morph
         # (the number never counts alone); gt advances with REAL time for the reflow.
-        self.play(FadeOut(self.med_lead), run_time=lead_out)    # leader off for the morph
         elapsed = 0.0
         for i in range(len(seq) - 1):
             na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
@@ -444,6 +444,9 @@ class Multiplayer(YahtzeeScene):
             anims.append(mt.animate(rate_func=rate).set_value(mb))
             anims.append(nt.animate(rate_func=rate).set_value(np.log(float(nb))))
             anims.append(gt.animate(rate_func=linear).set_value(min(1.0, elapsed / run_time)))
+            if i == 0:                                   # leader fades off early in the
+                anims.append(FadeOut(self.med_lead,      # first step — no static pause
+                                     rate_func=squish_rate_func(smooth, 0.0, 0.25)))
             self.play(*anims, run_time=rt)
             self.plot = new
 
