@@ -17,8 +17,10 @@ PLOT_C     = ORIGIN
 PLOT_W     = 8.0
 PLOT_H     = 4.0
 MIN_PROB   = 1e-4
-Y_MAX_PCT  = 1.85         # FIXED percent scale (so 1% stays 1%); ~= tallest peak
 X_TICK_STEP = 50
+# y-axis rescales per histogram so the tallest bar fills this fraction of the box;
+# y-ticks are value-keyed, so "1%" slides to its new height and "1.5%" fades in.
+Y_HEADROOM = 0.9
 
 BASE_COLOR = ACCENT_FILL   # bars
 MED_COLOR  = ACCENT_GOLD   # median-bar highlight
@@ -52,8 +54,8 @@ class Multiplayer(YahtzeeScene):
         median label + the title so their numbers can be live counters)."""
         return get_panning_histogram(
             self.dists[n], self.centers[n], self.union[0], self.union[1],
-            self.scale_x, Y_MAX_PCT, center=PLOT_C, width=PLOT_W, height=PLOT_H,
-            bar_color=BASE_COLOR, x_tick_step=X_TICK_STEP,
+            self.scale_x, center=PLOT_C, width=PLOT_W, height=PLOT_H,
+            bar_color=BASE_COLOR, x_tick_step=X_TICK_STEP, y_headroom=Y_HEADROOM,
             y_axis_label="Frequency (%)", x_axis_label="Score", title=None,
             median=sd.maxN_median(n), median_color=MED_COLOR, median_text=False,
         )
