@@ -25,9 +25,12 @@ Y_HEADROOM = 0.9
 BASE_COLOR = ACCENT_FILL   # bars
 MED_COLOR  = ACCENT_GOLD   # median-bar highlight
 
-BOX_TOP     = PLOT_C[1] + PLOT_H / 2
-TITLE_Y     = BOX_TOP + 0.85
-MED_LABEL_Y = BOX_TOP + 0.32
+BOX_TOP  = PLOT_C[1] + PLOT_H / 2
+TITLE_Y  = BOX_TOP + 0.85
+# median callout: leader rises to a "shelf" just above the peak, then runs right
+# to a label parked in the empty upper-right of the plot
+SHELF_Y    = BOX_TOP - 0.2
+MED_ANCHOR = [PLOT_C[0] + PLOT_W * 0.20, SHELF_Y, 0]
 
 # each histogram = best of N opponents (max of N scores); N=1 is the single plot
 SERIES = [1, 2, 3, 5]
@@ -57,36 +60,31 @@ class Multiplayer(YahtzeeScene):
             self.scale_x, center=PLOT_C, width=PLOT_W, height=PLOT_H,
             bar_color=BASE_COLOR, x_tick_step=X_TICK_STEP, y_headroom=Y_HEADROOM,
             y_axis_label="Frequency (%)", x_axis_label="Score", title=None,
-            median=sd.maxN_median(n), median_color=MED_COLOR, median_text=False,
+            median=sd.maxN_median(n), median_color=MED_COLOR,
+            median_label_anchor=MED_ANCHOR,
         )
 
     # ── scene-owned text (numbers are driven by counters, not crossfades) ─────
-    def _med_x(self, med_val, center_val):
-        return PLOT_C[0] + (med_val - center_val) * self.scale_x
-
     def _plain_title(self, text):
         m = crisp_text(text, font=FONT, font_size=FONT_SIZE_LG, color=BLACK)
         m.move_to([PLOT_C[0], TITLE_Y, 0])
         return m
 
     def _count_title(self, n):
-        row = VGroup(
-            crisp_text("Best of", font=FONT, font_size=FONT_SIZE_LG, color=BLACK),
-            crisp_text(str(n), font=FONT, font_size=FONT_SIZE_LG, color=BLACK),
-            crisp_text("opponents", font=FONT, font_size=FONT_SIZE_LG, color=BLACK),
-        ).arrange(RIGHT, buff=0.22)
-        row.move_to([PLOT_C[0], TITLE_Y, 0])
-        return row
+        # one string (not arranged pieces) so the baseline is consistent; the
+        # counter rebuilds it each frame anyway
+        m = crisp_text(f"Best of {n} opponents", font=FONT,
+                       font_size=FONT_SIZE_LG, color=BLACK)
+        m.move_to([PLOT_C[0], TITLE_Y, 0])
+        return m
 
-    def _med_label(self, med, x):
-        row = VGroup(
-            crisp_text("Median", font=FONT, font_size=FONT_SIZE_SM, color=BLACK,
-                       weight="BOLD"),
-            crisp_text(str(med), font=FONT, font_size=FONT_SIZE_SM, color=BLACK,
-                       weight="BOLD"),
-        ).arrange(RIGHT, buff=0.14)
-        row.move_to([x, MED_LABEL_Y, 0])
-        return row
+    def _med_label(self, med):
+        """The "Median NNN" label, left-aligned just right of the callout anchor
+        (fixed upper-right of the plot); only its number counts."""
+        m = crisp_text(f"Median {med}", font=FONT, font_size=FONT_SIZE_SM,
+                       color=BLACK, weight="BOLD")
+        m.move_to([MED_ANCHOR[0] + 0.12, MED_ANCHOR[1], 0], aligned_edge=LEFT)
+        return m
 
     def _grow_up(self, bars, *extra, run_time=1.0):
         for b in bars:
@@ -100,16 +98,14 @@ class Multiplayer(YahtzeeScene):
         instead crossfades the title ("Score Frequencies" → "Best of 2 …")."""
         prev_n = self.cur_n
         new = self._build(n)
-        c0, c1 = self.centers[prev_n], self.centers[n]
         m0, m1 = self.cur_median, sd.maxN_median(n)
 
-        ct, mt = ValueTracker(c0), ValueTracker(m0)
-        self.median_label.add_updater(lambda mob: mob.become(
-            self._med_label(round(mt.get_value()),
-                            self._med_x(mt.get_value(), ct.get_value()))))
+        mt = ValueTracker(m0)      # median label is parked; only its number counts
+        self.median_label.add_updater(
+            lambda mob: mob.become(self._med_label(round(mt.get_value()))))
 
         anims = morph_panning(self.plot, new)
-        anims += [ct.animate.set_value(c1), mt.animate.set_value(m1)]
+        anims.append(mt.animate.set_value(m1))
 
         if count_title:
             nt = ValueTracker(np.log(prev_n))
@@ -126,11 +122,11 @@ class Multiplayer(YahtzeeScene):
             self.title = new_title
 
         self.median_label.clear_updaters()
-        self.median_label.become(self._med_label(m1, self._med_x(m1, c1)))
+        self.median_label.become(self._med_label(m1))
         self.cur_n, self.cur_median, self.plot = n, m1, new
 
     # ════════════════════════════════════════════════════════════════════════
-    # a : single-player plot, thick median marker + label above the bars
+    # a : single-player plot; normal-width median bar with an upper-right callout
     # ════════════════════════════════════════════════════════════════════════
     @subscene
     def show_single(self, run_time=1.5):
@@ -139,12 +135,12 @@ class Multiplayer(YahtzeeScene):
         self.cur_median = sd.maxN_median(self.cur_n)
         self.plot = self._build(self.cur_n)
         self.title = self._plain_title("Score Frequencies")
-        self.median_label = self._med_label(
-            self.cur_median, self._med_x(self.cur_median, self.centers[self.cur_n]))
-        med_hl, med_leader = self.plot.median_group
+        self.median_label = self._med_label(self.cur_median)
+        med_hl, med_riser, med_horiz, med_dot = self.plot.median_group
         rest = VGroup(self.plot.x_axis, self.plot.y_axis, self.plot.y_ticks,
                       self.plot.x_ticks, self.plot.axis_labels)
-        self._grow_up([*self.plot.bars, med_hl], FadeIn(rest), FadeIn(med_leader),
+        callout = VGroup(med_riser, med_horiz, med_dot)
+        self._grow_up([*self.plot.bars, med_hl], FadeIn(rest), FadeIn(callout),
                       FadeIn(self.title), FadeIn(self.median_label),
                       run_time=run_time)
         self.wait(0.5)
