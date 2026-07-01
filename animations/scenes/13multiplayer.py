@@ -124,7 +124,7 @@ class Multiplayer(YahtzeeScene):
     def _med_label(self, med):
         """The "Median NNN" label, left-aligned just right of the callout anchor
         (fixed upper-right of the plot); only its number counts."""
-        m = crisp_text(f"Median {med}", font=FONT, font_size=FONT_SIZE_SM,
+        m = crisp_text(f"Median{chr(0xA0)}{med}", font=FONT, font_size=FONT_SIZE_SM,
                        color=BLACK, weight="BOLD")
         m.move_to([MED_ANCHOR[0] + 0.12, MED_ANCHOR[1], 0], aligned_edge=LEFT)
         return m
