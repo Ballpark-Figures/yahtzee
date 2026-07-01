@@ -27,6 +27,7 @@ Y_HEADROOM = 0.9
 Y_TICKS = (0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 15, 20, 25, 30, 40, 50)
 TITLE_MAXW = 11.0          # scale the counting title down if it would overrun this
 NUM_MAXW   = 12.0          # width cap for the finale number on its own line
+NUM_MAXH   = 0.48          # height cap so the stacked number clears "Best of"/"opponents"
 STACK_MID  = 3.0           # finale: y of the number line in the stacked title
 STACK_GAP  = 0.72          # finale: gap from the number line to "Best of"/"opponents"
 
@@ -82,13 +83,26 @@ class Multiplayer(YahtzeeScene):
             self.centers[n] = (lo + hi) / 2
         return self.centers[n]
 
-    def _build(self, n):
-        """The bars/axes/ticks ONLY — no median callout. The median highlight bar,
-        its dashed up-and-over leader, and the "Median NNN" label are all scene-owned
-        (so the highlight can snap to whichever bar matches the live counter and ride
-        the pan, and the leader can hide during the motion)."""
+    def _wc(self, nb, prev_n, n):
+        """Window-centre for an intermediate plot on a SMOOTH straight glide from the
+        start beat's centre to the end beat's centre (in log-N fraction). With the
+        eased sub-morph timing this makes the live window-centre = c0 + smooth(t)·Δ —
+        ONE continuous slide, so the median glides from its start to its end position
+        instead of the pan lurching between per-checkpoint centres."""
+        lp = np.log(float(prev_n))
+        span = np.log(float(n)) - lp
+        fr = (np.log(float(nb)) - lp) / span if span else 1.0
+        c0, c1 = self._center(prev_n), self._center(n)
+        return c0 + fr * (c1 - c0)
+
+    def _build(self, n, wc=None):
+        """The bars/axes/ticks ONLY — no median callout (the highlight bar, dashed
+        leader, and "Median NNN" label are all scene-owned). ``wc`` overrides the
+        window-centre so a beat can place its intermediate plots on a SMOOTH glide
+        (defaults to the plot's natural range-centre)."""
         return get_panning_histogram(
-            self._dist(n), self._center(n), self.union[0], self.union[1],
+            self._dist(n), wc if wc is not None else self._center(n),
+            self.union[0], self.union[1],
             self.scale_x, center=PLOT_C, width=PLOT_W, height=PLOT_H,
             bar_color=BASE_COLOR, x_tick_step=X_TICK_STEP, y_headroom=Y_HEADROOM,
             y_tick_values=Y_TICKS,
@@ -119,6 +133,8 @@ class Multiplayer(YahtzeeScene):
         m = Text(f"{n:,}", font=FONT, font_size=FONT_SIZE_LG, color=BLACK)
         if m.width > NUM_MAXW:
             m.scale(NUM_MAXW / m.width)
+        if m.height > NUM_MAXH:                          # keep it off "Best of"/"opponents"
+            m.scale(NUM_MAXH / m.height)
         return m
 
     def _med_label(self, med):
@@ -220,7 +236,7 @@ class Multiplayer(YahtzeeScene):
 
         for i in range(len(seq) - 1):
             na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
-            new = self._build(nb)
+            new = self._build(nb, wc=self._wc(nb, prev_n, n))
             rt, rate = beat[i]
 
             mt = ValueTracker(ma)
@@ -394,7 +410,7 @@ class Multiplayer(YahtzeeScene):
         elapsed, last = 0.0, len(seq) - 2
         for i in range(len(seq) - 1):
             na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
-            new = self._build(nb)
+            new = self._build(nb, wc=self._wc(nb, prev_n, n))
             rt, rate = beat[i]
             elapsed += rt
             anims = morph_panning(self.plot, new)
