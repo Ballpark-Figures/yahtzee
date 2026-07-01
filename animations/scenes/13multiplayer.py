@@ -83,16 +83,16 @@ class Multiplayer(YahtzeeScene):
         return self.centers[n]
 
     def _build(self, n):
-        """The bars/axes/ticks + median MARKER (no text — the scene owns the
-        median label + the title so their numbers can be live counters)."""
+        """The bars/axes/ticks ONLY — no median callout. The median highlight bar,
+        its dashed up-and-over leader, and the "Median NNN" label are all scene-owned
+        (so the highlight can snap to whichever bar matches the live counter and ride
+        the pan, and the leader can hide during the motion)."""
         return get_panning_histogram(
             self._dist(n), self._center(n), self.union[0], self.union[1],
             self.scale_x, center=PLOT_C, width=PLOT_W, height=PLOT_H,
             bar_color=BASE_COLOR, x_tick_step=X_TICK_STEP, y_headroom=Y_HEADROOM,
             y_tick_values=Y_TICKS,
             y_axis_label="Frequency (%)", x_axis_label="Score", title=None,
-            median=sd.maxN_median(n), median_color=MED_COLOR,
-            median_label_anchor=MED_ANCHOR,
         )
 
     # ── scene-owned text (numbers are driven by counters, not crossfades) ─────
@@ -134,6 +134,35 @@ class Multiplayer(YahtzeeScene):
             b.save_state()
             b.stretch(1e-3, dim=1, about_edge=DOWN)
         self.play(*[Restore(b) for b in bars], *extra, run_time=run_time)
+
+    def _med_hl_for(self, score, plot=None):
+        """The median highlight: a recoloured COPY of the chart bar at ``score`` in
+        ``plot`` (default the live one). As a per-frame updater it IS whichever bar
+        matches the counter — it snaps bar-to-bar and rides the pan, instead of
+        interpolating between two bars."""
+        plot = plot or self.plot
+        idx = min(max(int(round(score)) - self.union[0], 0), len(plot.bars) - 1)
+        hl = plot.bars[idx].copy().set_fill(MED_COLOR, opacity=1.0).set_stroke(width=0)
+        hl.set_z_index(2)
+        return hl
+
+    def _med_lead_for(self, score, plot=None):
+        """The dashed up-and-over leader (riser + horizontal + dot) from the top of
+        the bar at ``score`` to MED_ANCHOR. Shown only at REST — it fades out at the
+        start of a beat and back in at the end."""
+        plot = plot or self.plot
+        idx = min(max(int(round(score)) - self.union[0], 0), len(plot.bars) - 1)
+        bar = plot.bars[idx]
+        mx, bar_top = bar.get_center()[0], bar.get_top()[1]
+        ax, ay = MED_ANCHOR[0], MED_ANCHOR[1]
+        riser = DashedVMobject(Line([mx, bar_top, 0], [mx, ay, 0], color=MED_COLOR,
+                                    stroke_width=3), num_dashes=5, dashed_ratio=0.55)
+        horiz = DashedVMobject(Line([mx, ay, 0], [ax, ay, 0], color=MED_COLOR,
+                                    stroke_width=3), num_dashes=12, dashed_ratio=0.55)
+        dot = Dot([mx, bar_top, 0], radius=0.05, color=MED_COLOR)
+        g = VGroup(riser, horiz, dot)
+        g.set_z_index(2)
+        return g
 
     def _beat_seq(self, prev_n, n, m0, m1):
         """N-values + medians to morph through for a beat from ``prev_n`` (median
@@ -187,6 +216,7 @@ class Multiplayer(YahtzeeScene):
         prev_n, m0, m1 = self.cur_n, self.cur_median, sd.maxN_median(n)
         seq, meds = self._beat_seq(prev_n, n, m0, m1)
         beat = self._eased_beat(seq, run_time)
+        last = len(seq) - 2
 
         for i in range(len(seq) - 1):
             na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
@@ -196,10 +226,17 @@ class Multiplayer(YahtzeeScene):
             mt = ValueTracker(ma)
             self.median_label.add_updater(
                 lambda mob, mt=mt: mob.become(self._med_label(round(mt.get_value()))))
+            self.med_hl.add_updater(                     # snap onto the counter's bar
+                lambda h, mt=mt: h.become(self._med_hl_for(round(mt.get_value()))))
             anims = morph_panning(self.plot, new)
             for a in anims:
                 a.rate_func = rate                      # slice of smooth (eased over the beat)
             anims.append(mt.animate(rate_func=rate).set_value(mb))
+            if i == 0:                                   # leader disappears at the start
+                anims.append(FadeOut(self.med_lead))
+            if i == last:                                # ... and reappears at the end
+                self.med_lead = self._med_lead_for(m1, plot=new)
+                anims.append(FadeIn(self.med_lead))
 
             if count_title:
                 nt = ValueTracker(np.log(float(na)))
@@ -216,9 +253,11 @@ class Multiplayer(YahtzeeScene):
                 count_title = True
 
             self.median_label.clear_updaters()
+            self.med_hl.clear_updaters()
             self.plot = new
 
         self.median_label.become(self._med_label(m1))
+        self.med_hl.become(self._med_hl_for(m1))
         self.title.become(self._count_title(n))
         self.cur_n, self.cur_median = n, m1
 
@@ -233,13 +272,13 @@ class Multiplayer(YahtzeeScene):
         self.plot = self._build(self.cur_n)
         self.title = self._plain_title("Score Frequencies")
         self.median_label = self._med_label(self.cur_median)
-        med_hl, med_riser, med_horiz, med_dot = self.plot.median_group
+        self.med_hl = self._med_hl_for(self.cur_median)
+        self.med_lead = self._med_lead_for(self.cur_median)
         rest = VGroup(self.plot.x_axis, self.plot.y_axis, self.plot.y_ticks,
                       self.plot.x_ticks, self.plot.axis_labels)
-        callout = VGroup(med_riser, med_horiz, med_dot)
-        self._grow_up([*self.plot.bars, med_hl], FadeIn(rest), FadeIn(callout),
-                      FadeIn(self.title), FadeIn(self.median_label),
-                      run_time=run_time)
+        self._grow_up([*self.plot.bars, self.med_hl], FadeIn(rest),
+                      FadeIn(self.med_lead), FadeIn(self.title),
+                      FadeIn(self.median_label), run_time=run_time)
         self.wait(0.5)
 
     # ════════════════════════════════════════════════════════════════════════
@@ -341,6 +380,8 @@ class Multiplayer(YahtzeeScene):
 
         self.median_label.add_updater(
             lambda mob: mob.become(self._med_label(round(mt.get_value()))))
+        self.med_hl.add_updater(
+            lambda h: h.become(self._med_hl_for(round(mt.get_value()))))
         pre.add_updater(lambda m: m.move_to(elbow(pre_start, pre_end, reflow())))
         suf.add_updater(lambda m: m.move_to(elbow(suf_start, suf_end, reflow())))
         num.add_updater(lambda m: m.become(
@@ -350,7 +391,7 @@ class Multiplayer(YahtzeeScene):
         # morph THROUGH the checkpoints; the count EASES (smooth) on a log scale
         # over the whole beat. Count, pan and median run together every sub-morph
         # (the number never counts alone); gt advances with REAL time for the reflow.
-        elapsed = 0.0
+        elapsed, last = 0.0, len(seq) - 2
         for i in range(len(seq) - 1):
             na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
             new = self._build(nb)
@@ -362,12 +403,18 @@ class Multiplayer(YahtzeeScene):
             anims.append(mt.animate(rate_func=rate).set_value(mb))
             anims.append(nt.animate(rate_func=rate).set_value(np.log(float(nb))))
             anims.append(gt.animate(rate_func=linear).set_value(min(1.0, elapsed / run_time)))
+            if i == 0:                                   # leader hidden during the motion
+                anims.append(FadeOut(self.med_lead))
+            if i == last:
+                self.med_lead = self._med_lead_for(m1, plot=new)
+                anims.append(FadeIn(self.med_lead))
             self.play(*anims, run_time=rt)
             self.plot = new
 
-        for mob in (self.median_label, pre, suf, num):
+        for mob in (self.median_label, self.med_hl, pre, suf, num):
             mob.clear_updaters()
         self.median_label.become(self._med_label(m1))
+        self.med_hl.become(self._med_hl_for(m1))
         pre.move_to(pre_end)
         suf.move_to(suf_end)
         num.become(self._fit_number(n).move_to(num_end))
