@@ -8,7 +8,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
 from assets.scorecard import get_scorecard
-from assets.dice import DiceBoard, morph_dice, slot_point, slot_x, BAND_YS
+from assets.dice import DiceBoard, get_die, morph_dice, slot_point, slot_x, BAND_YS
 from assets import dp_data as dp
 
 
@@ -59,9 +59,14 @@ class DynamicProgramming(YahtzeeScene):
     # The analysis dice sit LEFT (tighter than the standard slot_x) so the odds
     # panel has real room to THEIR right; the keep mechanic still rises kept dice
     # a whole band (the DiceBoard.keep convention).
-    ASLOTS = [-0.7, 0.4, 1.5, 2.6, 3.7]
-    ODDS_LX, ODDS_NX = 3.6, 5.7       # label / number left edges (right of the dice)
-    ODDS_FS = 30
+    ASLOTS = [-1.0, 0.05, 1.1, 2.15, 3.2]
+    LABEL_FS = 28                     # default label size
+    # odds panel: "40 pts"/"0 pts" stacked in a LEFT column, "Avg pts" in a column
+    # to its RIGHT (script: "…stacked on top of each other. To the right of that,
+    # write Avg pts").
+    ODDS_FS = 22
+    ODDS_L1, ODDS_N1 = 3.05, 4.50     # 40/0 labels + numbers (left column)
+    ODDS_L2, ODDS_N2 = 5.60, 6.90     # Avg pts label + number (right column)
 
     # ── small helpers ─────────────────────────────────────────────────────────
     def _apos(self, band, slot):
@@ -88,7 +93,7 @@ class DynamicProgramming(YahtzeeScene):
                   run_time=run_time)
 
     def _label(self, text, x, y, *, fs=None, color=BLACK, anchor=LEFT):
-        fs = self.ODDS_FS if fs is None else fs
+        fs = self.LABEL_FS if fs is None else fs
         m = crisp_text(text, font_size=fs, color=color, font=FONT, weight="BOLD")
         m.move_to([x, y, 0], aligned_edge=anchor)
         return m
@@ -192,28 +197,32 @@ class DynamicProgramming(YahtzeeScene):
         self.wait(0.5)
 
     def _build_probs_panel(self):
-        by = BAND_YS[3]                       # odds sit beside the kept (top-row) dice
-        self.odds_ys = (by + 0.5, by, by - 0.5)
-        yt, ym, yb = self.odds_ys
-        self.lbl_p40 = self._label("40 pts:", self.ODDS_LX, yt)
-        self.lbl_p0  = self._label("0 pts:",  self.ODDS_LX, ym)
-        self.lbl_ev  = self._label("Avg pts:", self.ODDS_LX, yb)
-        self.n_p40 = self._label("0.0%", self.ODDS_NX, yt)
-        self.n_p0  = self._label("0.0%", self.ODDS_NX, ym)
-        self.n_ev  = self._label("0.00", self.ODDS_NX, yb)
+        by = BAND_YS[3]                        # odds sit beside the kept (top-row) dice
+        yt, yb = by + 0.42, by - 0.42          # "40 pts" over "0 pts" (stacked)
+        # number positions, keyed for _retarget: 40/0 in the left column, Avg to
+        # the RIGHT of that pair (vertically centred on it).
+        self._num_pos = {"p40": (self.ODDS_N1, yt), "p0": (self.ODDS_N1, yb),
+                         "ev": (self.ODDS_N2, by)}
+        self.lbl_p40 = self._label("40 pts:", self.ODDS_L1, yt, fs=self.ODDS_FS)
+        self.lbl_p0  = self._label("0 pts:",  self.ODDS_L1, yb, fs=self.ODDS_FS)
+        self.lbl_ev  = self._label("Avg pts:", self.ODDS_L2, by, fs=self.ODDS_FS)
+        self.n_p40 = self._label("0.0%", self.ODDS_N1, yt, fs=self.ODDS_FS)
+        self.n_p0  = self._label("0.0%", self.ODDS_N1, yb, fs=self.ODDS_FS)
+        self.n_ev  = self._label("0.00", self.ODDS_N2, by, fs=self.ODDS_FS)
 
     def _retarget(self, name, *, run_time, start=None):
         d = self.nums["second_reroll"][name]
-        yt, ym, yb = self.odds_ys
         c = start
-        self._count([
-            {"mob": self.n_p40, "fmt": self._pct, "x": self.ODDS_NX, "y": yt,
-             "start": (self.n_p40_val if c is None else c), "target": d["p40"] * 100},
-            {"mob": self.n_p0,  "fmt": self._pct, "x": self.ODDS_NX, "y": ym,
-             "start": (self.n_p0_val if c is None else c), "target": d["p0"] * 100},
-            {"mob": self.n_ev,  "fmt": self._ev,  "x": self.ODDS_NX, "y": yb,
-             "start": (self.n_ev_val if c is None else c), "target": d["ev"]},
-        ], run_time)
+        specs = []
+        for key, mob, fmt, tgt, cur in (
+            ("p40", self.n_p40, self._pct, d["p40"] * 100, getattr(self, "n_p40_val", 0.0)),
+            ("p0",  self.n_p0,  self._pct, d["p0"] * 100,  getattr(self, "n_p0_val", 0.0)),
+            ("ev",  self.n_ev,  self._ev,  d["ev"],        getattr(self, "n_ev_val", 0.0)),
+        ):
+            x, y = self._num_pos[key]
+            specs.append({"mob": mob, "fmt": fmt, "x": x, "y": y, "fs": self.ODDS_FS,
+                          "start": (cur if c is None else c), "target": tgt})
+        self._count(specs, run_time)
         self.n_p40_val, self.n_p0_val, self.n_ev_val = d["p40"] * 100, d["p0"] * 100, d["ev"]
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -238,24 +247,26 @@ class DynamicProgramming(YahtzeeScene):
     def other_rolls(self, run_time=0.6):
         self.play(self.n_ev.animate.set_color(BLACK),
                   self.lbl_ev.animate.set_color(BLACK), run_time=0.3)
-        for values in ([1, 2, 3, 4, 4], [2, 3, 4, 5, 5]):
+        # script: "3 other dice configurations with their best dice combos forward"
+        for values in ([1, 2, 3, 4, 4], [2, 3, 4, 5, 5], [2, 2, 3, 4, 5]):
             self._regroup(self.dice, 2, run_time=0.5)
             morph_dice(self, self.dice, values, run_time=0.5)
             keep_vec, ev = dp.best_keep(dp.values_to_vec(values), dp.LARGE_STRAIGHT, 1)
             self._show_keep(self.dice, self._keep_indices(values, keep_vec),
                             base_band=2, run_time=run_time)
             dist = dp.score_dist_keep(None, keep_vec, dp.LARGE_STRAIGHT)
-            yt, ym, yb = self.odds_ys
+            p40, p0 = dist.get(40, 0.0) * 100, dist.get(0, 0.0) * 100
+            (x40, y40), (x0, y0), (xev, yev) = (self._num_pos["p40"],
+                                                self._num_pos["p0"], self._num_pos["ev"])
             self._count([
-                {"mob": self.n_p40, "fmt": self._pct, "x": self.ODDS_NX, "y": yt,
-                 "start": self.n_p40_val, "target": dist.get(40, 0.0) * 100},
-                {"mob": self.n_p0,  "fmt": self._pct, "x": self.ODDS_NX, "y": ym,
-                 "start": self.n_p0_val, "target": dist.get(0, 0.0) * 100},
-                {"mob": self.n_ev,  "fmt": self._ev,  "x": self.ODDS_NX, "y": yb,
+                {"mob": self.n_p40, "fmt": self._pct, "x": x40, "y": y40, "fs": self.ODDS_FS,
+                 "start": self.n_p40_val, "target": p40},
+                {"mob": self.n_p0,  "fmt": self._pct, "x": x0, "y": y0, "fs": self.ODDS_FS,
+                 "start": self.n_p0_val, "target": p0},
+                {"mob": self.n_ev,  "fmt": self._ev,  "x": xev, "y": yev, "fs": self.ODDS_FS,
                  "start": self.n_ev_val, "target": ev},
             ], run_time=0.8)
-            self.n_p40_val, self.n_p0_val, self.n_ev_val = \
-                dist.get(40, 0.0) * 100, dist.get(0, 0.0) * 100, ev
+            self.n_p40_val, self.n_p0_val, self.n_ev_val = p40, p0, ev
             self.wait(0.5)
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -267,10 +278,10 @@ class DynamicProgramming(YahtzeeScene):
                   run_time=0.4)                                    # avg only now
         self._regroup(self.dice, 1, run_time=run_time)            # drop to band 1
         morph_dice(self, self.dice, [1, 2, 4, 4, 6], run_time=0.5)
-        # the Avg-pts label/number move down to sit beside band 2 (the kept row)
+        # avg only now → move the Avg label/number to the LEFT column beside band 2
         by = BAND_YS[2]
-        self.lbl_ev.set_color(BLACK).move_to([self.ODDS_LX, by, 0], aligned_edge=LEFT)
-        self.n_ev.set_color(BLACK).move_to([self.ODDS_NX, by, 0], aligned_edge=LEFT)
+        self.lbl_ev.set_color(BLACK).move_to([self.ODDS_L1, by, 0], aligned_edge=LEFT)
+        self.n_ev.set_color(BLACK).move_to([self.ODDS_N1, by, 0], aligned_edge=LEFT)
         self.ev_y = by
 
         keep_idx = {"124": [0, 1, 2], "24": [1, 2], "246": [1, 2, 4]}
@@ -278,8 +289,8 @@ class DynamicProgramming(YahtzeeScene):
         for name in ["124", "24", "246", "24"]:
             self._show_keep(self.dice, keep_idx[name], base_band=1, run_time=run_time)
             ev = self.nums["first_reroll"][name]["ev"]
-            self._count([{"mob": self.n_ev, "fmt": self._ev, "x": self.ODDS_NX,
-                          "y": by, "start": prev, "target": ev}], 0.8)
+            self._count([{"mob": self.n_ev, "fmt": self._ev, "x": self.ODDS_N1,
+                          "y": by, "start": prev, "target": ev, "fs": self.ODDS_FS}], 0.8)
             prev = ev
             self.wait(0.3)
         self.n_ev_val = prev
@@ -346,8 +357,8 @@ class DynamicProgramming(YahtzeeScene):
         box = self.nums["box_choice"]
         ev4 = box["fill_4kind"]["total"]          # zero 4-Kind, keep Lg Straight open
         evls = box["fill_lgstraight"]["total"]    # zero Lg Straight, keep 4-Kind open
-        lab4 = self._label(f"Avg after: {ev4:.1f}", -1.4, c4[1], anchor=LEFT)
-        labls = self._label(f"Avg after: {evls:.1f}", -1.4, cls[1], anchor=LEFT)
+        lab4 = self._label(f"Avg points after: {ev4:.1f}", -1.4, c4[1], anchor=LEFT, fs=24)
+        labls = self._label(f"Avg points after: {evls:.1f}", -1.4, cls[1], anchor=LEFT, fs=24)
         self.play(FadeIn(lab4), FadeIn(labls), run_time=0.5)
         self.wait(0.6)
 
@@ -361,7 +372,35 @@ class DynamicProgramming(YahtzeeScene):
         self.wait(0.3)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # h : empty the card box-by-box; REAL "avg points remaining" (solver V) → 254.6
+    # h : (ROUGH) the "skip most of the stuff" montage — a few (roll → optimal
+    #     keep set forward → EV) rows stacked, conveying "we repeat the backward
+    #     step for every position." Illustrative; EVs are the Large-Straight
+    #     best-keep values (matching the running example). Vague clause — flagged.
+    # ══════════════════════════════════════════════════════════════════════════
+    @subscene
+    def keep_montage(self, run_time=1.2):
+        def _mini_row(values, band):
+            keep_vec, ev = dp.best_keep(dp.values_to_vec(values), dp.LARGE_STRAIGHT, 2)
+            keep_idxs = set(self._keep_indices(values, keep_vec))
+            dice = [get_die(v, size=0.5) for v in values]
+            for s, d in enumerate(dice):                       # kept dice set FORWARD (up)
+                up = 0.28 if s in keep_idxs else 0.0
+                d.move_to([-0.6 + s * 0.62, BAND_YS[band] + up, 0])
+            lbl = self._label(f"EV: {ev:.2f}", 3.4, BAND_YS[band], anchor=LEFT, fs=26)
+            return VGroup(*dice, lbl)
+
+        second = _mini_row([1, 2, 4, 4, 6], 1)                 # "second row"
+        third = _mini_row([2, 3, 5, 5, 6], 2)                  # "third row"
+        turn = self.nums["turn_values"]["large_straight"]
+        bottom = self._label(f"EV: {turn:.2f}", 3.4, BAND_YS[0], anchor=LEFT, fs=26)  # "bottom with EV"
+        self.play(LaggedStart(FadeIn(third), FadeIn(second), FadeIn(bottom),
+                              lag_ratio=0.4), run_time=run_time)
+        self.wait(0.8)
+        self.play(FadeOut(VGroup(second, third, bottom)), run_time=0.5)
+        self.wait(0.2)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # i : empty the card box-by-box; REAL "avg points remaining" (solver V) → 254.6
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def backward_sweep(self, run_time=0.8):
