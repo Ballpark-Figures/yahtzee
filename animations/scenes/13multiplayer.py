@@ -135,6 +135,23 @@ class Multiplayer(YahtzeeScene):
             b.stretch(1e-3, dim=1, about_edge=DOWN)
         self.play(*[Restore(b) for b in bars], *extra, run_time=run_time)
 
+    def _beat_seq(self, prev_n, n, m0, m1):
+        """N-values + medians to morph through for a beat from ``prev_n`` (median
+        ``m0``) to ``n`` (median ``m1``): the checkpoints strictly inside, kept only
+        while the median STRICTLY increases. Near the top the median plateaus across
+        several multiples of 10 (achievable scores get sparse), so two checkpoints
+        can share a median — collapse those, else a sub-morph gets a zero median-
+        delta and thus run_time 0, which manim can't render. Also keeps the
+        constant-median-rate pacing honest (a zero-delta step should take no time)."""
+        inter, last_m = [], m0
+        for c in self.checkpoints:
+            if prev_n < c[0] < n and last_m < c[1] < m1:
+                inter.append(c[0])
+                last_m = c[1]
+        seq = [prev_n, *inter, n]
+        meds = [m0, *[sd.maxN_median(c) for c in inter], m1]
+        return seq, meds
+
     def _transition(self, n, count_title, run_time=3.0):
         """One ``run_time``-second beat-to-beat animation that morphs THROUGH the
         intermediate checkpoints (real best-of-N distributions whose median crosses
@@ -143,10 +160,7 @@ class Multiplayer(YahtzeeScene):
         title's N is median-paced (it reaches each checkpoint's N as the median
         passes it). The very first step also crossfades the title structure."""
         prev_n, m0, m1 = self.cur_n, self.cur_median, sd.maxN_median(n)
-        inter = [c[0] for c in self.checkpoints
-                 if prev_n < c[0] < n and m0 < c[1] < m1]
-        seq = [prev_n, *inter, n]                       # N values to morph through
-        meds = [m0, *[sd.maxN_median(c) for c in inter], m1]
+        seq, meds = self._beat_seq(prev_n, n, m0, m1)
         total = m1 - m0
 
         for i in range(len(seq) - 1):
@@ -249,59 +263,74 @@ class Multiplayer(YahtzeeScene):
         self.wait(0.5)
 
     @subscene
-    def best_of_perfect(self, run_time=4.5, settle=0.35):
-        """Finale. ONE play: the number counts continuously up to N* (~5.07e19) over
-        the whole ``run_time``, while the title reflows — "Best of" up, number to the
-        centre line, "opponents" down (all full-size, moved into the top room) — and
-        the plot pans to the perfect-game spike and the median reaches 1575. Those
-        MOTIONS use a rate func that finishes by ``settle``*run_time, so they settle
-        early while the count keeps going."""
+    def best_of_perfect(self, run_time=3.0, settle=0.35):
+        """Finale. The SAME beat-through-checkpoints morph as the other beats — the
+        median rises at a CONSTANT rate through the intermediate checkpoints and the
+        number counts median-paced up to N* (~5.07e19) — PLUS a one-off title reflow:
+        the one-line title splits into "Best of" (up), the number (to the centre
+        line) and "opponents" (down), all full-size. The reflow is driven by the
+        median-fraction through an ease that finishes by ``settle`` of the span, so
+        the words settle EARLY while the count / pan / median run the whole beat (the
+        number never counts alone). ``settle`` is a fraction of the MEDIAN span, which
+        — because the median is constant-rate — is also the time fraction."""
         n = self.n_perfect
-        new = self._build(n)
-        m1 = sd.maxN_median(n)
+        prev_n, m0, m1 = self.cur_n, self.cur_median, sd.maxN_median(n)
+        seq, meds = self._beat_seq(prev_n, n, m0, m1)
+        total = m1 - m0
         cx = PLOT_C[0]
 
-        # split the current one-line title into movable parts, laid over it so the
+        # split the one-line title into movable, full-size parts laid over it so the
         # hand-off is seamless (same words, same size, same spot)
         old = self.title
         oy = old.get_center()[1]
         pre = Text("Best of", font=FONT, font_size=FONT_SIZE_LG, color=BLACK)
         suf = Text("opponents", font=FONT, font_size=FONT_SIZE_LG, color=BLACK)
-        num = self._fit_number(self.cur_n)
         pre.move_to([old.get_left()[0] + pre.width / 2, oy, 0])
         suf.move_to([old.get_right()[0] - suf.width / 2, oy, 0])
+        pre_start, suf_start = pre.get_center().copy(), suf.get_center().copy()
+        pre_end = np.array([cx, STACK_MID + STACK_GAP, 0])
+        suf_end = np.array([cx, STACK_MID - STACK_GAP, 0])
         num_start = np.array([(pre.get_right()[0] + suf.get_left()[0]) / 2, oy, 0])
         num_end = np.array([cx, STACK_MID, 0])
-        num.move_to(num_start)
+        num = self._fit_number(prev_n).move_to(num_start)
         self.remove(old)
         self.add(pre, num, suf)
 
-        nt = ValueTracker(np.log(float(self.cur_n)))   # value: counts the whole time
-        pt = ValueTracker(0.0)                          # number's move (settles early)
-        mt = ValueTracker(self.cur_median)
-        num.add_updater(lambda m: m.become(
-            self._fit_number(int(round(np.exp(nt.get_value()))))
-            .move_to(interpolate(num_start, num_end, pt.get_value()))))
+        # median (constant-rate) drives the median label AND the reflow via an ease
+        # of the median-fraction (settles early); the log value drives the count.
+        mt = ValueTracker(m0)
+        nt = ValueTracker(np.log(float(prev_n)))
+        ease = squish_rate_func(smooth, 0.0, settle)
+        reflow = lambda: ease((mt.get_value() - m0) / total) if total else 1.0
         self.median_label.add_updater(
             lambda mob: mob.become(self._med_label(round(mt.get_value()))))
+        pre.add_updater(lambda m: m.move_to(interpolate(pre_start, pre_end, reflow())))
+        suf.add_updater(lambda m: m.move_to(interpolate(suf_start, suf_end, reflow())))
+        num.add_updater(lambda m: m.become(
+            self._fit_number(int(round(np.exp(nt.get_value()))))
+            .move_to(interpolate(num_start, num_end, reflow()))))
 
-        # The count, the plot pan and the median all run the FULL run_time (same
-        # duration, finishing together — so the number never counts alone). Only
-        # the words and the number's slide into place settle early (``settle``).
-        ease = squish_rate_func(smooth, 0.0, settle)
-        self.play(
-            pre.animate(rate_func=ease).move_to([cx, STACK_MID + STACK_GAP, 0]),
-            suf.animate(rate_func=ease).move_to([cx, STACK_MID - STACK_GAP, 0]),
-            pt.animate(rate_func=ease).set_value(1.0),
-            mt.animate.set_value(m1),
-            *morph_panning(self.plot, new),
-            nt.animate(rate_func=linear).set_value(np.log(float(n))),
-            run_time=run_time,
-        )
-        num.clear_updaters()
-        num.become(self._fit_number(n).move_to(num_end))
-        self.median_label.clear_updaters()
+        # morph THROUGH the checkpoints; each sub-morph's time ∝ its median-delta so
+        # the median rises at a constant rate. Count, pan and median run together
+        # every sub-morph (the number never counts alone).
+        for i in range(len(seq) - 1):
+            na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
+            new = self._build(nb)
+            rt = run_time * (mb - ma) / total if total else run_time
+            anims = morph_panning(self.plot, new)
+            for a in anims:
+                a.rate_func = linear
+            anims.append(mt.animate(rate_func=linear).set_value(mb))
+            anims.append(nt.animate(rate_func=linear).set_value(np.log(float(nb))))
+            self.play(*anims, run_time=rt)
+            self.plot = new
+
+        for mob in (self.median_label, pre, suf, num):
+            mob.clear_updaters()
         self.median_label.become(self._med_label(m1))
+        pre.move_to(pre_end)
+        suf.move_to(suf_end)
+        num.become(self._fit_number(n).move_to(num_end))
 
         self.title = VGroup(pre, num, suf)
         self.cur_n, self.cur_median, self.plot = n, m1, new
