@@ -321,13 +321,14 @@ class Multiplayer(YahtzeeScene):
         self.remove(old)
         self.add(pre, num, suf)
 
-        # the count (log N) drives the reflow via an ease of the log-N fraction
-        # (settles early) and the number; the median tracks each checkpoint.
+        # the reflow (words + number sliding into place) is driven by a dedicated
+        # beat-TIME tracker with ONE smooth ease that settles by ``settle`` — kept
+        # separate from the (already eased) count so it doesn't double-ease into a
+        # fast-slow-fast wobble. The number's VALUE still comes from the count (nt).
         mt = ValueTracker(m0)
         nt = ValueTracker(np.log(float(prev_n)))
-        ease = squish_rate_func(smooth, 0.0, settle)
-        reflow = lambda: (ease((nt.get_value() - np.log(float(prev_n))) / log_total)
-                          if log_total else 1.0)
+        gt = ValueTracker(0.0)                          # beat time fraction (0..1)
+        reflow = lambda: smooth(min(1.0, gt.get_value() / settle)) if settle else 1.0
 
         def elbow(start, end, p):
             # L-path: straight vertical to the corner (start_x, end_y), then over
@@ -348,16 +349,19 @@ class Multiplayer(YahtzeeScene):
 
         # morph THROUGH the checkpoints; the count EASES (smooth) on a log scale
         # over the whole beat. Count, pan and median run together every sub-morph
-        # (the number never counts alone).
+        # (the number never counts alone); gt advances with REAL time for the reflow.
+        elapsed = 0.0
         for i in range(len(seq) - 1):
             na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
             new = self._build(nb)
             rt, rate = beat[i]
+            elapsed += rt
             anims = morph_panning(self.plot, new)
             for a in anims:
                 a.rate_func = rate
             anims.append(mt.animate(rate_func=rate).set_value(mb))
             anims.append(nt.animate(rate_func=rate).set_value(np.log(float(nb))))
+            anims.append(gt.animate(rate_func=linear).set_value(min(1.0, elapsed / run_time)))
             self.play(*anims, run_time=rt)
             self.plot = new
 
