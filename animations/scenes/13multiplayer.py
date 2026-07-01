@@ -148,35 +148,64 @@ class Multiplayer(YahtzeeScene):
         meds = [m0, *[sd.maxN_median(c) for c in inter], m1]
         return seq, meds
 
+    def _eased_beat(self, seq, run_time):
+        """Per-sub-morph (run_time, rate_func) so the opponent count EASES (manim
+        ``smooth``) on a LOG scale across the WHOLE beat — the pre-checkpoint feel.
+        Each checkpoint sits at its log-N fraction along the smooth curve; a
+        sub-morph gets the time between its endpoints' inverse-smooth positions and a
+        rate_func that replays just that slice of ``smooth`` — so pan/median/count
+        stay in lock-step and the median still reaches each checkpoint as N passes
+        it, but the count eases in and out over the beat instead of running at a
+        constant log rate."""
+        lp = np.log(float(seq[0]))
+        span = np.log(float(seq[-1])) - lp
+
+        def sinv(y):                                    # inverse of manim's smooth
+            y = min(1.0, max(0.0, y))                    # smooth is a sigmoid
+            e = 1.0 / (1.0 + np.exp(5.0))               # sigmoid(-5) (inflection=10)
+            p = y * (1.0 - 2.0 * e) + e
+            return 0.5 + np.log(p / (1.0 - p)) / 10.0
+
+        fr = [(np.log(float(s)) - lp) / span if span else 0.0 for s in seq]
+        tm = [sinv(f) for f in fr]
+        out = []
+        for i in range(len(seq) - 1):
+            ta, dt = tm[i], tm[i + 1] - tm[i]
+            fa, df = fr[i], fr[i + 1] - fr[i]
+            rate = (lambda s, ta=ta, dt=dt, fa=fa, df=df:
+                    (smooth(ta + s * dt) - fa) / df if df else s)
+            out.append((run_time * dt, rate))
+        return out
+
     def _transition(self, n, count_title, run_time=3.0):
         """One ``run_time``-second beat-to-beat animation that morphs THROUGH the
         intermediate checkpoints (real best-of-N distributions whose median crosses
-        each multiple of 10). The opponent count N drives it on a LOG scale — each
-        sub-morph's time ∝ its log-N delta, so N counts at a constant log rate and
-        the median reaches each checkpoint's median exactly as N passes that
-        checkpoint's N. The very first step also crossfades the title structure."""
+        each multiple of 10). The opponent count N drives it on a LOG scale, EASED
+        (manim ``smooth``) over the whole beat, and the median reaches each
+        checkpoint's median exactly as N passes that checkpoint's N. The very first
+        step also crossfades the title structure."""
         prev_n, m0, m1 = self.cur_n, self.cur_median, sd.maxN_median(n)
         seq, meds = self._beat_seq(prev_n, n, m0, m1)
-        log_total = np.log(float(n)) - np.log(float(prev_n))
+        beat = self._eased_beat(seq, run_time)
 
         for i in range(len(seq) - 1):
             na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
             new = self._build(nb)
-            rt = run_time * (np.log(float(nb)) - np.log(float(na))) / log_total
+            rt, rate = beat[i]
 
             mt = ValueTracker(ma)
             self.median_label.add_updater(
                 lambda mob, mt=mt: mob.become(self._med_label(round(mt.get_value()))))
             anims = morph_panning(self.plot, new)
             for a in anims:
-                a.rate_func = linear                    # linear so the pan is even across steps
-            anims.append(mt.animate(rate_func=linear).set_value(mb))
+                a.rate_func = rate                      # slice of smooth (eased over the beat)
+            anims.append(mt.animate(rate_func=rate).set_value(mb))
 
             if count_title:
                 nt = ValueTracker(np.log(float(na)))
                 self.title.add_updater(lambda mob, nt=nt: mob.become(
                     self._count_title(int(round(np.exp(nt.get_value()))))))
-                anims.append(nt.animate(rate_func=linear).set_value(np.log(float(nb))))
+                anims.append(nt.animate(rate_func=rate).set_value(np.log(float(nb))))
                 self.play(*anims, run_time=rt)
                 self.title.clear_updaters()
             else:
@@ -272,6 +301,7 @@ class Multiplayer(YahtzeeScene):
         prev_n, m0, m1 = self.cur_n, self.cur_median, sd.maxN_median(n)
         seq, meds = self._beat_seq(prev_n, n, m0, m1)
         log_total = np.log(float(n)) - np.log(float(prev_n))
+        beat = self._eased_beat(seq, run_time)
         cx = PLOT_C[0]
 
         # split the one-line title into movable, full-size parts laid over it so the
@@ -316,18 +346,18 @@ class Multiplayer(YahtzeeScene):
             self._fit_number(int(round(np.exp(nt.get_value()))))
             .move_to(interpolate(num_start, num_end, reflow()))))
 
-        # morph THROUGH the checkpoints; each sub-morph's time ∝ its log-N delta so
-        # N counts at a constant log rate. Count, pan and median run together every
-        # sub-morph (the number never counts alone).
+        # morph THROUGH the checkpoints; the count EASES (smooth) on a log scale
+        # over the whole beat. Count, pan and median run together every sub-morph
+        # (the number never counts alone).
         for i in range(len(seq) - 1):
             na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
             new = self._build(nb)
-            rt = run_time * (np.log(float(nb)) - np.log(float(na))) / log_total
+            rt, rate = beat[i]
             anims = morph_panning(self.plot, new)
             for a in anims:
-                a.rate_func = linear
-            anims.append(mt.animate(rate_func=linear).set_value(mb))
-            anims.append(nt.animate(rate_func=linear).set_value(np.log(float(nb))))
+                a.rate_func = rate
+            anims.append(mt.animate(rate_func=rate).set_value(mb))
+            anims.append(nt.animate(rate_func=rate).set_value(np.log(float(nb))))
             self.play(*anims, run_time=rt)
             self.plot = new
 
