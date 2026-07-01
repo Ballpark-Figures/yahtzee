@@ -234,8 +234,10 @@ def ev_remaining(filled):
 _SWEEP_FULL = {ONES: 3, TWOS: 6, THREES: 9, FOURS: 12, FIVES: 15, SIXES: 18,
                THREE_KIND: 22, FOUR_KIND: 24, FULL_HOUSE: 25, SMALL_STRAIGHT: 30,
                LARGE_STRAIGHT: 40, CHANCE: 17, YAHTZEE: 50}
-_SWEEP_ORDER = [FOUR_KIND, YAHTZEE, THREE_KIND, CHANCE, FULL_HOUSE, LARGE_STRAIGHT,
-                SMALL_STRAIGHT, ONES, SIXES, TWOS, FIVES, THREES, FOURS]
+# interleave bottom-section and top-section boxes so the sweep doesn't empty the
+# whole bottom before touching the top.
+_SWEEP_ORDER = [FOUR_KIND, ONES, YAHTZEE, TWOS, THREE_KIND, THREES, CHANCE, FOURS,
+                FULL_HOUSE, FIVES, LARGE_STRAIGHT, SIXES, SMALL_STRAIGHT]
 
 
 def sweep_sequence():
