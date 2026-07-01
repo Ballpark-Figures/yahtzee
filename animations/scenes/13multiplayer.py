@@ -27,8 +27,10 @@ Y_HEADROOM = 0.9
 Y_TICKS = (0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 15, 20, 25, 30, 40, 50)
 TITLE_MAXW = 11.0          # scale the counting title down if it would overrun this
 NUM_MAXW   = 12.0          # width cap for the finale number on its own line
-STACK_MID  = 3.25          # finale: y of the number line in the stacked title
-STACK_GAP  = 0.88          # finale: gap from the number line to "Best of"/"opponents"
+STACK_MID  = 3.2           # finale: y of the number line in the stacked title
+STACK_GAP  = 0.30          # finale: edge-to-edge gap from the number to each word
+WORD_SHRINK = 0.75         # finale: shrink "Best of"/"opponents" (48pt->36pt) so the
+#                            stacked title doesn't crowd the top of the frame
 
 BASE_COLOR = ACCENT_FILL   # bars
 MED_COLOR  = ACCENT_GOLD   # median-bar highlight
@@ -236,17 +238,19 @@ class Multiplayer(YahtzeeScene):
             out.append((run_time * dt, rate))
         return out
 
-    def _transition(self, n, count_title, run_time=3.0):
+    def _transition(self, n, count_title, run_time=3.0, lead_out=0.25, lead_in=0.5):
         """One ``run_time``-second beat-to-beat animation that morphs THROUGH the
         intermediate checkpoints (real best-of-N distributions whose median crosses
         each multiple of 10). The opponent count N drives it on a LOG scale, EASED
         (manim ``smooth``) over the whole beat, and the median reaches each
-        checkpoint's median exactly as N passes that checkpoint's N. The very first
-        step also crossfades the title structure."""
+        checkpoint's median exactly as N passes that checkpoint's N. The dashed
+        median leader fades OUT for the whole morph (every beat, even single-step
+        ones) then draws back IN at the end; the first step crossfades the title."""
         prev_n, m0, m1 = self.cur_n, self.cur_median, sd.maxN_median(n)
         seq, meds = self._beat_seq(prev_n, n, m0, m1)
         beat = self._eased_beat(seq, run_time)
-        last = len(seq) - 2
+
+        self.play(FadeOut(self.med_lead), run_time=lead_out)    # leader off for the morph
 
         for i in range(len(seq) - 1):
             na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
@@ -262,11 +266,6 @@ class Multiplayer(YahtzeeScene):
             for a in anims:
                 a.rate_func = rate                      # slice of smooth (eased over the beat)
             anims.append(mt.animate(rate_func=rate).set_value(mb))
-            if i == 0:                                   # leader disappears at the start
-                anims.append(FadeOut(self.med_lead))
-            if i == last:                                # ... and reappears at the end
-                self.med_lead = self._med_lead_for(m1, plot=new)
-                anims.append(FadeIn(self.med_lead))
 
             if count_title:
                 nt = ValueTracker(np.log(float(na)))
@@ -289,6 +288,8 @@ class Multiplayer(YahtzeeScene):
         self.median_label.become(self._med_label(m1))
         self.med_hl.become(self._med_hl_for(m1))
         self.title.become(self._count_title(n))
+        self.med_lead = self._med_lead_for(m1)          # draw the leader back IN
+        self.play(Create(self.med_lead), run_time=lead_in)
         self.cur_n, self.cur_median = n, m1
 
     # ════════════════════════════════════════════════════════════════════════
@@ -357,7 +358,7 @@ class Multiplayer(YahtzeeScene):
         self.wait(0.5)
 
     @subscene
-    def best_of_perfect(self, run_time=3.0, settle=0.35):
+    def best_of_perfect(self, run_time=3.0, settle=0.35, lead_out=0.25, lead_in=0.5):
         """Finale. The SAME beat-through-checkpoints morph as the other beats — the
         opponent count N counts up to N* (~5.07e19) on a LOG scale and the median
         reaches each checkpoint as N passes it — PLUS a one-off title reflow: the
@@ -382,8 +383,13 @@ class Multiplayer(YahtzeeScene):
         pre.move_to([old.get_left()[0] + pre.width / 2, oy, 0])
         suf.move_to([old.get_right()[0] - suf.width / 2, oy, 0])
         pre_start, suf_start = pre.get_center().copy(), suf.get_center().copy()
-        pre_end = np.array([cx, STACK_MID + STACK_GAP, 0])
-        suf_end = np.array([cx, STACK_MID - STACK_GAP, 0])
+        pre_base, suf_base = pre.copy(), suf.copy()      # full-size originals for a
+        #                                                  seamless start; they shrink en route
+        # stacked END positions: number centred at STACK_MID, the SHRUNK words an equal
+        # STACK_GAP above/below its edges (so the number reads as centred between them)
+        num_h = self._fit_number(prev_n).height
+        pre_end = np.array([cx, STACK_MID + num_h / 2 + STACK_GAP + pre.height * WORD_SHRINK / 2, 0])
+        suf_end = np.array([cx, STACK_MID - num_h / 2 - STACK_GAP - suf.height * WORD_SHRINK / 2, 0])
         num_start = np.array([(pre.get_right()[0] + suf.get_left()[0]) / 2, oy, 0])
         num_end = np.array([cx, STACK_MID, 0])
         num = self._fit_number(prev_n).move_to(num_start)
@@ -412,8 +418,12 @@ class Multiplayer(YahtzeeScene):
             lambda mob: mob.become(self._med_label(round(mt.get_value()))))
         self.med_hl.add_updater(
             lambda h: h.become(self._med_hl_for(round(mt.get_value()))))
-        pre.add_updater(lambda m: m.move_to(elbow(pre_start, pre_end, reflow())))
-        suf.add_updater(lambda m: m.move_to(elbow(suf_start, suf_end, reflow())))
+        pre.add_updater(lambda m: m.become(pre_base.copy()
+            .scale(interpolate(1.0, WORD_SHRINK, reflow()))
+            .move_to(elbow(pre_start, pre_end, reflow()))))
+        suf.add_updater(lambda m: m.become(suf_base.copy()
+            .scale(interpolate(1.0, WORD_SHRINK, reflow()))
+            .move_to(elbow(suf_start, suf_end, reflow()))))
         num.add_updater(lambda m: m.become(
             self._fit_number(int(round(np.exp(nt.get_value()))))
             .move_to(interpolate(num_start, num_end, reflow()))))
@@ -421,7 +431,8 @@ class Multiplayer(YahtzeeScene):
         # morph THROUGH the checkpoints; the count EASES (smooth) on a log scale
         # over the whole beat. Count, pan and median run together every sub-morph
         # (the number never counts alone); gt advances with REAL time for the reflow.
-        elapsed, last = 0.0, len(seq) - 2
+        self.play(FadeOut(self.med_lead), run_time=lead_out)    # leader off for the morph
+        elapsed = 0.0
         for i in range(len(seq) - 1):
             na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
             new = self._build(nb, wc=self._wc(nb, prev_n, n))
@@ -433,11 +444,6 @@ class Multiplayer(YahtzeeScene):
             anims.append(mt.animate(rate_func=rate).set_value(mb))
             anims.append(nt.animate(rate_func=rate).set_value(np.log(float(nb))))
             anims.append(gt.animate(rate_func=linear).set_value(min(1.0, elapsed / run_time)))
-            if i == 0:                                   # leader hidden during the motion
-                anims.append(FadeOut(self.med_lead))
-            if i == last:
-                self.med_lead = self._med_lead_for(m1, plot=new)
-                anims.append(FadeIn(self.med_lead))
             self.play(*anims, run_time=rt)
             self.plot = new
 
@@ -445,9 +451,11 @@ class Multiplayer(YahtzeeScene):
             mob.clear_updaters()
         self.median_label.become(self._med_label(m1))
         self.med_hl.become(self._med_hl_for(m1))
-        pre.move_to(pre_end)
-        suf.move_to(suf_end)
+        pre.become(pre_base.copy().scale(WORD_SHRINK).move_to(pre_end))
+        suf.become(suf_base.copy().scale(WORD_SHRINK).move_to(suf_end))
         num.become(self._fit_number(n).move_to(num_end))
+        self.med_lead = self._med_lead_for(m1)          # draw the leader back IN
+        self.play(Create(self.med_lead), run_time=lead_in)
 
         self.title = VGroup(pre, num, suf)
         self.cur_n, self.cur_median, self.plot = n, m1, new
