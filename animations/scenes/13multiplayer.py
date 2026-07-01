@@ -254,16 +254,16 @@ class Multiplayer(YahtzeeScene):
         self.median_label.add_updater(
             lambda mob: mob.become(self._med_label(round(mt.get_value()))))
 
-        ease = squish_rate_func(smooth, 0.0, settle)   # motions done by settle*run_time
-        panning = morph_panning(self.plot, new)
-        for a in panning:
-            a.rate_func = ease
+        # The count, the plot pan and the median all run the FULL run_time (same
+        # duration, finishing together — so the number never counts alone). Only
+        # the words and the number's slide into place settle early (``settle``).
+        ease = squish_rate_func(smooth, 0.0, settle)
         self.play(
             pre.animate(rate_func=ease).move_to([cx, STACK_MID + STACK_GAP, 0]),
             suf.animate(rate_func=ease).move_to([cx, STACK_MID - STACK_GAP, 0]),
             pt.animate(rate_func=ease).set_value(1.0),
-            mt.animate(rate_func=ease).set_value(m1),
-            *panning,
+            mt.animate.set_value(m1),
+            *morph_panning(self.plot, new),
             nt.animate(rate_func=linear).set_value(np.log(float(n))),
             run_time=run_time,
         )
