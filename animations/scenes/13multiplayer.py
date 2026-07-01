@@ -21,9 +21,10 @@ X_TICK_STEP = 50
 # y-axis rescales per histogram so the tallest bar fills this fraction of the box;
 # y-ticks are value-keyed, so "1%" slides to its new height and "1.5%" fades in.
 Y_HEADROOM = 0.9
-# fixed % grid — spans all peaks (flat N=1 ~1.3% up to the peaky big-N ~3.7%);
-# ticks above a given plot's scale fade out at the top
-Y_TICKS = (0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5)
+# candidate % ticks across ALL scales (flat ~1% up to the perfect-game ~50%
+# spike). The histogram picks a nice step per plot and fades the rest, so the
+# grid just has to contain every value any step might land on.
+Y_TICKS = (0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 15, 20, 25, 30, 40, 50)
 TITLE_MAXW = 11.0          # scale the counting title down if it would overrun this
 NUM_MAXW   = 12.0          # width cap for the finale number on its own line
 STACK_GAP  = 0.6           # finale: vertical gap "Best of" / number / "opponents"
