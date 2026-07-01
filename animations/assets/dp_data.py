@@ -73,13 +73,18 @@ _TURN_EV_ROLLS = [[1, 2, 4, 4, 6], [1, 2, 3, 4, 6], [2, 3, 4, 5, 5]]  # beat f (
 _MONTAGE = [([1, 2, 4, 4, 6], "B"), ([2, 3, 5, 5, 6], "B"),
             ([1, 1, 4, 5, 6], "A"), ([3, 3, 3, 4, 5], "A")]
 
-# beat i backward sweep: a FULL example card (solver order) emptied box by box; the
-# interleaved order keeps top- and bottom-section boxes alternating. All-solver V.
+# beat i backward sweep: an example card (solver order) that STARTS with 4-Kind and
+# Large Straight already removed (continuing the montage's two-open-box turn), then
+# empties box by box until the card is empty. The interleaved order keeps top- and
+# bottom-section boxes alternating. All-solver V.
 _SWEEP_FULL = {ONES: 3, TWOS: 6, THREES: 9, FOURS: 12, FIVES: 15, SIXES: 18,
                THREE_KIND: 22, FOUR_KIND: 24, FULL_HOUSE: 25, SMALL_STRAIGHT: 30,
                LARGE_STRAIGHT: 40, CHANCE: 17, YAHTZEE: 50}
-_SWEEP_ORDER = [FOUR_KIND, ONES, YAHTZEE, TWOS, THREE_KIND, THREES, CHANCE, FOURS,
-                FULL_HOUSE, FIVES, LARGE_STRAIGHT, SIXES, SMALL_STRAIGHT]
+# already removed before the sweep starts (shown as the opening card state).
+_SWEEP_PRE_REMOVED = [FOUR_KIND, LARGE_STRAIGHT]
+# the remaining boxes, removed one at a time until the card is empty.
+_SWEEP_ORDER = [ONES, YAHTZEE, TWOS, THREE_KIND, THREES, CHANCE, FOURS,
+                FULL_HOUSE, FIVES, SIXES, SMALL_STRAIGHT]
 
 
 def _keep_ev_by_values(df, value_tuple):
@@ -192,8 +197,10 @@ def _compute_scene04():
             return se.state_value(st)
 
         filled = dict(_SWEEP_FULL)
+        for cat in _SWEEP_PRE_REMOVED:      # 4-Kind + Lg Straight already gone
+            del filled[cat]
         sweep = [{"emptied": None, "remaining": V_of(filled)}]
-        for cat in _SWEEP_ORDER:
+        for cat in _SWEEP_ORDER:            # empty the rest until the card is bare
             del filled[cat]
             sweep.append({"emptied": cat, "remaining": V_of(filled)})
 

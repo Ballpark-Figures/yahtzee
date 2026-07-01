@@ -245,50 +245,42 @@
   "sweep": [
     {
       "emptied": null,
-      "remaining": 0.0
-    },
-    {
-      "emptied": 7,
-      "remaining": 10.039386749267578
+      "remaining": 26.766918182373047
     },
     {
       "emptied": 0,
-      "remaining": 32.97367477416992
+      "remaining": 53.23786163330078
     },
     {
       "emptied": 12,
-      "remaining": 37.561397552490234
+      "remaining": 58.70244216918945
     },
     {
       "emptied": 1,
-      "remaining": 39.7944221496582
+      "remaining": 62.57756805419922
     },
     {
       "emptied": 6,
-      "remaining": 66.2022476196289
+      "remaining": 89.67508697509766
     },
     {
       "emptied": 2,
-      "remaining": 76.37567901611328
+      "remaining": 101.41461181640625
     },
     {
       "emptied": 11,
-      "remaining": 107.95452117919922
+      "remaining": 134.4606475830078
     },
     {
       "emptied": 3,
-      "remaining": 122.9607925415039
+      "remaining": 150.51393127441406
     },
     {
       "emptied": 8,
-      "remaining": 146.89462280273438
+      "remaining": 174.89480590820312
     },
     {
       "emptied": 4,
-      "remaining": 165.6439971923828
-    },
-    {
-      "emptied": 10,
       "remaining": 194.6669158935547
     },
     {

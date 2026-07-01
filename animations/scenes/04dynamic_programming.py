@@ -69,6 +69,12 @@ class DynamicProgramming(YahtzeeScene):
     # just after at ODDS_NX (small, consistent colon→number gap), sitting well
     # clear of the kept dice.
     ODDS_CX, ODDS_NX = 6.55, 6.68
+    # digit-only numbers sit a hair LOW next to their labels, because a label like
+    # "Avg pts:" has descenders (the p) that stretch its bounding box down and so
+    # raise its centre; the number has none. Nudge every number UP by this fraction
+    # of its font size so its baseline lands on the label's baseline (measured, and
+    # constant across font sizes).
+    NUM_BASELINE_DY = 0.00136
 
     # ── small helpers ─────────────────────────────────────────────────────────
     def _apos(self, band, slot):
@@ -94,11 +100,20 @@ class DynamicProgramming(YahtzeeScene):
         self.play(*[dice[i].animate.move_to(target[i]) for i in range(5)],
                   run_time=run_time)
 
-    def _label(self, text, x, y, *, fs=None, color=BLACK, anchor=LEFT):
+    def _label(self, text, x, y, *, fs=None, color=BLACK, anchor=LEFT, dy=0.0):
         fs = self.LABEL_FS if fs is None else fs
         m = crisp_text(text, font_size=fs, color=color, font=FONT, weight="BOLD")
-        m.move_to([x, y, 0], aligned_edge=anchor)
+        m.move_to([x, y + dy, 0], aligned_edge=anchor)
         return m
+
+    def _ny(self, y, fs):
+        """`y` nudged UP so a digit-only number's baseline matches its label's."""
+        return y + self.NUM_BASELINE_DY * fs
+
+    def _numlabel(self, text, x, y, *, fs, color=BLACK, anchor=LEFT):
+        """Like `_label` but for a NUMBER — applies the baseline nudge."""
+        return self._label(text, x, y, fs=fs, color=color, anchor=anchor,
+                           dy=self.NUM_BASELINE_DY * fs)
 
     def _count(self, specs, run_time):
         """Animate crisp_text numbers by rebuilding each frame from a ValueTracker
@@ -106,9 +121,10 @@ class DynamicProgramming(YahtzeeScene):
         live, anims = [], []
         for s in specs:
             t = ValueTracker(s["start"])
-            fmt, x, y = s["fmt"], s["x"], s["y"]
+            fmt, x = s["fmt"], s["x"]
             color, anchor = s.get("color", BLACK), s.get("anchor", LEFT)
             fs = s.get("fs", self.ODDS_FS)
+            y = self._ny(s["y"], fs)            # baseline nudge (numbers only)
 
             def upd(mob, t=t, fmt=fmt, x=x, y=y, color=color, anchor=anchor, fs=fs):
                 new = crisp_text(fmt(t.get_value()), font_size=fs,
@@ -122,9 +138,10 @@ class DynamicProgramming(YahtzeeScene):
         self.play(*anims, run_time=run_time)
         for s, t in live:
             s["mob"].clear_updaters()
-            final = crisp_text(s["fmt"](s["target"]), font_size=s.get("fs", self.ODDS_FS),
+            fs = s.get("fs", self.ODDS_FS)
+            final = crisp_text(s["fmt"](s["target"]), font_size=fs,
                                color=s.get("color", BLACK), font=FONT, weight="BOLD")
-            final.move_to([s["x"], s["y"], 0], aligned_edge=s.get("anchor", LEFT))
+            final.move_to([s["x"], self._ny(s["y"], fs), 0], aligned_edge=s.get("anchor", LEFT))
             s["mob"].become(final)
 
     @staticmethod
@@ -218,11 +235,11 @@ class DynamicProgramming(YahtzeeScene):
             *[dice[i].animate.move_to(slot_point(0, i)) for i in range(5)],
             Transform(lbl, big_lbl),
             num.animate.scale(self.TURN_FS / self.ODDS_FS).move_to(
-                [self.TURN_NX, BAND_YS[1], 0], aligned_edge=LEFT),
+                [self.TURN_NX, self._ny(BAND_YS[1], self.TURN_FS), 0], aligned_edge=LEFT),
             run_time=run_time,
         )
         self._count([{"mob": num, "fmt": self._ev, "x": self.TURN_NX, "y": BAND_YS[1],
-                      "start": prev, "target": turn, "color": SCORE_GREEN, "fs": self.TURN_FS}], 0.9)
+                      "start": prev, "target": turn, "color": AVG_GREEN, "fs": self.TURN_FS}], 0.9)
 
     def _build_probs_panel(self, base_band):
         yt, ym, yb = self._panel_ys(base_band)
@@ -231,9 +248,9 @@ class DynamicProgramming(YahtzeeScene):
         self.lbl_p40 = self._label("40 pts:", self.ODDS_CX, yt, fs=self.ODDS_FS, anchor=RIGHT)
         self.lbl_p0  = self._label("0 pts:",  self.ODDS_CX, ym, fs=self.ODDS_FS, anchor=RIGHT)
         self.lbl_ev  = self._label("Avg pts:", self.ODDS_CX, yb, fs=self.ODDS_FS, anchor=RIGHT)
-        self.n_p40 = self._label("0%", self.ODDS_NX, yt, fs=self.ODDS_FS)
-        self.n_p0  = self._label("0%", self.ODDS_NX, ym, fs=self.ODDS_FS)
-        self.n_ev  = self._label("0.00", self.ODDS_NX, yb, fs=self.ODDS_FS)
+        self.n_p40 = self._numlabel("0%", self.ODDS_NX, yt, fs=self.ODDS_FS)
+        self.n_p0  = self._numlabel("0%", self.ODDS_NX, ym, fs=self.ODDS_FS)
+        self.n_ev  = self._numlabel("0.00", self.ODDS_NX, yb, fs=self.ODDS_FS)
 
     def _retarget(self, name, *, run_time, start=None):
         d = self.nums["second_reroll"][name]
@@ -261,7 +278,7 @@ class DynamicProgramming(YahtzeeScene):
             self.wait(0.35)
         self._show_keep(self.dice, self._KEEP_IDX["1234"], base_band=2, run_time=run_time)
         self._retarget("1234", run_time=0.8)
-        self.play(self.n_ev.animate.set_color(SCORE_GREEN), run_time=0.5)  # number only
+        self.play(self.n_ev.animate.set_color(AVG_GREEN), run_time=0.5)  # number only
         self.wait(0.5)
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -289,7 +306,7 @@ class DynamicProgramming(YahtzeeScene):
                 {"mob": self.n_p0,  "fmt": self._pct, "x": x0, "y": y0, "fs": self.ODDS_FS,
                  "start": self.n_p0_val, "target": p0},
                 {"mob": self.n_ev,  "fmt": self._ev,  "x": xev, "y": yev, "fs": self.ODDS_FS,
-                 "color": SCORE_GREEN, "start": self.n_ev_val, "target": ev},
+                 "color": AVG_GREEN, "start": self.n_ev_val, "target": ev},
             ], run_time=0.8)
             self.n_p40_val, self.n_p0_val, self.n_ev_val = p40, p0, ev
             self.wait(0.5)
@@ -307,7 +324,7 @@ class DynamicProgramming(YahtzeeScene):
         by = BAND_YS[2]
         self.play(*[self.dice[i].animate.move_to(slot_point(1, i)) for i in range(5)],
                   self.lbl_ev.animate.move_to([self.ODDS_CX, by, 0], aligned_edge=RIGHT),
-                  self.n_ev.animate.set_color(BLACK).move_to([self.ODDS_NX, by, 0], aligned_edge=LEFT),
+                  self.n_ev.animate.set_color(BLACK).move_to([self.ODDS_NX, self._ny(by, self.ODDS_FS), 0], aligned_edge=LEFT),
                   run_time=0.5)
         morph_dice(self, self.dice, [1, 2, 4, 4, 6], run_time=0.5)
         self.ev_y = by
@@ -322,7 +339,7 @@ class DynamicProgramming(YahtzeeScene):
             prev = ev
             self.wait(0.3)
         self.n_ev_val = prev
-        self.play(self.n_ev.animate.set_color(SCORE_GREEN), run_time=0.5)  # number only
+        self.play(self.n_ev.animate.set_color(AVG_GREEN), run_time=0.5)  # number only
         self.wait(0.5)
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -343,7 +360,7 @@ class DynamicProgramming(YahtzeeScene):
             self._show_keep(self.dice, self._keep_indices(values, keep_vec),
                             base_band=1, run_time=run_time)
             self._count([{"mob": self.n_ev, "fmt": self._ev, "x": self.ODDS_NX, "y": by,
-                          "start": prev, "target": ev, "color": SCORE_GREEN,
+                          "start": prev, "target": ev, "color": AVG_GREEN,
                           "fs": self.ODDS_FS}], 0.7)
             prev = ev
             self.wait(0.4)
@@ -375,14 +392,15 @@ class DynamicProgramming(YahtzeeScene):
         z4 = self._label("0", c4[0], c4[1], color=GRAY, anchor=ORIGIN)
         zls = self._label("0", cls[0], cls[1], color=GRAY, anchor=ORIGIN)
         # HORIZONTAL arrows pointing LEFT — the arrowHEADS sit at the right edge of
-        # each open box; the base (right) end carries the "Avg points after" words.
+        # each open box; the base (right) end sits at the RIGHT EDGE OF THE CARD and
+        # carries the "Avg points after" words just beyond it.
         head4 = self.card.value_cells[7].get_right()
         headls = self.card.value_cells[10].get_right()
-        base_x = 2.1
+        base_x = self.card.get_right()[0]                         # the card's edge
         ar4 = Arrow([base_x, c4[1], 0], head4, color=BLACK,
-                    buff=0, stroke_width=3.5, max_tip_length_to_length_ratio=0.05)
+                    buff=0, stroke_width=3.5, max_tip_length_to_length_ratio=0.12)
         arls = Arrow([base_x, cls[1], 0], headls, color=BLACK,
-                     buff=0, stroke_width=3.5, max_tip_length_to_length_ratio=0.05)
+                     buff=0, stroke_width=3.5, max_tip_length_to_length_ratio=0.12)
         self.play(FadeIn(z4), FadeIn(zls), GrowArrow(ar4), GrowArrow(arls), run_time=0.6)
         self.wait(0.8)                                             # beat before the EVs
 
@@ -418,7 +436,7 @@ class DynamicProgramming(YahtzeeScene):
 
         # the EV panel (Avg pts: <green number>), right of the kept dice, one row up
         ev_lbl = self._label("Avg pts:", self.ODDS_CX, BAND_YS[3], fs=self.ODDS_FS, anchor=RIGHT)
-        ev_num = self._label("0.00", self.ODDS_NX, BAND_YS[3], color=SCORE_GREEN, fs=self.ODDS_FS)
+        ev_num = self._numlabel("0.00", self.ODDS_NX, BAND_YS[3], color=AVG_GREEN, fs=self.ODDS_FS)
         for s, d in enumerate(dice):                              # reveal in row 2 (band 2)
             d.set_value(montage[0]["values"][s])
             d.move_to(slot_point(2, s))
@@ -437,14 +455,14 @@ class DynamicProgramming(YahtzeeScene):
             anims = [dice[i].animate.move_to(slot_point(base_band, i)) for i in range(5)]
             if move_avg:
                 anims += [ev_lbl.animate.move_to([self.ODDS_CX, BAND_YS[ev_band], 0], aligned_edge=RIGHT),
-                          ev_num.animate.move_to([self.ODDS_NX, BAND_YS[ev_band], 0], aligned_edge=LEFT)]
+                          ev_num.animate.move_to([self.ODDS_NX, self._ny(BAND_YS[ev_band], self.ODDS_FS), 0], aligned_edge=LEFT)]
             self.play(*anims, run_time=0.4)
             morph_dice(self, dice, values, run_time=0.4)
             self._show_keep(dice, self._keep_indices(values, keep_vec),
                             base_band=base_band, run_time=run_time)          # SET FORWARD
             self._count([{"mob": ev_num, "fmt": self._ev, "x": self.ODDS_NX,
                           "y": BAND_YS[ev_band], "start": prev[0], "target": ev,
-                          "color": SCORE_GREEN, "fs": self.ODDS_FS}], 0.5)
+                          "color": AVG_GREEN, "fs": self.ODDS_FS}], 0.5)
             prev[0] = ev
             self.wait(0.25)
 
@@ -470,9 +488,13 @@ class DynamicProgramming(YahtzeeScene):
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def backward_sweep(self, run_time=0.8):
-        # reset the card to a full example card; the dice stay at the BOTTOM (band 0)
-        # for all of this subscene, and the running EV sits in the 3rd row (band 2).
-        self.card.transition(self, dict(SWEEP_FULL), run_time=0.8)
+        # reset to the example card but with 4-Kind AND Large Straight ALREADY
+        # removed (continuing from the montage's two-open-box turn); the dice stay
+        # at the BOTTOM (band 0) and the running EV sits in the 3rd row (band 2).
+        sweep_start = dict(SWEEP_FULL)
+        sweep_start[7] = None      # 4-Kind already removed
+        sweep_start[10] = None     # Large Straight already removed
+        self.card.transition(self, sweep_start, run_time=0.8)
         example = DiceBoard().dice
         for i, (d, v) in enumerate(zip(example, [3, 3, 5, 2, 6])):
             d.set_value(v)
@@ -482,19 +504,19 @@ class DynamicProgramming(YahtzeeScene):
         by = BAND_YS[1]                          # the EV lives in the 3rd row (top-down)
         onedp = lambda v: f"{v:.1f}"             # real solver V, to one decimal
         lbl = self._label("Avg points remaining:", slot_x(2) - 0.6, by, anchor=ORIGIN, fs=32)
-        num = self._label("0.0", slot_x(2) + 2.7, by, color=SCORE_GREEN, anchor=ORIGIN, fs=32)
+        num = self._numlabel("0.0", slot_x(2) + 2.7, by, color=AVG_GREEN, anchor=ORIGIN, fs=32)
         self.play(FadeIn(VGroup(lbl, num)), run_time=0.4)
 
         seq = self.nums["sweep"]                 # real solver V at each step
         prev = seq[0]["remaining"]
         self._count([{"mob": num, "fmt": onedp, "x": slot_x(2) + 2.7,
-                      "y": by, "start": 0.0, "target": prev, "color": SCORE_GREEN,
+                      "y": by, "start": 0.0, "target": prev, "color": AVG_GREEN,
                       "anchor": ORIGIN, "fs": 32}], 0.4)
         for step in seq[1:]:
             self.card.transition(self, {_sc_box(step["emptied"]): None}, run_time=0.45)
             self._count([{"mob": num, "fmt": onedp, "x": slot_x(2) + 2.7,
                           "y": by, "start": prev, "target": step["remaining"],
-                          "color": SCORE_GREEN, "anchor": ORIGIN, "fs": 32}], 0.4)
+                          "color": AVG_GREEN, "anchor": ORIGIN, "fs": 32}], 0.4)
             prev = step["remaining"]
             self.wait(0.15)
         self.wait(0.8)

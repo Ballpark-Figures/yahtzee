@@ -4,6 +4,7 @@ CENTER_SC   = [0, 0, 0]
 LEFT_SC     = [-4.74, 0, 0]
 
 SCORE_GREEN = "#1A7A1A"
+AVG_GREEN   = "#146014"   # slightly darker green for the scene-04 "avg points" readouts
 SCORE_RED   = "#A60E00"
 CARD_FILL   = "#F7F2E7"   # cream scorecard surface
 STRIPE_FILL = "#ECE3CE"   # zebra row shading
