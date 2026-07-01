@@ -56,21 +56,37 @@ class Multiplayer(YahtzeeScene):
         # the finale: fewest opponents for which a perfect game is more likely
         # than not (median hits 1575). Computed, not hard-coded.
         self.n_perfect = sd.opponents_for_perfect()
+        # (N, median) at each multiple of 10 the median crosses — intermediate
+        # checkpoints the beat-to-beat animations morph THROUGH.
+        self.checkpoints = sd.median_checkpoints(10)
         self.series = SERIES + [self.n_perfect]
         self.dists = {n: (sd.score_distribution() if n == 1
                           else sd.maxN_distribution(n)) for n in self.series}
         ranges = {n: trimmed_range(self.dists[n], MIN_PROB) for n in self.dists}
+        # union/scale from the MAIN beats already span the whole score range, so
+        # every in-between checkpoint fits; their dists/centers are built lazily.
         self.union = (min(lo for lo, _ in ranges.values()),
                       max(hi for _, hi in ranges.values()))
         span = max(hi - lo for lo, hi in ranges.values())   # widest fills the box
         self.scale_x = PLOT_W / span
         self.centers = {n: (lo + hi) / 2 for n, (lo, hi) in ranges.items()}
 
+    def _dist(self, n):
+        if n not in self.dists:
+            self.dists[n] = sd.maxN_distribution(n)
+        return self.dists[n]
+
+    def _center(self, n):
+        if n not in self.centers:
+            lo, hi = trimmed_range(self._dist(n), MIN_PROB)
+            self.centers[n] = (lo + hi) / 2
+        return self.centers[n]
+
     def _build(self, n):
         """The bars/axes/ticks + median MARKER (no text — the scene owns the
         median label + the title so their numbers can be live counters)."""
         return get_panning_histogram(
-            self.dists[n], self.centers[n], self.union[0], self.union[1],
+            self._dist(n), self._center(n), self.union[0], self.union[1],
             self.scale_x, center=PLOT_C, width=PLOT_W, height=PLOT_H,
             bar_color=BASE_COLOR, x_tick_step=X_TICK_STEP, y_headroom=Y_HEADROOM,
             y_tick_values=Y_TICKS,
@@ -119,38 +135,53 @@ class Multiplayer(YahtzeeScene):
             b.stretch(1e-3, dim=1, about_edge=DOWN)
         self.play(*[Restore(b) for b in bars], *extra, run_time=run_time)
 
-    def _transition(self, n, count_title, run_time):
-        """Morph+pan the plot to best-of-``n`` while COUNTING the median (linear)
-        and — when ``count_title`` — the title's N (log scale). The first step
-        instead crossfades the title ("Score Frequencies" → "Best of 2 …")."""
-        prev_n = self.cur_n
-        new = self._build(n)
-        m0, m1 = self.cur_median, sd.maxN_median(n)
+    def _transition(self, n, count_title, run_time=3.0):
+        """One ``run_time``-second beat-to-beat animation that morphs THROUGH the
+        intermediate checkpoints (real best-of-N distributions whose median crosses
+        each multiple of 10). Each sub-morph gets time proportional to its median-
+        delta, so the median rises at a CONSTANT rate over the whole beat. The
+        title's N is median-paced (it reaches each checkpoint's N as the median
+        passes it). The very first step also crossfades the title structure."""
+        prev_n, m0, m1 = self.cur_n, self.cur_median, sd.maxN_median(n)
+        inter = [c[0] for c in self.checkpoints
+                 if prev_n < c[0] < n and m0 < c[1] < m1]
+        seq = [prev_n, *inter, n]                       # N values to morph through
+        meds = [m0, *[sd.maxN_median(c) for c in inter], m1]
+        total = m1 - m0
 
-        mt = ValueTracker(m0)      # median label is parked; only its number counts
-        self.median_label.add_updater(
-            lambda mob: mob.become(self._med_label(round(mt.get_value()))))
+        for i in range(len(seq) - 1):
+            na, nb, ma, mb = seq[i], seq[i + 1], meds[i], meds[i + 1]
+            new = self._build(nb)
+            rt = run_time * (mb - ma) / total if total else run_time
 
-        anims = morph_panning(self.plot, new)
-        anims.append(mt.animate.set_value(m1))
+            mt = ValueTracker(ma)
+            self.median_label.add_updater(
+                lambda mob, mt=mt: mob.become(self._med_label(round(mt.get_value()))))
+            anims = morph_panning(self.plot, new)
+            for a in anims:
+                a.rate_func = linear                    # linear so the pan is even across steps
+            anims.append(mt.animate(rate_func=linear).set_value(mb))
 
-        if count_title:
-            nt = ValueTracker(np.log(prev_n))
-            self.title.add_updater(lambda mob: mob.become(
-                self._count_title(int(round(np.exp(nt.get_value()))))))
-            anims.append(nt.animate.set_value(np.log(n)))
-            self.play(*anims, run_time=run_time)
-            self.title.clear_updaters()
-            self.title.become(self._count_title(n))
-        else:
-            new_title = self._count_title(n)
-            anims += [FadeOut(self.title), FadeIn(new_title)]
-            self.play(*anims, run_time=run_time)
-            self.title = new_title
+            if count_title:
+                nt = ValueTracker(np.log(float(na)))
+                self.title.add_updater(lambda mob, nt=nt: mob.become(
+                    self._count_title(int(round(np.exp(nt.get_value()))))))
+                anims.append(nt.animate(rate_func=linear).set_value(np.log(float(nb))))
+                self.play(*anims, run_time=rt)
+                self.title.clear_updaters()
+            else:
+                new_title = self._count_title(nb)       # 1->2: crossfade structure
+                anims += [FadeOut(self.title), FadeIn(new_title)]
+                self.play(*anims, run_time=rt)
+                self.title = new_title
+                count_title = True
 
-        self.median_label.clear_updaters()
+            self.median_label.clear_updaters()
+            self.plot = new
+
         self.median_label.become(self._med_label(m1))
-        self.cur_n, self.cur_median, self.plot = n, m1, new
+        self.title.become(self._count_title(n))
+        self.cur_n, self.cur_median = n, m1
 
     # ════════════════════════════════════════════════════════════════════════
     # a : single-player plot; normal-width median bar with an upper-right callout
@@ -178,37 +209,37 @@ class Multiplayer(YahtzeeScene):
     # get big and the title number climbs on a log scale.
     # ════════════════════════════════════════════════════════════════════════
     @subscene
-    def best_of_2(self, run_time=2.0):
+    def best_of_2(self, run_time=3.0):
         self._transition(2, count_title=False, run_time=run_time)   # title crossfade
         self.wait(0.5)
 
     @subscene
-    def best_of_3(self, run_time=2.0):
+    def best_of_3(self, run_time=3.0):
         self._transition(3, count_title=True, run_time=run_time)
         self.wait(0.5)
 
     @subscene
-    def best_of_5(self, run_time=2.0):
+    def best_of_5(self, run_time=3.0):
         self._transition(5, count_title=True, run_time=run_time)
         self.wait(0.5)
 
     @subscene
-    def best_of_10(self, run_time=2.0):
+    def best_of_10(self, run_time=3.0):
         self._transition(10, count_title=True, run_time=run_time)
         self.wait(0.5)
 
     @subscene
-    def best_of_79(self, run_time=2.0):
+    def best_of_79(self, run_time=3.0):
         self._transition(79, count_title=True, run_time=run_time)
         self.wait(0.5)
 
     @subscene
-    def best_of_5000(self, run_time=2.5):
+    def best_of_5000(self, run_time=3.0):
         self._transition(5000, count_title=True, run_time=run_time)
         self.wait(0.5)
 
     @subscene
-    def best_of_1000000(self, run_time=2.5):
+    def best_of_1000000(self, run_time=3.0):
         self._transition(1_000_000, count_title=True, run_time=run_time)
         self.wait(0.5)
 

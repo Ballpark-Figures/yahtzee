@@ -174,6 +174,33 @@ def opponents_for_perfect(threshold=0.5):
     return lo
 
 
+def median_checkpoints(step=10):
+    """Sorted ``[(N, median), ...]``: for each multiple of ``step`` above the
+    single-player median and below the perfect score, the smallest best-of-``N``
+    whose median exceeds that multiple — DEDUPED so N strictly increases (a
+    multiple the median leaps over in one jump adds no new checkpoint). Uses the
+    closed form ``N = floor(ln2 / -ln(CDF(m))) + 1`` (CDF = single-player CDF at
+    score m), since median(N) > m  ⇔  CDF(m)^N < ½."""
+    base = score_distribution()
+    smin, smax = min(base), max(base)
+    scores = np.arange(smin, smax + 1)
+    pmf = np.array([base.get(int(s), 0.0) for s in scores], dtype=np.float64)
+    pmf = pmf / pmf.sum()
+    cdf = dict(zip(scores.tolist(), np.cumsum(pmf).tolist()))
+    ln2 = np.log(2.0)
+    out, last_n = [], 0
+    m = (maxN_median(1) // step + 1) * step         # first multiple above median(1)
+    while m < smax:
+        c = cdf.get(int(m))
+        if c is not None and 0.0 < c < 1.0:
+            n = int(np.floor(ln2 / (-np.log(c)))) + 1
+            if n > last_n:
+                out.append((n, maxN_median(n)))
+                last_n = n
+        m += step
+    return out
+
+
 def overlay_by_yahtzee(n_extra):
     """Games with exactly ``n_extra`` EXTRA (100-pt) yahtzee bonuses.
     One extra bonus ⇒ yahtzee_units == 2 (the 50 plus one +100)."""
