@@ -96,18 +96,20 @@ class Multiplayer(YahtzeeScene):
         return self.means[n]
 
     def _wc(self, nb, prev_n, n):
-        """Pan window-centre for an intermediate plot: follow the smooth MEAN, plus a
-        framing offset (range-centre − mean) LERPED between the beat's endpoints so
-        the right-skewed distribution stays boxed — pure mean-centring would push the
-        long high-score tail off the right edge. The mean is smooth in n (the median /
-        range-centre JUMP), so the pan slides smoothly; the median highlight still
-        snaps to its own bar on top of that smooth pan."""
+        """Pan window-centre for a checkpoint. Take the MEAN's screen offset from box-
+        centre at the beat's START and END (mean − range-centre; a little left, since
+        the distribution is right-skewed), move it SMOOTHLY from the start offset to
+        the end offset, and place the window so THIS checkpoint's mean lands at the
+        interpolated offset. So the mean glides from its start position to its end
+        position — and because the mean is smooth in n (the median / range-centre
+        JUMP), the slide has no jumps. Endpoints keep the range-centre framing so a
+        resting plot stays boxed; the median highlight still snaps to its own bar."""
         lp = np.log(float(prev_n))
         sp = np.log(float(n)) - lp
         fr = (np.log(float(nb)) - lp) / sp if sp else 1.0
-        o0 = self._center(prev_n) - self._mean(prev_n)
-        o1 = self._center(n) - self._mean(n)
-        return self._mean(nb) + o0 + fr * (o1 - o0)
+        d0 = self._mean(prev_n) - self._center(prev_n)      # mean's screen offset, start
+        d1 = self._mean(n) - self._center(n)                # ... and end
+        return self._mean(nb) - (d0 + fr * (d1 - d0))       # this mean at the interp offset
 
     def _build(self, n, wc=None):
         """The bars/axes/ticks ONLY — no median callout (the highlight bar, dashed
