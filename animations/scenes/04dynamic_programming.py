@@ -111,6 +111,17 @@ class DynamicProgramming(YahtzeeScene):
         return self._label(text, x, y, fs=fs, color=color, anchor=anchor,
                            dy=self.NUM_BASELINE_DY * fs)
 
+    def _remaining_label(self, x, y, fs):
+        """A 2-line right-anchored "Avg points / remaining:" label centred at
+        (x, y) — used where the full phrase is too wide for one line (h's right
+        column). Returns (group, line2_dy): the y-offset of the "remaining:" line
+        from the group centre, so a number can sit ON that line."""
+        l1 = crisp_text("Avg points", font_size=fs, color=BLACK, font=FONT, weight="BOLD")
+        l2 = crisp_text("remaining:", font_size=fs, color=BLACK, font=FONT, weight="BOLD")
+        g = VGroup(l1, l2).arrange(DOWN, buff=0.06, aligned_edge=RIGHT)
+        g.move_to([x, y, 0], aligned_edge=RIGHT)
+        return g, l2.get_center()[1] - g.get_center()[1]
+
     def _count(self, specs, run_time):
         """Animate crisp_text numbers by rebuilding each frame from a ValueTracker
         (the project's LaTeX-free counter pattern). Updaters cleared afterward."""
@@ -223,12 +234,12 @@ class DynamicProgramming(YahtzeeScene):
     TURN_FS = 40
     TURN_CX, TURN_NX = 3.45, 3.60
 
-    def _land_turn_ev(self, dice, lbl, num, prev, turn, *, run_time):
+    def _land_turn_ev(self, dice, lbl, num, prev, turn, *, run_time, label="Avg pts:"):
         """Move `dice` down to the bottom row (band 0) and, AT THE SAME TIME, the
-        Avg pts (lbl+num) down to the centre of the 3rd row (band 1), enlarged;
+        avg-points (lbl+num) down to the centre of the 3rd row (band 1), enlarged;
         then count the number to the whole-turn EV `turn`. Shared by f and the
-        montage (each passes its own rest-of-game turn value)."""
-        big_lbl = self._label("Avg pts:", self.TURN_CX, BAND_YS[1], fs=self.TURN_FS, anchor=RIGHT)
+        montage (each passes its own rest-of-game turn value and label text)."""
+        big_lbl = self._label(label, self.TURN_CX, BAND_YS[1], fs=self.TURN_FS, anchor=RIGHT)
         self.play(
             *[dice[i].animate.move_to(slot_point(0, i)) for i in range(5)],
             Transform(lbl, big_lbl),
@@ -411,17 +422,24 @@ class DynamicProgramming(YahtzeeScene):
         box = self.nums["box_choice"]
         ev4 = box["fill_4kind"]["total"]          # zero 4-Kind, keep Lg Straight open
         evls = box["fill_lgstraight"]["total"]    # zero Lg Straight, keep 4-Kind open
-        lab4 = self._label(f"Avg points after: {ev4:.1f}", base_x + 0.2, c4[1], anchor=LEFT, fs=24)
-        labls = self._label(f"Avg points after: {evls:.1f}", base_x + 0.2, cls[1], anchor=LEFT, fs=24)
+        # Keep the label and its number as SEPARATE mobjects: the full
+        # "Avg points remaining: 10.6" string is wide enough at fs24 to hit
+        # crisp_text's wrap width and break onto two lines (the shorter 5.6 one
+        # doesn't) — the label alone is safe.
+        lab4 = self._label("Avg points remaining:", base_x + 0.2, c4[1], anchor=LEFT, fs=24)
+        num4 = self._numlabel(f"{ev4:.1f}", lab4.get_right()[0] + 0.15, c4[1], fs=24)
+        labls = self._label("Avg points remaining:", base_x + 0.2, cls[1], anchor=LEFT, fs=24)
+        numls = self._numlabel(f"{evls:.1f}", labls.get_right()[0] + 0.15, cls[1], fs=24)
 
         self.play(FadeIn(z4), FadeIn(zls), run_time=0.5)          # the 0s appear in the boxes
         self.wait(0.4)
-        # the arrows grow in AT THE SAME TIME as the "Avg points after" text
-        self.play(GrowArrow(ar4), GrowArrow(arls), FadeIn(lab4), FadeIn(labls), run_time=0.6)
+        # the arrows grow in AT THE SAME TIME as the "Avg points remaining" text
+        self.play(GrowArrow(ar4), GrowArrow(arls),
+                  FadeIn(lab4), FadeIn(num4), FadeIn(labls), FadeIn(numls), run_time=0.6)
         self.wait(0.6)
 
         # zero out the LOWER-EV box (keep the higher-value one open) → the 4-Kind
-        self.play(FadeOut(VGroup(ar4, arls, z4, zls, lab4, labls)), run_time=0.4)
+        self.play(FadeOut(VGroup(ar4, arls, z4, zls, lab4, num4, labls, numls)), run_time=0.4)
         zero_row = 7 if ev4 >= evls else 10
         self.card.animate_zero_score(self, zero_row, self.dice)
         self.wait(0.4)
@@ -442,16 +460,20 @@ class DynamicProgramming(YahtzeeScene):
         self.card.transition(self, {7: None}, run_time=0.6)       # 4-Kind unfilled again
         dice = [get_die(1) for _ in range(5)]                     # same size as always
         montage = self.nums["montage"]                            # solver, 2-open-box state
+        start = self.nums["turn_ev"]                              # continue from beat f's value
 
-        # the EV panel (Avg pts: <green number>), right of the kept dice, one row up
-        ev_lbl = self._label("Avg pts:", self.ODDS_CX, BAND_YS[3], fs=self.ODDS_FS, anchor=RIGHT)
-        ev_num = self._numlabel("0.00", self.ODDS_NX, BAND_YS[3], color=AVG_GREEN, fs=self.ODDS_FS)
+        # "Avg points remaining:" is too wide for the right column here, so stack it
+        # on 2 lines with the green number on the "remaining:" line. The counter
+        # PICKS UP from beat f's turn value (not 0).
+        ev_lbl, line2_dy = self._remaining_label(self.ODDS_CX, BAND_YS[3], self.ODDS_FS)
+        ev_num = self._numlabel(self._ev(start), self.ODDS_NX, BAND_YS[3] + line2_dy,
+                                color=AVG_GREEN, fs=self.ODDS_FS)
         for s, d in enumerate(dice):                              # reveal in row 2 (band 2)
             d.set_value(montage[0]["values"][s])
             d.move_to(slot_point(2, s))
         self.play(*[FadeIn(d) for d in dice], FadeIn(ev_lbl), FadeIn(ev_num), run_time=0.5)
 
-        prev = [0.0]
+        prev = [start]
 
         def _roll(entry, *, move_avg):
             values, keep_vec, ev = entry["values"], entry["keep_vec"], entry["ev"]
@@ -459,18 +481,19 @@ class DynamicProgramming(YahtzeeScene):
             # 1st-reroll (stage A) rolls sit in row 3 (band 1), EV in row 2 above.
             base_band = 2 if entry["stage"] == "B" else 1
             ev_band = base_band + 1
+            num_y = BAND_YS[ev_band] + line2_dy                   # number sits on the "remaining:" line
             # flatten the dice at `base_band`; on a row change, the avg moves down
             # to `ev_band` AT THE SAME TIME (not first).
             anims = [dice[i].animate.move_to(slot_point(base_band, i)) for i in range(5)]
             if move_avg:
                 anims += [ev_lbl.animate.move_to([self.ODDS_CX, BAND_YS[ev_band], 0], aligned_edge=RIGHT),
-                          ev_num.animate.move_to([self.ODDS_NX, self._ny(BAND_YS[ev_band], self.ODDS_FS), 0], aligned_edge=LEFT)]
+                          ev_num.animate.move_to([self.ODDS_NX, self._ny(num_y, self.ODDS_FS), 0], aligned_edge=LEFT)]
             self.play(*anims, run_time=0.4)
             morph_dice(self, dice, values, run_time=0.4)
             self._show_keep(dice, self._keep_indices(values, keep_vec),
                             base_band=base_band, run_time=run_time)          # SET FORWARD
             self._count([{"mob": ev_num, "fmt": self._ev, "x": self.ODDS_NX,
-                          "y": BAND_YS[ev_band], "start": prev[0], "target": ev,
+                          "y": num_y, "start": prev[0], "target": ev,
                           "color": AVG_GREEN, "fs": self.ODDS_FS}], 0.5)
             prev[0] = ev
             self.wait(0.25)
@@ -484,12 +507,13 @@ class DynamicProgramming(YahtzeeScene):
             _roll(entry, move_avg=(base_band != prev_band))
             prev_band = base_band
 
-        # end like f: dice down to the bottom row + avg to the middle of the 3rd
-        # row (bigger), together, its number becoming the whole-turn EV (≈21.2).
+        # end like f: dice down to the bottom row + avg to the middle of the 3rd row
+        # (bigger, now a single line), its number becoming the whole-turn EV (≈21.2).
         self._land_turn_ev(dice, ev_lbl, ev_num, prev[0],
-                           self.nums["montage_turn_ev"], run_time=run_time)
+                           self.nums["montage_turn_ev"], run_time=run_time,
+                           label="Avg points remaining:")
         # leave the dice + turn value ON SCREEN — the sweep (beat i) continues from
-        # them, just relabelling the value as "avg points remaining".
+        # them (same "avg points remaining" wording, just repositioned).
         self.h_dice, self.h_ev_lbl, self.h_ev_num = dice, ev_lbl, ev_num
         self.wait(0.6)
 
