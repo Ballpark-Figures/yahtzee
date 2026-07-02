@@ -190,3 +190,6 @@ class LineGraph(YahtzeeScene):
         self.wait(hold)
         self._focus([SM_STRAIGHT, THREE_KIND, LG_STRAIGHT], run_time)
         self.wait(hold)
+        # scene 08 is followed by a talking head (THG), so it ends with the full
+        # chart on screen — restore every line/label to full opacity
+        self._focus(None, run_time)
