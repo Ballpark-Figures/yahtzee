@@ -298,14 +298,15 @@ class Reductions(YahtzeeScene):
         highlight(self, [self._box_target(self.card1, 0)], hold=hold)
         # — then restore the top section to its earlier state.
         self.card1.transition(self, RESTORE_TOP, run_time=restore_rt)
-        # transition() adds NEW cell texts at SCENE level; re-home any that aren't
-        # in the card group so a later card move/fade takes them along (else the
-        # restored Ones "3" is left floating when h moves the card off-centre).
-        fam = self.card1.get_family()
-        for t in list(self.card1.value_texts.values()):
-            if t not in fam:
-                self.remove(t)
-                self.card1.score_texts.add(t)
+        # transition() adds new-value cell texts at SCENE level (orphaned from the
+        # card group), which would be left behind when h later moves the card. Hard-
+        # swap the whole thing for a FRESH clean SCORES1 card (identical → the
+        # instant swap is invisible): clear EVERY current top-level mobject, then
+        # add the clean card, so nothing (card or orphan) is left behind.
+        for m in list(self.mobjects):
+            self.remove(m)
+        self.card1 = get_scorecard(center=CARD_C, scores=SCORES1)
+        self.add(self.card1)
 
     # g) bottom score not needed at all
     @subscene
@@ -386,10 +387,7 @@ class Reductions(YahtzeeScene):
         final = self._moving_ev(v1, 1.0)
         self.add(final)
 
-        # only once everything has stopped: the full caption appears above it
-        avg = crisp_text("Average points in an optimal game of Yahtzee:",
-                         font_size=LABEL_FS, color=BLACK, font=FONT, weight="BOLD")
-        if avg.width > 12.5:
-            avg.scale_to_fit_width(12.5)
-        avg.next_to(final, UP, buff=0.55)
+        # only once everything has stopped: the caption appears above it
+        avg = crisp_text("Average total points:", font_size=LABEL_FS, color=BLACK,
+                         font=FONT, weight="BOLD").next_to(final, UP, buff=0.55)
         self.play(FadeIn(avg, shift=UP * 0.2), run_time=lbl_rt)
