@@ -47,8 +47,9 @@ class Rules(YahtzeeScene):
                   *[FadeIn(d, shift=UP * 0.8) for d in dice],
                   run_time=1.0)
         self.wait(0.3)
-        # …then "every box gets filled exactly once": highlight all 13 rows.
-        self.card.highlight_rows(self, range(13), lag_ratio=0.28, run_time=3.2)
+        # …then "every box gets filled exactly once": walk a flash down all 13
+        # rows one at a time (pulse, not hold — it's a travelling highlight).
+        self.card.highlight_rows(self, range(13), pulse=True, lag_ratio=0.28, run_time=3.2)
 
     # ── b. the roll mechanic: save 2 → 3 → 4 sixes, score the Sixes box ────────
     # Copied from the 99test "four 6s" example.

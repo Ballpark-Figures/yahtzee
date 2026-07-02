@@ -392,24 +392,49 @@ class Scorecard(VGroup):
         bold_lbl.align_to(lbl, LEFT).set_y(lbl.get_center()[1])
         return fill, border, bold_lbl
 
-    def highlight_rows(self, scene, rows, *, color=YELLOW, opacity=0.45,
-                       run_time=0.8, lag_ratio=0.0):
-        """Pulse a highlight across the given rows (each up then back down): a soft
-        fill + thick black border over columns 1-2 (label+value, NOT the summary
-        column), and the row label TRANSFORMING into bold and back (there_and_back,
-        so it ends as the original regular text). `lag_ratio=0` flashes them
-        together; >0 walks them one at a time. Transient — nothing is left on the
-        card afterward."""
+    def highlight_rows(self, scene, rows, *, color=ACCENT_GOLD, opacity=0.45,
+                       run_time=None, fade=0.25, hold=1.2, lag_ratio=0.0,
+                       pulse=False):
+        """Emphasise whole scorecard rows (label+value, columns 1-2): a soft fill
+        + thick border, with the row label bolded.
+
+        Default HOLDS the highlight — fade in, hold for `hold` s, fade out — the
+        steady emphasis the video wants. `pulse=True` instead flashes each row
+        there-and-back (use `lag_ratio` > 0 to WALK the flash down the rows). For
+        back-compat, a `run_time` is taken as the pulse duration, or (holding) as
+        the hold duration. Transient — nothing is left on the card afterward."""
         rows   = list(rows)
         pieces = [self._row_highlight(r, color, opacity) for r in rows]
-        anims  = []
-        for (fill, border, bold), r in zip(pieces, rows):
-            anims.append(AnimationGroup(
-                FadeIn(fill,   rate_func=there_and_back),
-                FadeIn(border, rate_func=there_and_back),
-                Transform(self.labels[r], bold, rate_func=there_and_back),
-            ))
-        scene.play(LaggedStart(*anims, lag_ratio=lag_ratio), run_time=run_time)
+
+        if pulse:
+            rt = run_time if run_time is not None else 0.8
+            anims = [AnimationGroup(
+                        FadeIn(fill,   rate_func=there_and_back),
+                        FadeIn(border, rate_func=there_and_back),
+                        Transform(self.labels[r], bold, rate_func=there_and_back),
+                     ) for (fill, border, bold), r in zip(pieces, rows)]
+            scene.play(LaggedStart(*anims, lag_ratio=lag_ratio), run_time=rt)
+            for fill, border, _bold in pieces:
+                scene.remove(fill, border)
+            return
+
+        hold = run_time if run_time is not None else hold
+        for r in rows:
+            self.labels[r].save_state()
+        scene.play(
+            LaggedStart(*[AnimationGroup(FadeIn(fill), FadeIn(border),
+                                         Transform(self.labels[r], bold))
+                          for (fill, border, bold), r in zip(pieces, rows)],
+                        lag_ratio=lag_ratio),
+            run_time=fade,
+        )
+        scene.wait(hold)
+        scene.play(
+            *[FadeOut(fill) for fill, _b, _bold in pieces],
+            *[FadeOut(border) for _f, border, _bold in pieces],
+            *[Restore(self.labels[r]) for r in rows],
+            run_time=fade,
+        )
         for fill, border, _bold in pieces:
             scene.remove(fill, border)
 
