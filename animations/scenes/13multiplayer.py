@@ -375,24 +375,20 @@ class Multiplayer(YahtzeeScene):
         self._transition(8_300_000_000, count_title=True, run_time=run_time)
         self.wait(0.5)
 
-    @subscene
-    def best_of_perfect(self, run_time=3.0, settle=0.35, lead_in=0.5):
-        """Finale. The SAME beat-through-checkpoints morph as the other beats — the
-        opponent count N counts up to N* (~5.07e19) on a LOG scale and the median
-        reaches each checkpoint as N passes it — PLUS a one-off title reflow: the
-        one-line title splits into "Best of" (up-then-over), the number (to the
-        centre line) and "opponents" (down-then-over), all full-size. The reflow is
-        driven by the log-N fraction through an ease that finishes by ``settle``, so
-        the words settle EARLY while the count / pan / median run the whole beat (the
-        number never counts alone)."""
-        n = self.n_perfect
-        prev_n, m0, m1 = self.cur_n, self.cur_median, sd.maxN_median(n)
-        seq, meds = self._beat_seq(prev_n, n, m0, m1)
+    def _setup_perfect(self, run_time, settle):
+        """Build the finale's split title over the current one-line title — "Best of"
+        (up-then-over, shrinking), the number (to the centre line, counting) and
+        "opponents" (down-then-over) — and attach its reflow updaters plus the
+        median / log-count / beat-time trackers. Owns self.pre / self.num / self.suf.
+        The reflow rides a beat-TIME ease that settles by ``settle`` (kept separate
+        from the already-eased count so it doesn't double-ease into a wobble). Returns
+        (seq, meds, beat, mt, nt, gt) for _morph_chain to run and advance."""
+        n, prev_n, m0 = self.n_perfect, self.cur_n, self.cur_median
+        seq, meds = self._beat_seq(prev_n, n, m0, sd.maxN_median(n))
         beat = self._eased_beat(seq, run_time)
         cx = PLOT_C[0]
 
-        # split the one-line title into movable, full-size parts laid over it so the
-        # hand-off is seamless (same words, same size, same spot)
+        # split the one-line title into movable parts laid over it (seamless hand-off)
         old = self.title
         oy = old.get_center()[1]
         pre = Text("Best of", font=FONT, font_size=FONT_SIZE_LG, color=BLACK)
@@ -400,10 +396,8 @@ class Multiplayer(YahtzeeScene):
         pre.move_to([old.get_left()[0] + pre.width / 2, oy, 0])
         suf.move_to([old.get_right()[0] - suf.width / 2, oy, 0])
         pre_start, suf_start = pre.get_center().copy(), suf.get_center().copy()
-        pre_base, suf_base = pre.copy(), suf.copy()      # full-size originals for a
-        #                                                  seamless start; they shrink en route
-        # stacked END positions: number centred at STACK_MID, the SHRUNK words an equal
-        # STACK_GAP above/below its edges (so the number reads as centred between them)
+        pre_base, suf_base = pre.copy(), suf.copy()      # full-size at the split; shrink en route
+        # number centred at STACK_MID, the SHRUNK words an equal STACK_GAP above/below
         num_h = self._fit_number(prev_n).height
         pre_end = np.array([cx, STACK_MID + num_h / 2 + STACK_GAP + pre.height * WORD_SHRINK / 2, 0])
         suf_end = np.array([cx, STACK_MID - num_h / 2 - STACK_GAP - suf.height * WORD_SHRINK / 2, 0])
@@ -412,19 +406,17 @@ class Multiplayer(YahtzeeScene):
         num = self._fit_number(prev_n).move_to(num_start)
         self.remove(old)
         self.add(pre, num, suf)
+        self.pre, self.suf, self.num = pre, suf, num
+        self._pre_end, self._suf_end, self._num_end = pre_end, suf_end, num_end
+        self._pre_base, self._suf_base = pre_base, suf_base
 
-        # the reflow (words + number sliding into place) is driven by a dedicated
-        # beat-TIME tracker with ONE smooth ease that settles by ``settle`` — kept
-        # separate from the (already eased) count so it doesn't double-ease into a
-        # fast-slow-fast wobble. The number's VALUE still comes from the count (nt).
         mt = ValueTracker(m0)
         nt = ValueTracker(np.log(float(prev_n)))
         gt = ValueTracker(0.0)                          # beat time fraction (0..1)
         reflow = lambda: smooth(min(1.0, gt.get_value() / settle)) if settle else 1.0
 
         def elbow(start, end, p):
-            # L-path: straight vertical to the corner (start_x, end_y), then over
-            corner = np.array([start[0], end[1], 0.0])
+            corner = np.array([start[0], end[1], 0.0])   # L-path: vertical, then over
             v, h = abs(corner[1] - start[1]), abs(end[0] - corner[0])
             f = v / (v + h) if (v + h) else 0.0
             if p <= f:
@@ -444,22 +436,35 @@ class Multiplayer(YahtzeeScene):
         num.add_updater(lambda m: m.become(
             self._fit_number(int(round(np.exp(nt.get_value()))))
             .move_to(interpolate(num_start, num_end, reflow()))))
+        return seq, meds, beat, mt, nt, gt
 
-        # the shared morph chain drives the pan / eased log-N count / median snap; gt
-        # (advanced in REAL time by the chain) drives the reflow, so the words settle
-        # EARLY while the count / pan / median run the whole beat.
-        self._morph_chain(seq, meds, beat, prev_n, n, mt, nt, run_time, gt=gt)
-
-        for mob in (self.median_label, self.med_hl, pre, suf, num):
+    def _finish_perfect(self):
+        """Clear the finale updaters and settle every piece on its final value — the
+        median at N*'s value, the words shrunk at their stacked ends, the number at
+        N* — then re-build the median leader for the closing draw-in and record the
+        end state (cur_n / cur_median / title)."""
+        n = self.n_perfect
+        m1 = sd.maxN_median(n)
+        for mob in (self.median_label, self.med_hl, self.pre, self.suf, self.num):
             mob.clear_updaters()
         self.median_label.become(self._med_label(m1))
         self.med_hl.become(self._med_hl_for(m1))
-        pre.become(pre_base.copy().scale(WORD_SHRINK).move_to(pre_end))
-        suf.become(suf_base.copy().scale(WORD_SHRINK).move_to(suf_end))
-        num.become(self._fit_number(n).move_to(num_end))
-        self.med_lead = self._med_lead_for(m1)          # draw the leader back IN
-        self.play(Create(self.med_lead), run_time=lead_in)
-
-        self.title = VGroup(pre, num, suf)
+        self.pre.become(self._pre_base.copy().scale(WORD_SHRINK).move_to(self._pre_end))
+        self.suf.become(self._suf_base.copy().scale(WORD_SHRINK).move_to(self._suf_end))
+        self.num.become(self._fit_number(n).move_to(self._num_end))
+        self.med_lead = self._med_lead_for(m1)          # ready for the closing Create
+        self.title = VGroup(self.pre, self.num, self.suf)
         self.cur_n, self.cur_median = n, m1              # self.plot set by _morph_chain
+
+    @subscene
+    def best_of_perfect(self, run_time=3.0, settle=0.35, lead_in=0.5):
+        """Finale — the shared morph chain (pan / eased log-N count / median snap) PLUS
+        a one-off title reflow, both built in _setup_perfect. Only the animation and
+        its timings live here, so it's easy to tune: the morph runs over ``run_time``
+        (the reflow settling by ``settle``), then the median leader draws back in over
+        ``lead_in``."""
+        seq, meds, beat, mt, nt, gt = self._setup_perfect(run_time, settle)
+        self._morph_chain(seq, meds, beat, self.cur_n, self.n_perfect, mt, nt, run_time, gt=gt)
+        self._finish_perfect()
+        self.play(Create(self.med_lead), run_time=lead_in)
         self.wait(0.5)
