@@ -178,6 +178,24 @@ class Multiplayer(YahtzeeScene):
         hl.set_z_index(2)
         return hl
 
+    def _med_lead_for(self, score, plot=None):
+        """The dashed up-and-over leader (riser + horizontal + dot) from the top of
+        the bar at ``score`` to MED_ANCHOR. Shown only at REST — it fades out at the
+        start of a beat and back in at the end."""
+        plot = plot or self.plot
+        idx = min(max(int(round(score)) - self.union[0], 0), len(plot.bars) - 1)
+        bar = plot.bars[idx]
+        mx, bar_top = bar.get_center()[0], bar.get_top()[1]
+        ax, ay = MED_ANCHOR[0], MED_ANCHOR[1]
+        riser = DashedVMobject(Line([mx, bar_top, 0], [mx, ay, 0], color=MED_COLOR,
+                                    stroke_width=3), num_dashes=5, dashed_ratio=0.55)
+        horiz = DashedVMobject(Line([mx, ay, 0], [ax, ay, 0], color=MED_COLOR,
+                                    stroke_width=3), num_dashes=12, dashed_ratio=0.55)
+        dot = Dot([mx, bar_top, 0], radius=0.05, color=MED_COLOR)
+        g = VGroup(riser, horiz, dot)
+        g.set_z_index(2)
+        return g
+
     def _beat_seq(self, prev_n, n, m0, m1):
         """N-values + medians to morph through for a beat from ``prev_n`` (median
         ``m0``) to ``n`` (median ``m1``): every checkpoint whose N is strictly inside
@@ -225,8 +243,8 @@ class Multiplayer(YahtzeeScene):
         """The shared checkpoint-morph loop used by EVERY beat and the finale: each
         sub-morph builds the next mean-anchored plot, morph_panning's it, and advances
         the median tracker ``mt`` and the log-count tracker ``nt`` on that sub-morph's
-        eased rate. ``gt`` (if given) advances 0..1 in REAL time for the finale's
-        reflow; ``extra_first`` is
+        eased rate; the dashed leader fades off early in the first step. ``gt`` (if
+        given) advances 0..1 in REAL time for the finale's reflow; ``extra_first`` is
         extra anims folded into the first step (e.g. a title crossfade). The caller
         attaches the median_label / med_hl / title / reflow updaters to these trackers
         before calling and tears them down after; ``self.plot`` ends on the last plot."""
@@ -243,19 +261,21 @@ class Multiplayer(YahtzeeScene):
             if gt is not None:
                 elapsed += rt
                 anims.append(gt.animate(rate_func=linear).set_value(min(1.0, elapsed / run_time)))
-            if i == 0:                                   # e.g. a title crossfade
+            if i == 0:                                   # leader off early — no static pause
+                anims.append(FadeOut(self.med_lead,
+                                     rate_func=squish_rate_func(smooth, 0.0, 0.25)))
                 anims += list(extra_first)
             self.play(*anims, run_time=rt)
             self.plot = new
 
-    def _transition(self, n, count_title, run_time=3.0):
+    def _transition(self, n, count_title, run_time=3.0, lead_in=0.5):
         """One ``run_time``-second beat-to-beat animation that morphs THROUGH the
         intermediate checkpoints (real best-of-N distributions whose median crosses
         each multiple of 10). The opponent count N drives it on a LOG scale, EASED
         (manim ``smooth``) over the whole beat, and the median reaches each
-        checkpoint's median exactly as N passes that checkpoint's N. The median
-        highlight bar rides along the whole way; the first step crossfades the
-        title."""
+        checkpoint's median exactly as N passes that checkpoint's N. The dashed
+        median leader fades OUT early in the FIRST step (folded in, so no static
+        pause) and draws back IN at the end; the first step crossfades the title."""
         prev_n, m0, m1 = self.cur_n, self.cur_median, sd.maxN_median(n)
         seq, meds = self._beat_seq(prev_n, n, m0, m1)
         beat = self._eased_beat(seq, run_time)
@@ -286,6 +306,8 @@ class Multiplayer(YahtzeeScene):
         self.median_label.become(self._med_label(m1))
         self.med_hl.become(self._med_hl_for(m1))
         self.title.become(self._count_title(n))
+        self.med_lead = self._med_lead_for(m1)          # draw the leader back IN
+        self.play(Create(self.med_lead), run_time=lead_in)
         self.cur_n, self.cur_median = n, m1
 
     # ════════════════════════════════════════════════════════════════════════
@@ -300,10 +322,12 @@ class Multiplayer(YahtzeeScene):
         self.title = self._plain_title("Score Frequencies")
         self.median_label = self._med_label(self.cur_median)
         self.med_hl = self._med_hl_for(self.cur_median)
+        self.med_lead = self._med_lead_for(self.cur_median)
         rest = VGroup(self.plot.x_axis, self.plot.y_axis, self.plot.y_ticks,
                       self.plot.x_ticks, self.plot.axis_labels)
         self._grow_up([*self.plot.bars, self.med_hl], FadeIn(rest),
-                      FadeIn(self.title), FadeIn(self.median_label), run_time=1.5)
+                      FadeIn(self.med_lead), FadeIn(self.title),
+                      FadeIn(self.median_label), run_time=1.5)
         self.wait(0.5)
 
     # ════════════════════════════════════════════════════════════════════════
@@ -417,7 +441,8 @@ class Multiplayer(YahtzeeScene):
     def _finish_perfect(self):
         """Clear the finale updaters and settle every piece on its final value — the
         median at N*'s value, the words shrunk at their stacked ends, the number at
-        N* — and record the end state (cur_n / cur_median / title)."""
+        N* — then re-build the median leader for the closing draw-in and record the
+        end state (cur_n / cur_median / title)."""
         n = self.n_perfect
         m1 = sd.maxN_median(n)
         for mob in (self.median_label, self.med_hl, self.pre, self.suf, self.num):
@@ -427,6 +452,7 @@ class Multiplayer(YahtzeeScene):
         self.pre.become(self._pre_base.copy().scale(WORD_SHRINK).move_to(self._pre_end))
         self.suf.become(self._suf_base.copy().scale(WORD_SHRINK).move_to(self._suf_end))
         self.num.become(self._fit_number(n).move_to(self._num_end))
+        self.med_lead = self._med_lead_for(m1)          # ready for the closing Create
         self.title = VGroup(self.pre, self.num, self.suf)
         self.cur_n, self.cur_median = n, m1              # self.plot set by _morph_chain
 
@@ -435,9 +461,11 @@ class Multiplayer(YahtzeeScene):
         """Finale — the shared morph chain (pan / eased log-N count / median snap) PLUS
         a one-off title reflow, both built in _setup_perfect. Only the animation and
         its timings live here, so it's easy to tune: the morph runs over ``run_time``
-        (the reflow settling by ``settle``)."""
-        run_time, settle = 5.0, 0.35                     # finale timings (tweak here)
+        (the reflow settling by ``settle``), then the median leader draws back in over
+        ``lead_in``."""
+        run_time, settle, lead_in = 5.0, 0.35, 0.5       # finale timings (tweak here)
         seq, meds, beat, mt, nt, gt = self._setup_perfect(run_time, settle)
         self._morph_chain(seq, meds, beat, self.cur_n, self.n_perfect, mt, nt, run_time, gt=gt)
         self._finish_perfect()
+        self.play(Create(self.med_lead), run_time=lead_in)
         self.wait(0.5)
