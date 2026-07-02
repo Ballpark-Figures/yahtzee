@@ -8,6 +8,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
 from bpkfigures.style import ACCENT_FILL, ACCENT_GOLD
+from bpkfigures.card import get_card
 from bpkfigures.histogram import (get_panning_histogram, morph_panning,
                                   trimmed_range)
 from assets import score_data as sd
@@ -41,6 +42,11 @@ TITLE_Y  = BOX_TOP + 0.85
 # to a label parked in the empty upper-right of the plot
 SHELF_Y    = BOX_TOP - 0.2
 MED_ANCHOR = [PLOT_C[0] + PLOT_W * 0.20, SHELF_Y, 0]
+
+# a cream card frames the plot (the title floats above it on the background); sized
+# to wrap the box + axis labels + the parked "Median NNN" readout. Top is kept low
+# enough to clear the finale's stacked-title bottom word ("opponents", ~y=2.29).
+CARD_W, CARD_H, CARD_CY = 11.2, 5.1, -0.45
 
 # each histogram = best of N opponents (max of N scores); N=1 is the single plot.
 # Values follow the script's beats (10, then the population beats 79/5000/1M/8.3B);
@@ -179,22 +185,17 @@ class Multiplayer(YahtzeeScene):
         return hl
 
     def _med_lead_for(self, score, plot=None):
-        """The dashed up-and-over leader (riser + horizontal + dot) from the top of
-        the bar at ``score`` to MED_ANCHOR. Shown only at REST — it fades out at the
-        start of a beat and back in at the end."""
+        """A thin full-height rule marking the median: a vertical gold line at the
+        median bar's x, from the axis base up to the shelf just under the box top
+        (replaces the old dashed up-and-over elbow). Shown only at REST — it fades
+        out at the start of a beat and is drawn back in at the end."""
         plot = plot or self.plot
         idx = min(max(int(round(score)) - self.union[0], 0), len(plot.bars) - 1)
-        bar = plot.bars[idx]
-        mx, bar_top = bar.get_center()[0], bar.get_top()[1]
-        ax, ay = MED_ANCHOR[0], MED_ANCHOR[1]
-        riser = DashedVMobject(Line([mx, bar_top, 0], [mx, ay, 0], color=MED_COLOR,
-                                    stroke_width=3), num_dashes=5, dashed_ratio=0.55)
-        horiz = DashedVMobject(Line([mx, ay, 0], [ax, ay, 0], color=MED_COLOR,
-                                    stroke_width=3), num_dashes=12, dashed_ratio=0.55)
-        dot = Dot([mx, bar_top, 0], radius=0.05, color=MED_COLOR)
-        g = VGroup(riser, horiz, dot)
-        g.set_z_index(2)
-        return g
+        mx = plot.bars[idx].get_center()[0]
+        base_y = PLOT_C[1] - PLOT_H / 2
+        rule = Line([mx, base_y, 0], [mx, SHELF_Y, 0], color=MED_COLOR, stroke_width=3)
+        rule.set_z_index(2)
+        return rule
 
     def _beat_seq(self, prev_n, n, m0, m1):
         """N-values + medians to morph through for a beat from ``prev_n`` (median
@@ -318,6 +319,8 @@ class Multiplayer(YahtzeeScene):
         self._prepare()
         self.cur_n = SERIES[0]
         self.cur_median = sd.maxN_median(self.cur_n)
+        self.card_bg = get_card(CARD_W, CARD_H, center=[PLOT_C[0], CARD_CY, 0])
+        self.card_bg.set_z_index(-1)                      # behind every plot/morph
         self.plot = self._build(self.cur_n)
         self.title = self._plain_title("Score Frequencies")
         self.median_label = self._med_label(self.cur_median)
@@ -325,8 +328,8 @@ class Multiplayer(YahtzeeScene):
         self.med_lead = self._med_lead_for(self.cur_median)
         rest = VGroup(self.plot.x_axis, self.plot.y_axis, self.plot.y_ticks,
                       self.plot.x_ticks, self.plot.axis_labels)
-        self._grow_up([*self.plot.bars, self.med_hl], FadeIn(rest),
-                      FadeIn(self.med_lead), FadeIn(self.title),
+        self._grow_up([*self.plot.bars, self.med_hl], FadeIn(self.card_bg),
+                      FadeIn(rest), FadeIn(self.med_lead), FadeIn(self.title),
                       FadeIn(self.median_label), run_time=1.5)
         self.wait(0.5)
 
@@ -463,7 +466,7 @@ class Multiplayer(YahtzeeScene):
         its timings live here, so it's easy to tune: the morph runs over ``run_time``
         (the reflow settling by ``settle``), then the median leader draws back in over
         ``lead_in``."""
-        run_time, settle, lead_in = 3.0, 0.35, 0.5       # finale timings (tweak here)
+        run_time, settle, lead_in = 5.0, 0.35, 0.5       # finale timings (tweak here)
         seq, meds, beat, mt, nt, gt = self._setup_perfect(run_time, settle)
         self._morph_chain(seq, meds, beat, self.cur_n, self.n_perfect, mt, nt, run_time, gt=gt)
         self._finish_perfect()
