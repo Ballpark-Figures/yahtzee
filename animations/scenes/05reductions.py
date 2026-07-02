@@ -7,18 +7,17 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
 from assets.scorecard import get_scorecard
+from assets import reductions_data as rd
 
 
 # ── the numbers (all SOURCED — see the scene-05 provenance report) ────────────
 #   start : scene 01's final figure (258.5 trillion YAHTZEE positions)
 #   A     : first reduction  = 105,285,166 non-terminal GameStates      x 756
 #   C     : second reduction = 536,320 non-terminal ReducedGameStates   x 756
-#   EV    : perfect-play average, scene 04's ending value (254.5877…)
+#   EV    : beat i's sweep comes from the solver (assets/reductions_data.py)
 SCENE1_POSITIONS = 258_521_977_812_672
 BLANK_A          = 79_595_585_496          # math/count_game_states.py
 BLANK_C          = 405_457_920             # math/count_reduced_states.py
-FINAL_EV_VAL     = 254.5877227783203       # dp_cache "remaining"; scene-04 end
-EV_START         = 0.0                     # cosmetic climb start for the recap
 
 # ── the two example scorecards (col-2 fills; row order = SCORE_ROWS) ───────────
 #   0-5 Ones..Sixes | 6 3ofK | 7 4ofK | 8 FH | 9 SmS | 10 LgS | 11 Yahtzee |
@@ -36,30 +35,28 @@ FILLED_BOXES = [0, 1, 7, 12]               # boxes filled on both cards
 OPEN_BOTTOM  = [6, 8, 9, 10, 11]           # unfilled bottom rows
 YAHTZEE_ROW  = 11
 
+# solver category (reductions_data) → scorecard row (differ only at 11/12)
+_SC_BOX = {11: 12, 12: 11}
+
+
+def _sc_box(solver_cat):
+    return _SC_BOX.get(solver_cat, solver_cat)
+
+
 # ── layout ────────────────────────────────────────────────────────────────────
 CARD_C = CENTER_SC                          # [0, 0, 0]
 CARD_L = LEFT_SC                            # [-4.74, 0, 0]
 TWO_L  = [-3.9, 0, 0]
 TWO_R  = [3.9, 0, 0]
-NUM_POS = [2.9, -0.2, 0]                    # big number, right of a left-sat card
-LBL_POS = [2.9, 0.95, 0]                    # caption above the number
-NUM_FS  = 36
-NUM_MAXW = 7.4                              # cap the widest (258.5T) to the panel
-LABEL_FS = 30
+NUM_POS = [2.85, -0.15, 0]                  # big number, right of a left-sat card
+LBL_POS = [2.85, 1.2, 0]                    # caption above the number
+NUM_FS  = 46
+NUM_MAXW = 9.0                              # cap the widest (258.5T) to the panel
+LABEL_FS = 38
 
 
 def _fmt(v):
     return f"{int(round(v)):,}"
-
-
-# label crossfade rate funcs — label-1 out over the first ~45%, label-2 in over
-# the last ~45%, so the two captions are never both fully visible.
-def _out_first(t):
-    return smooth(min(t / 0.45, 1.0))
-
-
-def _in_last(t):
-    return smooth(max((t - 0.55) / 0.45, 0.0))
 
 
 class Reductions(YahtzeeScene):
@@ -75,10 +72,11 @@ class Reductions(YahtzeeScene):
       reduce_first       — 258.5T  --log-->  A (79.6B)  [Total -> Reduced]
       maximize_points    — number out, card back to centre
       drop_yahtzee_count — yahtzee -> eligibility bit (empty/0/50)
-      cap_top_at_63      — top score only matters below 63 (example cards)
+      cap_top_at_63      — top score only matters below 63; restore the card
       drop_bottom_total  — bottom score not needed at all
       reduce_second      — A  --log-->  C (405M)  [Reduced -> Final]
-      perfect_average    — replay scene-04 end: avg remaining -> ~254.6
+      perfect_average    — replay scene-04 end: empty the card box-by-box, the
+                           solver's avg-points-remaining climbs to 254.6
     """
 
     def setup_scene(self):
@@ -91,7 +89,7 @@ class Reductions(YahtzeeScene):
         self.card2 = get_scorecard(center=TWO_R, scores=SCORES2)
         self.num = None         # the big right-side number (carried between beats)
         self.num_label = None   # its caption
-        self.strike = None      # the bottom-total cross-out (beat -> reduce_second)
+        self.strike = None      # the bottom-total cross-out (built + cleared in g)
 
     def _build_count(self, start_val, end_val, label_from, label_to):
         self._c_start_val, self._c_end_val = start_val, end_val
@@ -111,6 +109,8 @@ class Reductions(YahtzeeScene):
     def _setup_examples(self):
         self.examples = [get_scorecard(center=CARD_C, scores=s)
                          for s in (EX_TOP_53, EX_TOP_63, EX_TOP_93)]
+        # …and the card to restore to at the end (the scene's earlier state).
+        self.restore_card = get_scorecard(center=CARD_C, scores=SCORES1)
 
     def _setup_yahtzee_cycle(self):
         cell = self.card1.value_cells[YAHTZEE_ROW].get_center()
@@ -126,11 +126,10 @@ class Reductions(YahtzeeScene):
                            color=SCORE_RED, stroke_width=6)
 
     def _setup_perfect_average(self):
-        self.empty_card = get_scorecard(center=CARD_L, scores=None)
+        self.sweep = rd.scene05_numbers()["sweep"]   # solver avg-points-remaining
         self.ev_label = crisp_text("Avg points remaining:", font_size=LABEL_FS,
                                    color=AVG_GREEN, font=FONT,
                                    weight="BOLD").move_to(LBL_POS)
-        self.ev_final = self._ev_text(FINAL_EV_VAL, NUM_POS)
 
     # ══ small builders + highlight targets ═════════════════════════════════════
     def _num_text(self, value, pos, fs=NUM_FS, maxw=NUM_MAXW):
@@ -184,12 +183,12 @@ class Reductions(YahtzeeScene):
         y = card.total_text.get_center()[1]
         return ([(left + right) / 2, y, 0], right - left, card.cell_height * 1.18)
 
-    def _run_count(self, *, move_first, appear, count, hold):
+    def _run_count(self, *, move_first, appear, count, label_rt, hold):
         """Shared animation for the two reduction beats: card to the left, the
-        start number + 'from' caption appear, then a log-scale count to the end
-        while the caption crossfades to the 'to' label. Leaves self.num /
-        self.num_label at the end state. (The live counter is un-picklable, so it
-        is built here, in the animation, not in setup.)"""
+        start number + 'from' caption appear, then a log-scale count to the end;
+        the caption swaps to the 'to' label ONLY after the number lands. Leaves
+        self.num / self.num_label at the end state. (The live counter is
+        un-picklable, so it is built here, in the animation, not in setup.)"""
         self.play(self.card1.animate.move_to(CARD_L), run_time=move_first)
         self.play(FadeIn(self._c_start, shift=UP * 0.2),
                   FadeIn(self._c_from, shift=UP * 0.2), run_time=appear)
@@ -198,13 +197,15 @@ class Reductions(YahtzeeScene):
         tr = ValueTracker(math.log10(self._c_start_val))
         live = always_redraw(lambda: self._num_text(10 ** tr.get_value(), NUM_POS))
         self.remove(self._c_start)
-        self.add(live, self._c_to)
-        self.play(tr.animate.set_value(math.log10(self._c_end_val)),
-                  self._c_from.animate(rate_func=_out_first).set_opacity(0.0),
-                  self._c_to.animate(rate_func=_in_last).set_opacity(1.0),
-                  run_time=count)
-        self.remove(live, self._c_from)
+        self.add(live)
+        self.play(tr.animate.set_value(math.log10(self._c_end_val)), run_time=count)
+        self.remove(live)
         self.add(self._c_end)
+
+        # number is done — NOW crossfade the caption from -> to
+        self.add(self._c_to)
+        self.play(FadeOut(self._c_from), self._c_to.animate.set_opacity(1.0),
+                  run_time=label_rt)
         self.num, self.num_label = self._c_end, self._c_to
 
     # ══ subscenes (animation only) ═════════════════════════════════════════════
@@ -247,8 +248,9 @@ class Reductions(YahtzeeScene):
     @subscene
     def reduce_first(self):
         self._setup_reduce_first()
-        move_first, appear, count, hold = 0.9, 0.6, 2.4, 0.6
-        self._run_count(move_first=move_first, appear=appear, count=count, hold=hold)
+        move_first, appear, count, label_rt, hold = 0.9, 0.6, 2.4, 0.6, 0.6
+        self._run_count(move_first=move_first, appear=appear, count=count,
+                        label_rt=label_rt, hold=hold)
 
     # d) number out, card back to centre
     @subscene
@@ -259,7 +261,7 @@ class Reductions(YahtzeeScene):
         self.num = self.num_label = None
         self.play(self.card1.animate.move_to(CARD_C), run_time=move_rt)
 
-    # e) yahtzee count -> eligibility bit; cycle empty/0/50 a few times
+    # e) yahtzee count -> eligibility bit; crossfade empty/0/50 a few times
     @subscene
     def drop_yahtzee_count(self):
         self._setup_yahtzee_cycle()
@@ -267,27 +269,35 @@ class Reductions(YahtzeeScene):
         highlight(self, [self._fullrow_target(self.card1, YAHTZEE_ROW)], hold=hold)
         for zero, fifty in self.cyc_pairs:
             self.play(FadeIn(zero), run_time=cyc)
-            self.play(ReplacementTransform(zero, fifty), run_time=cyc)
+            self.play(FadeOut(zero), FadeIn(fifty), run_time=cyc)   # crossfade 0 -> 50
             self.play(FadeOut(fifty), run_time=cyc)
 
-    # f) top score only matters below 63 — switch top-section examples
+    # f) top score only matters below 63 — example cards, then restore the card
     @subscene
     def cap_top_at_63(self):
         self._setup_examples()
-        tr_rt, gap, hold = 0.8, 0.35, 1.0
+        tr_rt, gap, hold, restore_rt = 0.8, 0.35, 1.0, 0.8
         for new in self.examples:
             self.play(ReplacementTransform(self.card1, new), run_time=tr_rt)
             self.card1 = new
             self.wait(gap)
-        # …the only thing that matters is which boxes are still open (the 1's).
+        # …only which boxes are still open matters (the 1's) —
         highlight(self, [self._box_target(self.card1, 0)], hold=hold)
+        # — then restore the top section to its earlier state (back to card1).
+        self.play(ReplacementTransform(self.card1, self.restore_card), run_time=restore_rt)
+        self.card1 = self.restore_card
 
     # g) bottom score not needed at all
     @subscene
     def drop_bottom_total(self):
         self._setup_bottom_strike()
-        strike_rt, hold = 0.5, 1.0
+        strike_rt, strike_hold, unstrike_rt, hold = 0.5, 0.5, 0.4, 1.0
+        # cross out the bottom total, let it register, then REMOVE the cross-out…
         self.play(Create(self.strike), run_time=strike_rt)
+        self.wait(strike_hold)
+        self.play(FadeOut(self.strike), run_time=unstrike_rt)
+        self.strike = None
+        # …then highlight the open bottom boxes (all we actually need).
         highlight(self, [self._box_target(self.card1, r) for r in OPEN_BOTTOM],
                   hold=hold)
 
@@ -295,30 +305,42 @@ class Reductions(YahtzeeScene):
     @subscene
     def reduce_second(self):
         self._setup_reduce_second()
-        fade, move_first, appear, count, hold = 0.5, 0.9, 0.6, 2.4, 0.5
-        if self.strike is not None:
-            self.play(FadeOut(self.strike), run_time=fade)
-            self.strike = None
-        self._run_count(move_first=move_first, appear=appear, count=count, hold=hold)
+        move_first, appear, count, label_rt, hold = 0.9, 0.6, 2.4, 0.6, 0.5
+        self._run_count(move_first=move_first, appear=appear, count=count,
+                        label_rt=label_rt, hold=hold)
 
-    # i) replay scene-04's ending: avg points remaining -> ~254.6
+    # i) replay scene-04's ending on THIS card: empty it box-by-box, the solver's
+    #    avg-points-remaining climbing to ~254.6, then centre + enlarge.
     @subscene
     def perfect_average(self):
         self._setup_perfect_average()
-        fade, empty_rt, count_rt, move_rt = 0.5, 0.8, 1.6, 1.0
+        fade, appear, step_rt, count_rt, settle, move_rt = 0.5, 0.7, 0.45, 0.55, 0.15, 1.0
+        sweep = self.sweep
+
         self.play(FadeOut(self.num, shift=UP * 0.2),
                   FadeOut(self.num_label, shift=UP * 0.2), run_time=fade)
         self.num = self.num_label = None
 
-        tr = ValueTracker(EV_START)
-        live = always_redraw(lambda: self._ev_text(tr.get_value(), NUM_POS))
-        self.play(ReplacementTransform(self.card1, self.empty_card),
-                  FadeIn(self.ev_label, shift=UP * 0.2), run_time=empty_rt)
-        self.card1 = self.empty_card
-        self.add(live)
-        self.play(tr.animate.set_value(FINAL_EV_VAL), run_time=count_rt)
-        self.remove(live)
-        self.add(self.ev_final)
+        # expected points remaining for the current (end-of-h) card
+        start = self._ev_text(sweep[0]["remaining"], NUM_POS)
+        self.play(FadeIn(self.ev_label, shift=UP * 0.2),
+                  FadeIn(start, shift=UP * 0.2), run_time=appear)
+        self.wait(0.3)
 
-        self.play(FadeOut(self.empty_card, shift=LEFT * 0.6), FadeOut(self.ev_label),
-                  self.ev_final.animate.move_to(CENTER_SC).scale(1.9), run_time=move_rt)
+        tr = ValueTracker(sweep[0]["remaining"])
+        live = always_redraw(lambda: self._ev_text(tr.get_value(), NUM_POS))
+        self.remove(start)
+        self.add(live)
+
+        # empty the card one box at a time, recomputing the expectation each step
+        for step in sweep[1:]:
+            self.card1.transition(self, {_sc_box(step["emptied"]): None},
+                                  run_time=step_rt)
+            self.play(tr.animate.set_value(step["remaining"]), run_time=count_rt)
+            self.wait(settle)
+
+        self.remove(live)
+        final = self._ev_text(sweep[-1]["remaining"], NUM_POS)
+        self.add(final)
+        self.play(FadeOut(self.card1, shift=LEFT * 0.6), FadeOut(self.ev_label),
+                  final.animate.move_to(CENTER_SC).scale(1.5), run_time=move_rt)
