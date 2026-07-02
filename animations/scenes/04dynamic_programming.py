@@ -203,7 +203,6 @@ class DynamicProgramming(YahtzeeScene):
 
         self.card.large_straight(self, self.board.dice, y=BAND_YS[3])     # score the final dice
         self.dice = self.board.dice
-        self.wait(0.6)
 
     # keep-name → dice indices (dice read 1,2,3,4,6 left→right after the regroup)
     _KEEP_IDX = {"1234": [0, 1, 2, 3], "34": [2, 3], "234": [1, 2, 3], "246": [1, 3, 4]}
@@ -226,7 +225,6 @@ class DynamicProgramming(YahtzeeScene):
         self.play(FadeIn(VGroup(self.lbl_p40, self.lbl_p0, self.lbl_ev,
                                 self.n_p40, self.n_p0, self.n_ev)), run_time=0.4)
         self._retarget("1234", run_time=0.9, start=0.0)
-        self.wait(0.5)
 
     def _panel_ys(self, base_band):
         """The three stacked rows (40 / 0 / Avg) beside the kept dice, which sit in
@@ -300,7 +298,6 @@ class DynamicProgramming(YahtzeeScene):
         self._show_keep(self.dice, self._KEEP_IDX["1234"], base_band=2, run_time=run_time)
         self._retarget("1234", run_time=0.8)
         self.play(self.n_ev.animate.set_color(AVG_GREEN), run_time=0.5)  # number only
-        self.wait(0.5)
 
     # ══════════════════════════════════════════════════════════════════════════
     # d : a couple more rolls with their best keep + numbers already in place
@@ -367,7 +364,6 @@ class DynamicProgramming(YahtzeeScene):
             self.wait(0.3)
         self.n_ev_val = prev
         self.play(self.n_ev.animate.set_color(AVG_GREEN), run_time=0.5)  # number only
-        self.wait(0.5)
 
     # ══════════════════════════════════════════════════════════════════════════
     # f : a few first rolls (EV above), then dice to band 0 → one whole-turn EV
@@ -398,7 +394,6 @@ class DynamicProgramming(YahtzeeScene):
         self._land_turn_ev(self.dice, self.lbl_ev, self.n_ev, prev,
                            self.nums["turn_ev"], run_time=run_time)
         self.turn_lbl, self.turn_num = self.lbl_ev, self.n_ev
-        self.wait(0.6)
 
     # ══════════════════════════════════════════════════════════════════════════
     # g : box choice — 11134 with 4-Kind & Lg Straight open; compare "avg after"
@@ -456,7 +451,6 @@ class DynamicProgramming(YahtzeeScene):
         self.wait(0.4)
         self.play(FadeOut(VGroup(*self.dice)), run_time=0.4)
         self.dice = None
-        self.wait(0.3)
 
     # ══════════════════════════════════════════════════════════════════════════
     # h : the backward-induction montage — like d/e, repeated GOING DOWN the rows
@@ -528,7 +522,6 @@ class DynamicProgramming(YahtzeeScene):
                            anchor_lbl=ORIGIN, anchor_num=ORIGIN, fmt=self._onedp)
         # leave the dice + value ON SCREEN — the sweep (beat i) continues from them.
         self.h_dice, self.h_ev_lbl, self.h_ev_num = dice, ev_lbl, ev_num
-        self.wait(0.6)
 
     # ══════════════════════════════════════════════════════════════════════════
     # i : empty the card box-by-box; REAL "avg points remaining" (solver V) → 254.6
@@ -543,7 +536,6 @@ class DynamicProgramming(YahtzeeScene):
         xn = slot_x(2) + 2.7
         seq = self.nums["sweep"]                 # seq[0] ≈ 21.2 = the montage turn value
         num = self.h_ev_num                      # count on the carried-over mob
-        self.wait(0.3)
 
         prev = seq[0]["remaining"]
         for step in seq[1:]:
@@ -553,4 +545,3 @@ class DynamicProgramming(YahtzeeScene):
                           "color": AVG_GREEN, "anchor": ORIGIN, "fs": 32}], 0.4)
             prev = step["remaining"]
             self.wait(0.15)
-        self.wait(0.8)

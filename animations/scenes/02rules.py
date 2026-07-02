@@ -49,7 +49,6 @@ class Rules(YahtzeeScene):
         self.wait(0.3)
         # …then "every box gets filled exactly once": highlight all 13 rows.
         self.card.highlight_rows(self, range(13), lag_ratio=0.28, run_time=3.2)
-        self.wait(0.3)
 
     # ── b. the roll mechanic: save 2 → 3 → 4 sixes, score the Sixes box ────────
     # Copied from the 99test "four 6s" example.
@@ -67,7 +66,6 @@ class Rules(YahtzeeScene):
         self.play(*b.roll_rest([6, 2]), run_time=1.0)           # → four 6s
         self.wait(0.5)
         self.card.upper(self, b.dice, 6)                        # Sixes → 24
-        self.wait(0.6)
 
     # ── c. a bad roll → scratch a box with a 0 ─────────────────────────────────
     # Demonstrates the forced scratch on 4-of-a-Kind. This (and the Sixes from b)
@@ -78,7 +76,6 @@ class Rules(YahtzeeScene):
         morph_dice(self, self.board.dice, [2, 3, 4, 4, 6], run_time=0.6)
         self.wait(0.3)
         self.card.animate_zero_score(self, 7, self.board.dice)   # 4-of-a-Kind → 0
-        self.wait(0.6)
 
     # ── d. start "what the boxes mean": empty the card, then the upper section ──
     # The mechanics demo (b's Sixes, c's scratched 4-of-a-Kind) is wiped here so
@@ -94,7 +91,6 @@ class Rules(YahtzeeScene):
         self.wait(0.2)
         # (no graying of the odd die — top-section scoring has no fade-out)
         self.card.upper(self, dice, 5)                  # Fives → 20
-        self.wait(0.5)
 
     # ── e. fill the rest of the top section; cross 63 → +35 bonus ──────────────
     @subscene
@@ -115,7 +111,6 @@ class Rules(YahtzeeScene):
             self.wait(0.1)
             self.card.upper(self, dice, face)
             self.wait(0.25)
-        self.wait(0.4)
 
     # ── f. enter the centred-dice showcase; 3-of-a-Kind and 4-of-a-Kind ────────
     @subscene
@@ -136,7 +131,6 @@ class Rules(YahtzeeScene):
         morph_dice(self, dice, [6, 6, 1, 6, 6], run_time=0.6)   # four 6s (spread)
         self.wait(0.1)
         self.card.four_of_a_kind(self, dice)            # → 25
-        self.wait(0.5)
 
     # ── g. full house: only the colored boxes move (no pips) ───────────────────
     @subscene
@@ -146,7 +140,6 @@ class Rules(YahtzeeScene):
         morph_dice(self, dice, [5, 2, 5, 2, 5], run_time=0.6)   # triple/pair interleaved
         self.wait(0.1)
         self.card.full_house(self, dice)                # → 25
-        self.wait(0.5)
 
     # ── h. small straight (gray unused), then large straight ───────────────────
     # Colored boxes move (no pips); the dice glide back home as the boxes fly off.
@@ -164,7 +157,6 @@ class Rules(YahtzeeScene):
         morph_dice(self, dice, [2, 5, 1, 4, 3], run_time=0.6)
         self.wait(0.1)
         self.card.large_straight(self, dice, y=self.CENTER_Y)   # → 40
-        self.wait(0.5)
 
     # ── i. Yahtzee ────────────────────────────────────────────────────────────
     @subscene
@@ -174,7 +166,6 @@ class Rules(YahtzeeScene):
         morph_dice(self, dice, [5, 5, 5, 5, 5], run_time=0.6)
         self.wait(0.1)
         self.card.yahtzee(self, dice, y=self.CENTER_Y)  # → 50
-        self.wait(0.5)
 
     # ── j. Chance ─────────────────────────────────────────────────────────────
     @subscene
@@ -184,7 +175,6 @@ class Rules(YahtzeeScene):
         morph_dice(self, dice, [2, 3, 4, 4, 6], run_time=0.6)
         self.wait(0.1)
         self.card.chance(self, dice)                    # → 19
-        self.wait(0.6)
 
     # ── k. Joker, no bonus: scratch Yahtzee + empty Fours and Large Straight, ──
     # then a 4s Yahtzee fills the matching upper Fours box, and a 5s Yahtzee fills
@@ -207,7 +197,6 @@ class Rules(YahtzeeScene):
         morph_dice(self, dice, [5, 5, 5, 5, 5], run_time=0.6)    # a 5s Yahtzee
         self.wait(0.2)
         card.joker_fill(self, dice, 10, 40, y=self.CENTER_Y)     # → Large Straight (40)
-        self.wait(0.6)
 
     # ── l. real-50 case: turn the 0 into a 50, empty 4-of-a-Kind, then a 6s ─────
     # Yahtzee fills 4-of-a-Kind AND pays the +100 bonus.
@@ -224,4 +213,3 @@ class Rules(YahtzeeScene):
         # Yahtzee box now holds a real 50, so this joker_fill knows to do the
         # rainbow jump-spin and pay the +100 bonus on its own.
         card.joker_fill(self, dice, 7, 30, y=self.CENTER_Y)      # → 4-of-a-Kind (30) +100
-        self.wait(0.8)

@@ -299,28 +299,24 @@ class Dice(YahtzeeScene):
         self.play(*[ReplacementTransform(d, s)
                     for d, s in zip(self.lv1, self.lv1_sq)], run_time=0.8)
         self.lv1 = None                         # consumed
-        self.wait(0.3)
 
     @subscene
     def grow_36(self):
         self.lv2_sq = _build_square_level(2)
         self._grow(self.lv1_sq, self.lv2_sq, 1, run_time=self.GROW_RT)
         self.lv1_sq = None                      # consumed
-        self.wait(0.3)
 
     @subscene
     def grow_216(self):
         self.lv3_sq = _build_square_level(3)
         self._grow(self.lv2_sq, self.lv3_sq, 2, run_time=self.GROW_RT)
         self.lv2_sq = None
-        self.wait(0.3)
 
     @subscene
     def grow_1296(self):
         self.lv4_sq = _build_square_level(4)
         self._grow(self.lv3_sq, self.lv4_sq, 3, run_time=self.GROW_RT)
         self.lv3_sq = None
-        self.wait(0.3)
 
     @subscene
     def grow_7776(self):
@@ -347,7 +343,6 @@ class Dice(YahtzeeScene):
         self.play(*[ReplacementTransform(self.power_asc[mi], self.grid252[mi])
                     for mi in range(len(self.power_asc))], run_time=1.8)
         self.power_asc = None                   # consumed
-        self.wait(1.0)
 
     # ── c. yahtzee: color the dice, swap two pips → still one arrangement ───────
     @subscene
@@ -375,7 +370,6 @@ class Dice(YahtzeeScene):
                   path_arc=PI, run_time=0.8)
         d1.pips.set_z_index(0)
         d2.pips.set_z_index(0)
-        self.wait(0.8)
 
     def _shuffle_pips(self, dice, arrangement, run_time):
         """Re-home each die's pip-group so slot i shows the pips of die
@@ -421,7 +415,6 @@ class Dice(YahtzeeScene):
         self.yz_dice = None                     # consumed
         self.play(LaggedStart(*[FadeIn(g) for g in self.s120[1:]],
                               lag_ratio=0.01), run_time=1.6)
-        self.wait(0.8)
 
     # ── e. 240 straights vs 6 yahtzees → ~40x ──────────────────────────────────
     @subscene
@@ -438,7 +431,6 @@ class Dice(YahtzeeScene):
         )
         self.s120 = None                        # consumed
         self.play(FadeIn(self.s240_label), FadeIn(self.six_label), run_time=0.5)
-        self.wait(1.0)
 
     # ── f. frequency table: example combo (colored pips) + # of ways ───────────
     @subscene
@@ -450,4 +442,3 @@ class Dice(YahtzeeScene):
         self.play(LaggedStart(*[FadeIn(r, shift=RIGHT * 0.2)
                                 for r in self.freq_rows],
                               lag_ratio=0.15, run_time=1.8))
-        self.wait(1.0)

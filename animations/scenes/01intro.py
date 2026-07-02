@@ -390,7 +390,6 @@ class Intro(YahtzeeScene):
         # rainbow color (1 red ... 6 purple).
         self.play(LaggedStart(*[self._recolor(d) for d in dice],
                               lag_ratio=0.12, run_time=1.0))
-        self.wait(1)
 
     # ── build up: 6 singles -> 21 pairs -> 56 trios -> 126 quads -> 252 quints ─
     @subscene
@@ -398,22 +397,18 @@ class Intro(YahtzeeScene):
         self._setup_buildup()           # owns the build-up grids (uses one_die_dice)
         self.add(self.bgrid[1])
         self._grow_step(1, run_time=2.4)
-        self.wait(1)
 
     @subscene
     def trios(self):
         self._grow_step(2, run_time=2.4)
-        self.wait(1)
 
     @subscene
     def quads(self):
         self._grow_step(3, run_time=2.4)
-        self.wait(1)
 
     @subscene
     def quints(self):
         self._grow_step(4, run_time=2.4)
-        self.wait(1)
 
     # ── shrink each of the 252 by how likely it is ────────────────────────────
     @subscene
@@ -492,7 +487,6 @@ class Intro(YahtzeeScene):
         )
         # "Dice States" fades in below the 756.
         self.play(FadeIn(self.dice_states_label, shift=UP * 0.2), run_time=0.5)
-        self.wait(1)
 
     # ── flash the 13 boxes & multiply 2's down the 3rd column -> 8192 ──────────
     @subscene
@@ -577,7 +571,6 @@ class Intro(YahtzeeScene):
                        FadeIn(self.box_combos_label, shift=RIGHT * 0.2,
                               run_time=0.4)),                     # 0.5 - 0.9s
         )
-        self.wait(0.6)
 
     # ── card/dice exit; 8192 -> 385B; cull; x756 down to 1 / count up to 258T ──
     @subscene
@@ -707,4 +700,3 @@ class Intro(YahtzeeScene):
         positions_label = _label("YAHTZEE Positions").scale(1.3)
         positions_label.next_to(final, DOWN, buff=0.5)
         self.play(FadeIn(positions_label, shift=UP * 0.2), run_time=0.6)
-        self.wait(1)

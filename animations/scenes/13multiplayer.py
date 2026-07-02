@@ -328,7 +328,6 @@ class Multiplayer(YahtzeeScene):
         self._grow_up([*self.plot.bars, self.med_hl], FadeIn(rest),
                       FadeIn(self.med_lead), FadeIn(self.title),
                       FadeIn(self.median_label), run_time=1.5)
-        self.wait(0.5)
 
     # ════════════════════════════════════════════════════════════════════════
     # b–i : best-of-N — morph+pan, median counts up, title N counts on log scale.
@@ -338,42 +337,34 @@ class Multiplayer(YahtzeeScene):
     @subscene
     def best_of_2(self):
         self._transition(2, count_title=False, run_time=3.0)   # title crossfade
-        self.wait(0.5)
 
     @subscene
     def best_of_3(self):
         self._transition(3, count_title=True, run_time=3.0)
-        self.wait(0.5)
 
     @subscene
     def best_of_5(self):
         self._transition(5, count_title=True, run_time=3.0)
-        self.wait(0.5)
 
     @subscene
     def best_of_10(self):
         self._transition(10, count_title=True, run_time=3.0)
-        self.wait(0.5)
 
     @subscene
     def best_of_79(self):
         self._transition(79, count_title=True, run_time=3.0)
-        self.wait(0.5)
 
     @subscene
     def best_of_5000(self):
         self._transition(5000, count_title=True, run_time=3.0)
-        self.wait(0.5)
 
     @subscene
     def best_of_1000000(self):
         self._transition(1_000_000, count_title=True, run_time=3.0)
-        self.wait(0.5)
 
     @subscene
     def best_of_8300000000(self):
         self._transition(8_300_000_000, count_title=True, run_time=3.0)
-        self.wait(0.5)
 
     def _setup_perfect(self, run_time, settle):
         """Build the finale's split title over the current one-line title — "Best of"
@@ -468,4 +459,3 @@ class Multiplayer(YahtzeeScene):
         self._morph_chain(seq, meds, beat, self.cur_n, self.n_perfect, mt, nt, run_time, gt=gt)
         self._finish_perfect()
         self.play(Create(self.med_lead), run_time=lead_in)
-        self.wait(0.5)

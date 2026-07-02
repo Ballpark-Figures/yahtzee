@@ -81,7 +81,6 @@ class Histogram(YahtzeeScene):
         self.legend = None
         rest = VGroup(*[m for m in self.plot.submobjects if m is not self.plot.bars])
         self._grow_up(self.plot.bars, FadeIn(rest), run_time=run_time)
-        self.wait(0.4)
 
     @subscene
     def overlay_one(self):
@@ -94,7 +93,6 @@ class Histogram(YahtzeeScene):
             (BONUS1_COLOR, "One 100-pt bonus"),
         ])
         self._grow_up(ol, FadeIn(self.legend), run_time=run_time)
-        self.wait(0.4)
 
     @subscene
     def overlay_two(self):
@@ -111,7 +109,6 @@ class Histogram(YahtzeeScene):
         third = full[2]
         self.legend.add(third)
         self._grow_up(ol, FadeIn(third), run_time=run_time)
-        self.wait(0.5)
 
     # ════════════════════════════════════════════════════════════════════════
     # d–h : scorecard + reduced-points bonus system + bonus bar table
@@ -172,7 +169,6 @@ class Histogram(YahtzeeScene):
         self.card.highlight_rows(self, TOP_ROWS, lag_ratio=0.0, run_time=1.2)
         self.wait(0.2)
         self.card.highlight_rows(self, [CHANCE_ROW], run_time=0.8)
-        self.wait(0.3)
 
     @subscene
     def giant_bonus(self):
@@ -187,7 +183,6 @@ class Histogram(YahtzeeScene):
         self.play(FadeIn(self.h_giant, shift=RIGHT * 0.2), run_time=run_time)
         self.play(FadeIn(self.i_giant[0], shift=RIGHT * 0.2),
                   FadeIn(n4, shift=LEFT * 0.2), run_time=run_time)
-        self.wait(0.3)
 
     @subscene
     def fill_bonuses(self):
@@ -219,7 +214,6 @@ class Histogram(YahtzeeScene):
             self.card_numbers.add(num)
             self.play(FadeIn(it, shift=RIGHT * 0.2), FadeIn(num, shift=LEFT * 0.2),
                       run_time=run_time)
-        self.wait(0.4)
 
     @subscene
     def bonus_table(self):
@@ -238,13 +232,11 @@ class Histogram(YahtzeeScene):
         self.wait(0.4)
         self._emph([YAHTZEE_ROW], [6])                 # yahtzee box + table row
         self._emph([9, 10], [4, 5])                    # small & large straight
-        self.wait(0.2)
 
     @subscene
     def highlight_kinds(self):
         run_time = 0.9
         self._emph([6, 7], [1, 2])                     # 3- & 4-of-a-kind
-        self.wait(0.3)
 
     def _emph(self, card_rows, table_idxs, hold=1.5, run_time=0.6):
         """Hold a scorecard-box highlight (fill + border) for ``hold`` s while the
@@ -291,7 +283,6 @@ class Histogram(YahtzeeScene):
         self.legend = None
         rest = VGroup(*[m for m in self.plot.submobjects if m is not self.plot.bars])
         self._grow_up(self.plot.bars, FadeIn(rest), run_time=run_time)
-        self.wait(0.3)
 
     def _highlight(self, counts, label, color, run_time, first=False):
         """First call grows the overlay up; later calls Transform from the current
