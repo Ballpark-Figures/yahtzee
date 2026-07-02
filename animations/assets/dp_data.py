@@ -64,8 +64,13 @@ _SECOND_REROLL_KEEPS = {"1234": (1, 2, 3, 4), "34": (3, 4),
 _FIRST_REROLL_ROLL = [1, 2, 4, 4, 6]           # beat e
 _FIRST_REROLL_KEEPS = {"124": (1, 2, 4), "24": (2, 4), "246": (2, 4, 6)}
 
-_OTHER_ROLLS = [[1, 2, 4, 4, 5], [3, 3, 4, 5, 5], [1, 1, 1, 2, 3]]   # beat d (stage B)
-_TURN_EV_ROLLS = [[1, 2, 4, 4, 6], [1, 2, 3, 4, 6], [2, 3, 4, 5, 5]]  # beat f (stage A)
+# beat d (stage B). First roll is NOT [1,2,4,4,5] (whose EV 6.67 equals beat c's
+# ending 1234 keep) — lead with a different EV so the counter changes on the first
+# new set. Keeps are varied sizes (3 / 4 / 2 dice).
+_OTHER_ROLLS = [[3, 3, 4, 5, 5], [1, 2, 4, 4, 5], [1, 1, 1, 2, 3]]
+# beat f (stage A). Beat e already settled on [1,2,4,4,6] keep 24, so DON'T repeat it
+# here (that caused the "24 dips down then back up" bounce); start from the next roll.
+_TURN_EV_ROLLS = [[1, 2, 3, 4, 6], [2, 3, 4, 5, 5]]
 
 # beat h montage: (roll, stage). Stage B rolls (2nd reroll, 1 left) are shown in the
 # upper row; stage A rolls (1st reroll, 2 left) in the lower row. Chosen so the

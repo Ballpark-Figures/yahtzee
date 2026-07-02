@@ -322,11 +322,15 @@ class DynamicProgramming(YahtzeeScene):
                   self.lbl_ev.animate.move_to([self.ODDS_CX, by, 0], aligned_edge=RIGHT),
                   self.n_ev.animate.set_color(BLACK).move_to([self.ODDS_NX, self._ny(by, self.ODDS_FS), 0], aligned_edge=LEFT),
                   run_time=0.5)
+        # reset the running counter back to 0 now that it has moved to the new row
+        # (the carried-over value was the previous roll's — start these fresh).
+        self._count([{"mob": self.n_ev, "fmt": self._ev, "x": self.ODDS_NX, "y": by,
+                      "start": self.n_ev_val, "target": 0.0, "fs": self.ODDS_FS}], 0.3)
         morph_dice(self, self.dice, [1, 2, 4, 4, 6], run_time=0.5)
         self.ev_y = by
 
         keep_idx = {"124": [0, 1, 2], "24": [1, 2], "246": [1, 2, 4]}
-        prev = self.n_ev_val
+        prev = 0.0
         for name in ["124", "24", "246", "24"]:
             self._show_keep(self.dice, keep_idx[name], base_band=1, run_time=run_time)
             ev = self.nums["first_reroll"][name]["ev"]
@@ -388,24 +392,25 @@ class DynamicProgramming(YahtzeeScene):
         z4 = self._label("0", c4[0], c4[1], color=GRAY, anchor=ORIGIN)
         zls = self._label("0", cls[0], cls[1], color=GRAY, anchor=ORIGIN)
         # HORIZONTAL arrows pointing LEFT — the arrowHEADS sit at the right edge of
-        # each open box; the base (right) end sits at the RIGHT EDGE OF THE CARD and
-        # carries the "Avg points after" words just beyond it.
+        # each open box; the base (right) end reaches just PAST the right edge of the
+        # card and carries the "Avg points after" words.
         head4 = self.card.value_cells[7].get_right()
         headls = self.card.value_cells[10].get_right()
-        base_x = self.card.get_right()[0]                         # the card's edge
+        base_x = self.card.get_right()[0] + 0.12                  # just past the card edge
         ar4 = Arrow([base_x, c4[1], 0], head4, color=BLACK,
                     buff=0, stroke_width=3.5, max_tip_length_to_length_ratio=0.12)
         arls = Arrow([base_x, cls[1], 0], headls, color=BLACK,
                      buff=0, stroke_width=3.5, max_tip_length_to_length_ratio=0.12)
-        self.play(FadeIn(z4), FadeIn(zls), GrowArrow(ar4), GrowArrow(arls), run_time=0.6)
-        self.wait(0.8)                                             # beat before the EVs
-
         box = self.nums["box_choice"]
         ev4 = box["fill_4kind"]["total"]          # zero 4-Kind, keep Lg Straight open
         evls = box["fill_lgstraight"]["total"]    # zero Lg Straight, keep 4-Kind open
         lab4 = self._label(f"Avg points after: {ev4:.1f}", base_x + 0.2, c4[1], anchor=LEFT, fs=24)
         labls = self._label(f"Avg points after: {evls:.1f}", base_x + 0.2, cls[1], anchor=LEFT, fs=24)
-        self.play(FadeIn(lab4), FadeIn(labls), run_time=0.5)
+
+        self.play(FadeIn(z4), FadeIn(zls), run_time=0.5)          # the 0s appear in the boxes
+        self.wait(0.4)
+        # the arrows grow in AT THE SAME TIME as the "Avg points after" text
+        self.play(GrowArrow(ar4), GrowArrow(arls), FadeIn(lab4), FadeIn(labls), run_time=0.6)
         self.wait(0.6)
 
         # zero out the LOWER-EV box (keep the higher-value one open) → the 4-Kind
@@ -475,39 +480,38 @@ class DynamicProgramming(YahtzeeScene):
         # row (bigger), together, its number becoming the whole-turn EV (≈21.2).
         self._land_turn_ev(dice, ev_lbl, ev_num, prev[0],
                            self.nums["montage_turn_ev"], run_time=run_time)
-        self.wait(0.8)
-        self.play(FadeOut(VGroup(*dice, ev_lbl, ev_num)), run_time=0.4)   # clear before the sweep
-        self.wait(0.2)
+        # leave the dice + turn value ON SCREEN — the sweep (beat i) continues from
+        # them, just relabelling the value as "avg points remaining".
+        self.h_dice, self.h_ev_lbl, self.h_ev_num = dice, ev_lbl, ev_num
+        self.wait(0.6)
 
     # ══════════════════════════════════════════════════════════════════════════
     # i : empty the card box-by-box; REAL "avg points remaining" (solver V) → 254.6
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def backward_sweep(self, run_time=0.8):
-        # Continue on the SAME running-example card the montage left us — it already
-        # has 4-Kind and Large Straight open (V ≈ 21.2), so no reset. The dice stay
-        # at the BOTTOM (band 0) and the running EV sits in the 3rd row (band 2).
-        example = DiceBoard().dice
-        for i, (d, v) in enumerate(zip(example, [3, 3, 5, 2, 6])):
-            d.set_value(v)
-            d.move_to([slot_x(i), BAND_YS[0], 0])
-        self.play(*[FadeIn(d) for d in example], run_time=0.5)
-
+        # Continue STRAIGHT from the montage: the dice and the turn value (V ≈ 21.2)
+        # are already on screen, on the SAME running-example card (4-Kind + Large
+        # Straight open). Relabel that value as "avg points remaining" — keeping the
+        # number (no reset) — then start emptying the card.
         by = BAND_YS[1]                          # the EV lives in the 3rd row (top-down)
         onedp = lambda v: f"{v:.1f}"             # real solver V, to one decimal
-        lbl = self._label("Avg points remaining:", slot_x(2) - 0.6, by, anchor=ORIGIN, fs=32)
-        num = self._numlabel("0.0", slot_x(2) + 2.7, by, color=AVG_GREEN, anchor=ORIGIN, fs=32)
-        self.play(FadeIn(VGroup(lbl, num)), run_time=0.4)
+        xn = slot_x(2) + 2.7
+        seq = self.nums["sweep"]                 # seq[0] ≈ 21.2 = the montage turn value
 
-        seq = self.nums["sweep"]                 # real solver V at each step
+        lbl2 = self._label("Avg points remaining:", slot_x(2) - 0.6, by, anchor=ORIGIN, fs=32)
+        num2 = self._numlabel(onedp(seq[0]["remaining"]), xn, by, color=AVG_GREEN,
+                              anchor=ORIGIN, fs=32)
+        self.play(Transform(self.h_ev_lbl, lbl2), Transform(self.h_ev_num, num2),
+                  run_time=0.6)
+        num = self.h_ev_num                      # keep counting on the carried-over mob
+        self.wait(0.3)
+
         prev = seq[0]["remaining"]
-        self._count([{"mob": num, "fmt": onedp, "x": slot_x(2) + 2.7,
-                      "y": by, "start": 0.0, "target": prev, "color": AVG_GREEN,
-                      "anchor": ORIGIN, "fs": 32}], 0.4)
         for step in seq[1:]:
             self.card.transition(self, {_sc_box(step["emptied"]): None}, run_time=0.45)
-            self._count([{"mob": num, "fmt": onedp, "x": slot_x(2) + 2.7,
-                          "y": by, "start": prev, "target": step["remaining"],
+            self._count([{"mob": num, "fmt": onedp, "x": xn, "y": by,
+                          "start": prev, "target": step["remaining"],
                           "color": AVG_GREEN, "anchor": ORIGIN, "fs": 32}], 0.4)
             prev = step["remaining"]
             self.wait(0.15)
