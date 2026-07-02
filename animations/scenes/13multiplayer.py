@@ -165,7 +165,7 @@ class Multiplayer(YahtzeeScene):
         for b in bars:
             b.save_state()
             b.stretch(1e-3, dim=1, about_edge=DOWN)
-        self.play(*[Restore(b) for b in bars], *extra, run_time=run_time)
+        self.play(*[Restore(b) for b in bars], *extra, run_time=3.0)
 
     def _med_hl_for(self, score, plot=None):
         """The median highlight: a recoloured COPY of the chart bar at ``score`` in
@@ -314,7 +314,7 @@ class Multiplayer(YahtzeeScene):
     # a : single-player plot; normal-width median bar with an upper-right callout
     # ════════════════════════════════════════════════════════════════════════
     @subscene
-    def show_single(self, run_time=1.5):
+    def show_single(self):
         self._prepare()
         self.cur_n = SERIES[0]
         self.cur_median = sd.maxN_median(self.cur_n)
@@ -327,7 +327,7 @@ class Multiplayer(YahtzeeScene):
                       self.plot.x_ticks, self.plot.axis_labels)
         self._grow_up([*self.plot.bars, self.med_hl], FadeIn(rest),
                       FadeIn(self.med_lead), FadeIn(self.title),
-                      FadeIn(self.median_label), run_time=run_time)
+                      FadeIn(self.median_label), run_time=1.5)
         self.wait(0.5)
 
     # ════════════════════════════════════════════════════════════════════════
@@ -336,43 +336,43 @@ class Multiplayer(YahtzeeScene):
     # get big and the title number climbs on a log scale.
     # ════════════════════════════════════════════════════════════════════════
     @subscene
-    def best_of_2(self, run_time=3.0):
-        self._transition(2, count_title=False, run_time=run_time)   # title crossfade
+    def best_of_2(self):
+        self._transition(2, count_title=False, run_time=3.0)   # title crossfade
         self.wait(0.5)
 
     @subscene
-    def best_of_3(self, run_time=3.0):
-        self._transition(3, count_title=True, run_time=run_time)
+    def best_of_3(self):
+        self._transition(3, count_title=True, run_time=3.0)
         self.wait(0.5)
 
     @subscene
-    def best_of_5(self, run_time=3.0):
-        self._transition(5, count_title=True, run_time=run_time)
+    def best_of_5(self):
+        self._transition(5, count_title=True, run_time=3.0)
         self.wait(0.5)
 
     @subscene
-    def best_of_10(self, run_time=3.0):
-        self._transition(10, count_title=True, run_time=run_time)
+    def best_of_10(self):
+        self._transition(10, count_title=True, run_time=3.0)
         self.wait(0.5)
 
     @subscene
-    def best_of_79(self, run_time=3.0):
-        self._transition(79, count_title=True, run_time=run_time)
+    def best_of_79(self):
+        self._transition(79, count_title=True, run_time=3.0)
         self.wait(0.5)
 
     @subscene
-    def best_of_5000(self, run_time=3.0):
-        self._transition(5000, count_title=True, run_time=run_time)
+    def best_of_5000(self):
+        self._transition(5000, count_title=True, run_time=3.0)
         self.wait(0.5)
 
     @subscene
-    def best_of_1000000(self, run_time=3.0):
-        self._transition(1_000_000, count_title=True, run_time=run_time)
+    def best_of_1000000(self):
+        self._transition(1_000_000, count_title=True, run_time=3.0)
         self.wait(0.5)
 
     @subscene
-    def best_of_8300000000(self, run_time=3.0):
-        self._transition(8_300_000_000, count_title=True, run_time=run_time)
+    def best_of_8300000000(self):
+        self._transition(8_300_000_000, count_title=True, run_time=3.0)
         self.wait(0.5)
 
     def _setup_perfect(self, run_time, settle):
@@ -457,12 +457,13 @@ class Multiplayer(YahtzeeScene):
         self.cur_n, self.cur_median = n, m1              # self.plot set by _morph_chain
 
     @subscene
-    def best_of_perfect(self, run_time=3.0, settle=0.35, lead_in=0.5):
+    def best_of_perfect(self):
         """Finale — the shared morph chain (pan / eased log-N count / median snap) PLUS
         a one-off title reflow, both built in _setup_perfect. Only the animation and
         its timings live here, so it's easy to tune: the morph runs over ``run_time``
         (the reflow settling by ``settle``), then the median leader draws back in over
         ``lead_in``."""
+        run_time, settle, lead_in = 3.0, 0.35, 0.5       # finale timings (tweak here)
         seq, meds, beat, mt, nt, gt = self._setup_perfect(run_time, settle)
         self._morph_chain(seq, meds, beat, self.cur_n, self.n_perfect, mt, nt, run_time, gt=gt)
         self._finish_perfect()

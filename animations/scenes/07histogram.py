@@ -73,7 +73,8 @@ class Histogram(YahtzeeScene):
     # a–c : the histogram and the two yahtzee-bonus overlays
     # ════════════════════════════════════════════════════════════════════════
     @subscene
-    def show_plot(self, run_time=1.5):
+    def show_plot(self):
+        run_time = 1.5
         self.base = sd.score_distribution()
         self.plot = self._build_plot()
         self.overlay = VGroup()
@@ -83,7 +84,8 @@ class Histogram(YahtzeeScene):
         self.wait(0.4)
 
     @subscene
-    def overlay_one(self, run_time=1.0):
+    def overlay_one(self):
+        run_time = 1.0
         o1 = sd.overlay_by_yahtzee(1)                 # exactly one extra (yu==2)
         ol = overlay_bars(self.plot, o1, BONUS1_COLOR)
         self.overlay.add(ol)
@@ -95,7 +97,8 @@ class Histogram(YahtzeeScene):
         self.wait(0.4)
 
     @subscene
-    def overlay_two(self, run_time=1.0):
+    def overlay_two(self):
+        run_time = 1.0
         o2 = sd.overlay_by_yahtzee(2)                 # exactly two extra (yu==3)
         ol = overlay_bars(self.plot, o2, BONUS2_COLOR)
         self.overlay.add(ol)
@@ -154,7 +157,8 @@ class Histogram(YahtzeeScene):
         self.bonus_panel = panel
 
     @subscene
-    def card_in(self, run_time=1.0):
+    def card_in(self):
+        run_time = 1.0
         self.card = get_scorecard(scores=[None] * 14, center=LEFT_SC,
                                   show_summary=False)
         # re-place so the left gap matches the scorecard↔card and card↔right gaps
@@ -171,7 +175,8 @@ class Histogram(YahtzeeScene):
         self.wait(0.3)
 
     @subscene
-    def giant_bonus(self, run_time=0.8):
+    def giant_bonus(self):
+        run_time = 0.8
         self._setup_bonus_panel()
         self.card_numbers = VGroup()
         n4 = self._card_num("+4", [self._col3_x(),
@@ -185,7 +190,8 @@ class Histogram(YahtzeeScene):
         self.wait(0.3)
 
     @subscene
-    def fill_bonuses(self, run_time=0.7):
+    def fill_bonuses(self):
+        run_time = 0.7
         vc = self.card.value_cells
         c3 = self._col3_x()
         top_y = (vc[0].get_center()[1] + vc[5].get_center()[1]) / 2
@@ -216,7 +222,8 @@ class Histogram(YahtzeeScene):
         self.wait(0.4)
 
     @subscene
-    def bonus_table(self, run_time=1.5):
+    def bonus_table(self):
+        run_time = 1.5
         self.table_rows = sd.bonus_table_rows()
         self.table = get_bar_graph(self.table_rows, bar_max_width=3.4,
                                    title="Average Points", pct_header="Success\nProb",
@@ -234,7 +241,8 @@ class Histogram(YahtzeeScene):
         self.wait(0.2)
 
     @subscene
-    def highlight_kinds(self, run_time=0.9):
+    def highlight_kinds(self):
+        run_time = 0.9
         self._emph([6, 7], [1, 2])                     # 3- & 4-of-a-kind
         self.wait(0.3)
 
@@ -273,7 +281,8 @@ class Histogram(YahtzeeScene):
     # i–q : back to the plot, highlight peak regions by reduced-bonus points
     # ════════════════════════════════════════════════════════════════════════
     @subscene
-    def plot_back(self, run_time=1.0):
+    def plot_back(self):
+        run_time = 1.0
         self.plot = self._build_plot()
         self.play(FadeOut(self.card, self.card_numbers, self.table, self.table_card),
                   run_time=run_time * 0.5)
@@ -301,40 +310,48 @@ class Histogram(YahtzeeScene):
         self.wait(0.4)
 
     @subscene
-    def right_bumps(self, run_time=1.0):
+    def right_bumps(self):
+        run_time = 1.0
         self._highlight(sd.overlay_yahtzee_bumps(), "Extra yahtzees",
                         HL_COLOR, run_time, first=True)
 
     @subscene
-    def all_big(self, run_time=1.0):
+    def all_big(self):
+        run_time = 1.0
         self._highlight(sd.overlay_all_big_bonuses(), "All big bonuses",
                         HL_COLOR, run_time)
 
     @subscene
-    def all_bonuses(self, run_time=1.0):
+    def all_bonuses(self):
+        run_time = 1.0
         self._highlight(sd.overlay_by_reduced(10), "All regular bonuses (10 bonus pts)",
                         HL_COLOR, run_time)
 
     @subscene
-    def minus_one_small(self, run_time=1.0):
+    def minus_one_small(self):
+        run_time = 1.0
         self._highlight(sd.overlay_by_reduced(9), "Missing 1 bonus pt",
                         HL_COLOR, run_time)
 
     @subscene
-    def minus_two_three(self, run_time=1.0):
+    def minus_two_three(self):
+        run_time = 1.0
         self._highlight(sd.overlay_by_reduced(8), "Missing 2 bonus pts", HL_COLOR, run_time)
         self._highlight(sd.overlay_by_reduced(7), "Missing 3 bonus pts", HL_COLOR, run_time)
 
     @subscene
-    def minus_four(self, run_time=1.0):
+    def minus_four(self):
+        run_time = 1.0
         self._highlight(sd.overlay_by_reduced(6), "Missing 4 bonus pts", HL_COLOR, run_time)
 
     @subscene
-    def minus_five(self, run_time=1.0):
+    def minus_five(self):
+        run_time = 1.0
         self._highlight(sd.overlay_by_reduced(5), "Missing 5 bonus pts", HL_COLOR, run_time)
 
     @subscene
-    def below_five(self, run_time=1.0):
+    def below_five(self):
+        run_time = 1.0
         self._highlight(sd.overlay_reduced_below(5), "Missing 6+ bonus pts",
                         HL_COLOR, run_time)
         self.play(FadeOut(self.plot, self.cur_overlay, self.legend), run_time=0.8)

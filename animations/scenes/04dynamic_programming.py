@@ -162,7 +162,8 @@ class DynamicProgramming(YahtzeeScene):
     # a : card fills to "all but Lg Straight"; a real turn rolls UP to 12345
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
-    def intro_card(self, run_time=1.0):
+    def intro_card(self):
+        run_time = 1.0
         # Three separate script beats, in order, with delays between (matching the
         # script's paragraph breaks): 1. empty scorecard comes on, 2. dice come on
         # (from the TOP), 3. the card fills out. The fill is a full filled card
@@ -196,7 +197,8 @@ class DynamicProgramming(YahtzeeScene):
     # b : 12346 at band 2; keep 1234 pushes up to band 3; odds to the right
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
-    def second_reroll(self, run_time=0.8):
+    def second_reroll(self):
+        run_time = 0.8
         self.nums = dp.scene04_numbers()
         self.card.transition(self, {10: None}, run_time=0.6)      # re-open Lg Str
 
@@ -267,7 +269,8 @@ class DynamicProgramming(YahtzeeScene):
     # c : cycle the kept set (dice re-rise each time), back to 1234 (best → green)
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
-    def reroll_cycle(self, run_time=0.6):
+    def reroll_cycle(self):
+        run_time = 0.6
         for name in ["34", "234", "246"]:
             self._show_keep(self.dice, self._KEEP_IDX[name], base_band=2, run_time=run_time)
             self._retarget(name, run_time=0.8)
@@ -281,7 +284,8 @@ class DynamicProgramming(YahtzeeScene):
     # d : a couple more rolls with their best keep + numbers already in place
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
-    def other_rolls(self, run_time=0.6):
+    def other_rolls(self):
+        run_time = 0.6
         # the Avg number stays GREEN for these (best-keep) examples (number only)
         # script: "3 other dice configurations with their best dice combos forward"
         # — varied, and NOT all four-dice keeps (4 / 3 / 2 kept respectively).
@@ -311,7 +315,8 @@ class DynamicProgramming(YahtzeeScene):
     # e : step back to the FIRST reroll — 12446 at band 1, keep 24 (avg only)
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
-    def first_reroll(self, run_time=0.6):
+    def first_reroll(self):
+        run_time = 0.6
         self.play(FadeOut(VGroup(self.lbl_p40, self.lbl_p0, self.n_p40, self.n_p0)),
                   run_time=0.4)                                    # avg only now
         # move the dice DOWN to band 1 (3rd row) AND the Avg down to band 2 (2nd
@@ -346,7 +351,8 @@ class DynamicProgramming(YahtzeeScene):
     # f : a few first rolls (EV above), then dice to band 0 → one whole-turn EV
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
-    def turn_ev(self, run_time=0.6):
+    def turn_ev(self):
+        run_time = 0.6
         # FIRST PART like d: each first roll's best keep is SET FORWARD, with its
         # Avg pts (green number) — reusing the same panel label/number from e.
         by = BAND_YS[2]
@@ -376,7 +382,8 @@ class DynamicProgramming(YahtzeeScene):
     # g : box choice — 11134 with 4-Kind & Lg Straight open; compare "avg after"
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
-    def box_choice(self, run_time=0.6):
+    def box_choice(self):
+        run_time = 0.6
         self.play(FadeOut(VGroup(self.turn_lbl, self.turn_num)), run_time=0.3)
         self.turn_lbl = self.turn_num = None
         # open 4-of-a-Kind (Lg Straight is already open from the running example);
@@ -430,7 +437,8 @@ class DynamicProgramming(YahtzeeScene):
     #     at the bottom (row 4). Going backwards, so 4-of-a-Kind is unfilled.
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
-    def keep_montage(self, run_time=0.6):
+    def keep_montage(self):
+        run_time = 0.6
         self.card.transition(self, {7: None}, run_time=0.6)       # 4-Kind unfilled again
         dice = [get_die(1) for _ in range(5)]                     # same size as always
         montage = self.nums["montage"]                            # solver, 2-open-box state
@@ -489,7 +497,8 @@ class DynamicProgramming(YahtzeeScene):
     # i : empty the card box-by-box; REAL "avg points remaining" (solver V) → 254.6
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
-    def backward_sweep(self, run_time=0.8):
+    def backward_sweep(self):
+        run_time = 0.8
         # Continue STRAIGHT from the montage: the dice and the turn value (V ≈ 21.2)
         # are already on screen, on the SAME running-example card (4-Kind + Large
         # Straight open). Relabel that value as "avg points remaining" — keeping the
