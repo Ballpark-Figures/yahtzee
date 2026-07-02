@@ -393,7 +393,7 @@ class Scorecard(VGroup):
         return fill, border, bold_lbl
 
     def highlight_rows(self, scene, rows, *, color=ACCENT_GOLD, opacity=0.45,
-                       run_time=None, fade=0.25, hold=1.2, lag_ratio=0.0,
+                       run_time=None, fade=0.25, hold=1.0, lag_ratio=0.0,
                        pulse=False):
         """Emphasise whole scorecard rows (label+value, columns 1-2): a soft fill
         + thick border, with the row label bolded.

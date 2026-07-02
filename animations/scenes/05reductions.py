@@ -212,7 +212,7 @@ class Reductions(YahtzeeScene):
     @subscene
     def two_cards(self):
         self._setup_cards()
-        in_rt, hold = 0.9, 1.2
+        in_rt, hold = 0.9, 1.0
         c1, c2 = self.card1, self.card2
 
         # entrance: build at home (setup), drop offscreen, rise back up
@@ -232,7 +232,7 @@ class Reductions(YahtzeeScene):
     # b) collapse to the sufficient statistic
     @subscene
     def one_card(self):
-        move_rt, hold = 0.9, 1.2
+        move_rt, hold = 0.9, 1.0
         c1 = self.card1
         self.play(FadeOut(self.card2, shift=RIGHT * 0.6),
                   c1.animate.move_to(CARD_C), run_time=move_rt)
@@ -263,7 +263,7 @@ class Reductions(YahtzeeScene):
     @subscene
     def drop_yahtzee_count(self):
         self._setup_yahtzee_cycle()
-        hold, cyc = 1.2, 0.22
+        hold, cyc = 1.0, 0.22
         highlight(self, [self._fullrow_target(self.card1, YAHTZEE_ROW)], hold=hold)
         for zero, fifty in self.cyc_pairs:
             self.play(FadeIn(zero), run_time=cyc)
@@ -274,7 +274,7 @@ class Reductions(YahtzeeScene):
     @subscene
     def cap_top_at_63(self):
         self._setup_examples()
-        tr_rt, gap, hold = 0.8, 0.35, 1.2
+        tr_rt, gap, hold = 0.8, 0.35, 1.0
         for new in self.examples:
             self.play(ReplacementTransform(self.card1, new), run_time=tr_rt)
             self.card1 = new
@@ -286,7 +286,7 @@ class Reductions(YahtzeeScene):
     @subscene
     def drop_bottom_total(self):
         self._setup_bottom_strike()
-        strike_rt, hold = 0.5, 1.2
+        strike_rt, hold = 0.5, 1.0
         self.play(Create(self.strike), run_time=strike_rt)
         highlight(self, [self._box_target(self.card1, r) for r in OPEN_BOTTOM],
                   hold=hold)
