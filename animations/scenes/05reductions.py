@@ -57,7 +57,8 @@ LBL_POS = [2.85, 1.2, 0]                    # caption above the number
 NUM_FS  = 46
 NUM_MAXW = 9.0                              # cap the widest (258.5T) to the panel
 LABEL_FS = 38
-FINAL_SCALE = 1.6                           # how much the final average grows
+FINAL_POS = [0, -0.8, 0]                     # where the final average lands
+FINAL_SCALE = 2.6                            # how much the final average grows
 
 
 def _fmt(v):
@@ -157,7 +158,7 @@ class Reductions(YahtzeeScene):
         centre and grown by `mt` in [0, 1] (for the finale move)."""
         t = crisp_text(f"{v:.1f}", font_size=fs, color=BLACK, font=FONT,
                        weight="BOLD")
-        pos = [NUM_POS[i] + (CENTER_SC[i] - NUM_POS[i]) * mt for i in range(3)]
+        pos = [NUM_POS[i] + (FINAL_POS[i] - NUM_POS[i]) * mt for i in range(3)]
         return t.move_to(pos).scale(1 + (FINAL_SCALE - 1) * mt)
 
     def _summary_cells(self, card):
@@ -297,6 +298,14 @@ class Reductions(YahtzeeScene):
         highlight(self, [self._box_target(self.card1, 0)], hold=hold)
         # — then restore the top section to its earlier state.
         self.card1.transition(self, RESTORE_TOP, run_time=restore_rt)
+        # transition() adds NEW cell texts at SCENE level; re-home any that aren't
+        # in the card group so a later card move/fade takes them along (else the
+        # restored Ones "3" is left floating when h moves the card off-centre).
+        fam = self.card1.get_family()
+        for t in list(self.card1.value_texts.values()):
+            if t not in fam:
+                self.remove(t)
+                self.card1.score_texts.add(t)
 
     # g) bottom score not needed at all
     @subscene
@@ -327,7 +336,7 @@ class Reductions(YahtzeeScene):
     def perfect_average(self):
         self._setup_perfect_average()
         fade, appear, step_rt, count_rt, settle, last_rt, lbl_rt = \
-            0.5, 0.7, 0.45, 0.55, 0.15, 1.2, 0.5
+            0.5, 0.7, 0.45, 0.55, 0.15, 2.0, 0.6
         sweep = self.sweep
 
         self.play(FadeOut(self.num, shift=UP * 0.2),
@@ -357,20 +366,30 @@ class Reductions(YahtzeeScene):
         # drop the "Avg points remaining:" caption right away. Fade EVERYTHING
         # except the moving number: the card group plus any summary texts
         # transition() left at scene level (a bare FadeOut(card1) misses those).
-        last = sweep[-1]["remaining"]
-        clutter = [m for m in self.mobjects if m is not live and m is not self.ev_label]
+        # finale: drive the number's VALUE from the SAME tracker as its motion, so
+        # it keeps COUNTING UP throughout the move-and-grow (two separate trackers
+        # desync — the motion finishes while the value lags, so it looks like a
+        # jump). Also removes the card and drops the caption early.
+        v0, v1 = sweep[-2]["remaining"], sweep[-1]["remaining"]
+        self.remove(live)
+        fin = always_redraw(lambda: self._moving_ev(
+            v0 + (v1 - v0) * move_t.get_value(), move_t.get_value()))
+        self.add(fin)
+        clutter = [m for m in self.mobjects if m is not fin and m is not self.ev_label]
         self.play(
-            tr.animate.set_value(last),
             move_t.animate.set_value(1.0),
             *[FadeOut(m) for m in clutter],
             self.ev_label.animate(rate_func=_out_first).set_opacity(0.0),
             run_time=last_rt,
         )
-        self.remove(live, self.ev_label, *clutter)
-        final = self._moving_ev(last, 1.0)
+        self.remove(fin, self.ev_label, *clutter)
+        final = self._moving_ev(v1, 1.0)
         self.add(final)
 
-        # only once everything has stopped: "Average Points:" appears
-        avg = crisp_text("Average Points:", font_size=LABEL_FS, color=BLACK,
-                         font=FONT, weight="BOLD").next_to(final, UP, buff=0.45)
+        # only once everything has stopped: the full caption appears above it
+        avg = crisp_text("Average points in an optimal game of Yahtzee:",
+                         font_size=LABEL_FS, color=BLACK, font=FONT, weight="BOLD")
+        if avg.width > 12.5:
+            avg.scale_to_fit_width(12.5)
+        avg.next_to(final, UP, buff=0.55)
         self.play(FadeIn(avg, shift=UP * 0.2), run_time=lbl_rt)
