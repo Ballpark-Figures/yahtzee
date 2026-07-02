@@ -7,7 +7,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
-from bpkfigures.style import (FONT_SIZE_SM, ACCENT_GOLD, ACCENT_ORANGE, ACCENT_RED,
+from bpkfigures.style import (FONT_SIZE_SM, ACCENT_FILL, ACCENT_ORANGE, ACCENT_RED,
                               ACCENT_GREEN, ACCENT_PURPLE, ACCENT_PINK)
 from bpkfigures.card import get_card
 from bpkfigures.line_graph import get_line_graph, line_point
@@ -26,10 +26,11 @@ Y_MAX  = 35            # headroom above the tallest line (Large Straight ≈ 32.
 
 # One colour per line (drawn / listed in the assets/line_data.LINES order:
 # Small Straight, Large Straight, Yahtzee, 3 of a Kind, 4 of a Kind, Full House).
-# Assigned so that no two lines that finish close together share a similar hue —
-# in particular the near-identical gold/orange are kept well apart (Small Straight
-# vs Full House, not the two straights).
-LINE_COLORS = [ACCENT_GOLD, ACCENT_GREEN, ACCENT_RED,
+# Small Straight (the hero / worked-example line) takes the deep-blue primary for
+# the strongest contrast on the cream card — gold read too light there. The rest
+# are the categorical accents, assigned so lines that finish close together differ
+# in hue.
+LINE_COLORS = [ACCENT_FILL, ACCENT_GREEN, ACCENT_RED,
                ACCENT_PINK, ACCENT_PURPLE, ACCENT_ORANGE]
 
 # line indices (match LINES order) so the highlight beats read clearly
