@@ -160,6 +160,10 @@ class DynamicProgramming(YahtzeeScene):
         return f"{v:.2f}"
 
     @staticmethod
+    def _onedp(v):
+        return f"{v:.1f}"
+
+    @staticmethod
     def _keep_indices(values, keep_vec):
         need = list(keep_vec)
         idxs = []
@@ -234,21 +238,28 @@ class DynamicProgramming(YahtzeeScene):
     TURN_FS = 40
     TURN_CX, TURN_NX = 3.45, 3.60
 
-    def _land_turn_ev(self, dice, lbl, num, prev, turn, *, run_time, label="Avg pts:"):
+    def _land_turn_ev(self, dice, lbl, num, prev, turn, *, run_time, label="Avg pts:",
+                      fs=None, lbl_x=None, num_x=None, anchor_lbl=RIGHT, anchor_num=LEFT,
+                      fmt=None):
         """Move `dice` down to the bottom row (band 0) and, AT THE SAME TIME, the
-        avg-points (lbl+num) down to the centre of the 3rd row (band 1), enlarged;
-        then count the number to the whole-turn EV `turn`. Shared by f and the
-        montage (each passes its own rest-of-game turn value and label text)."""
-        big_lbl = self._label(label, self.TURN_CX, BAND_YS[1], fs=self.TURN_FS, anchor=RIGHT)
+        avg-points (lbl+num) down to the 3rd row (band 1); then count the number to
+        the whole-turn EV `turn`. Defaults land it BIG and central (beat f); h passes
+        beat i's smaller layout so the value doesn't jump size/position at the hand-off."""
+        fs = self.TURN_FS if fs is None else fs
+        lbl_x = self.TURN_CX if lbl_x is None else lbl_x
+        num_x = self.TURN_NX if num_x is None else num_x
+        fmt = self._ev if fmt is None else fmt
+        y = BAND_YS[1]
+        big_lbl = self._label(label, lbl_x, y, fs=fs, anchor=anchor_lbl)
         self.play(
             *[dice[i].animate.move_to(slot_point(0, i)) for i in range(5)],
             Transform(lbl, big_lbl),
-            num.animate.scale(self.TURN_FS / self.ODDS_FS).move_to(
-                [self.TURN_NX, self._ny(BAND_YS[1], self.TURN_FS), 0], aligned_edge=LEFT),
+            num.animate.scale(fs / self.ODDS_FS).move_to(
+                [num_x, self._ny(y, fs), 0], aligned_edge=anchor_num),
             run_time=run_time,
         )
-        self._count([{"mob": num, "fmt": self._ev, "x": self.TURN_NX, "y": BAND_YS[1],
-                      "start": prev, "target": turn, "color": AVG_GREEN, "fs": self.TURN_FS}], 0.9)
+        self._count([{"mob": num, "fmt": fmt, "x": num_x, "y": y, "start": prev,
+                      "target": turn, "color": AVG_GREEN, "fs": fs, "anchor": anchor_num}], 0.9)
 
     def _build_probs_panel(self, base_band):
         yt, ym, yb = self._panel_ys(base_band)
@@ -507,13 +518,15 @@ class DynamicProgramming(YahtzeeScene):
             _roll(entry, move_avg=(base_band != prev_band))
             prev_band = base_band
 
-        # end like f: dice down to the bottom row + avg to the middle of the 3rd row
-        # (bigger, now a single line), its number becoming the whole-turn EV (≈21.2).
+        # dice to the bottom row + the value to the 3rd row, single line — landing
+        # DIRECTLY in beat i's layout (its size/position, one decimal) so nothing
+        # jumps size or shifts left at the h→i hand-off.
         self._land_turn_ev(dice, ev_lbl, ev_num, prev[0],
                            self.nums["montage_turn_ev"], run_time=run_time,
-                           label="Avg points remaining:")
-        # leave the dice + turn value ON SCREEN — the sweep (beat i) continues from
-        # them (same "avg points remaining" wording, just repositioned).
+                           label="Avg points remaining:", fs=32,
+                           lbl_x=slot_x(2) - 0.6, num_x=slot_x(2) + 2.7,
+                           anchor_lbl=ORIGIN, anchor_num=ORIGIN, fmt=self._onedp)
+        # leave the dice + value ON SCREEN — the sweep (beat i) continues from them.
         self.h_dice, self.h_ev_lbl, self.h_ev_num = dice, ev_lbl, ev_num
         self.wait(0.6)
 
@@ -523,27 +536,19 @@ class DynamicProgramming(YahtzeeScene):
     @subscene
     def backward_sweep(self):
         run_time = 0.8
-        # Continue STRAIGHT from the montage: the dice and the turn value (V ≈ 21.2)
-        # are already on screen, on the SAME running-example card (4-Kind + Large
-        # Straight open). Relabel that value as "avg points remaining" — keeping the
-        # number (no reset) — then start emptying the card.
+        # Continue STRAIGHT from the montage: beat h already landed the value in THIS
+        # layout ("Avg points remaining: 21.2", V ≈ 21.2) with the dice below, on the
+        # SAME running-example card (4-Kind + Large Straight open). Just keep emptying.
         by = BAND_YS[1]                          # the EV lives in the 3rd row (top-down)
-        onedp = lambda v: f"{v:.1f}"             # real solver V, to one decimal
         xn = slot_x(2) + 2.7
         seq = self.nums["sweep"]                 # seq[0] ≈ 21.2 = the montage turn value
-
-        lbl2 = self._label("Avg points remaining:", slot_x(2) - 0.6, by, anchor=ORIGIN, fs=32)
-        num2 = self._numlabel(onedp(seq[0]["remaining"]), xn, by, color=AVG_GREEN,
-                              anchor=ORIGIN, fs=32)
-        self.play(Transform(self.h_ev_lbl, lbl2), Transform(self.h_ev_num, num2),
-                  run_time=0.6)
-        num = self.h_ev_num                      # keep counting on the carried-over mob
+        num = self.h_ev_num                      # count on the carried-over mob
         self.wait(0.3)
 
         prev = seq[0]["remaining"]
         for step in seq[1:]:
             self.card.transition(self, {_sc_box(step["emptied"]): None}, run_time=0.45)
-            self._count([{"mob": num, "fmt": onedp, "x": xn, "y": by,
+            self._count([{"mob": num, "fmt": self._onedp, "x": xn, "y": by,
                           "start": prev, "target": step["remaining"],
                           "color": AVG_GREEN, "anchor": ORIGIN, "fs": 32}], 0.4)
             prev = step["remaining"]
