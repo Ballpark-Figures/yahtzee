@@ -29,6 +29,10 @@ HL_COLOR     = ACCENT_GOLD    # peak highlights / +1 small-bonus numbers
 # default position bleeds off the left edge, so we re-place it for this layout.)
 GAP = 0.45
 
+# When emphasising bar-graph rows, every OTHER row fades to this opacity (the
+# scene-08 fade-to-emphasise effect).
+TABLE_DIM_OP = 0.2
+
 TOP_ROWS    = list(range(6))
 CHANCE_ROW  = 12
 YAHTZEE_ROW = 11
@@ -240,12 +244,13 @@ class Histogram(YahtzeeScene):
 
     def _emph(self, card_rows, table_idxs, hold=1.5, run_time=0.6):
         """Hold a scorecard-box highlight (fill + border) for ``hold`` s while the
-        row label and the matching bar-graph label + % TRANSFORM from regular into
-        bold (and back) — the same morph the scorecard's highlight uses, not a
-        copy laid on top. Originals are save_state'd and Restore'd, so nothing is
-        left mutated."""
+        matching bar-graph row's label + % TRANSFORM from regular into bold — and
+        every OTHER bar-graph row FADES to ``TABLE_DIM_OP`` (the scene-08
+        fade-to-emphasise effect), so the focused row's bars stand out. Everything
+        is save_state'd and Restore'd, so nothing is left mutated."""
+        focus = set(table_idxs)
         fills = VGroup()
-        morphs = []          # mobjects we morph to bold, then Restore
+        restores = []        # mobjects/rows we save_state now, Restore after
         ins = []
         for r in card_rows:
             fill, border, bold = self.card._row_highlight(r, YELLOW, 0.45)
@@ -253,21 +258,29 @@ class Histogram(YahtzeeScene):
             lbl = self.card.labels[r]
             lbl.save_state()
             ins += [FadeIn(fill), FadeIn(border), Transform(lbl, bold)]
-            morphs.append(lbl)
-        for i in table_idxs:
-            targets = [
-                (self.table[i][0], self.table_rows[i]["label"], RIGHT),
-                (self.table[i][3], f"{self.table_rows[i]['pct']:.0f}%", LEFT),
-            ]
-            for m, txt, edge in targets:
-                bold = crisp_text(txt, font=FONT, font_size=FONT_SIZE_SM,
-                                  color=BLACK, weight="BOLD").move_to(m, aligned_edge=edge)
-                m.save_state()
-                ins.append(Transform(m, bold))
-                morphs.append(m)
+            restores.append(lbl)
+        for i in range(len(self.table_rows)):
+            if i in focus:
+                # bold the focused row's label + % (the original is Restored later)
+                targets = [
+                    (self.table[i][0], self.table_rows[i]["label"], RIGHT),
+                    (self.table[i][3], f"{self.table_rows[i]['pct']:.0f}%", LEFT),
+                ]
+                for m, txt, edge in targets:
+                    bold = crisp_text(txt, font=FONT, font_size=FONT_SIZE_SM,
+                                      color=BLACK, weight="BOLD").move_to(m, aligned_edge=edge)
+                    m.save_state()
+                    ins.append(Transform(m, bold))
+                    restores.append(m)
+            else:
+                # dim the whole row (save_state keeps each bar's own opacity so the
+                # Restore is exact — the long bar is a 0.85-opacity tint, not 1.0)
+                self.table[i].save_state()
+                ins.append(self.table[i].animate.set_opacity(TABLE_DIM_OP))
+                restores.append(self.table[i])
         self.play(*ins, run_time=run_time)
         self.wait(hold)
-        self.play(FadeOut(fills), *[Restore(m) for m in morphs], run_time=run_time)
+        self.play(FadeOut(fills), *[Restore(m) for m in restores], run_time=run_time)
 
     # ════════════════════════════════════════════════════════════════════════
     # i–q : back to the plot, highlight peak regions by reduced-bonus points
