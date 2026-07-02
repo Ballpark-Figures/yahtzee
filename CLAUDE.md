@@ -12,9 +12,15 @@ way.
 
 ## Script
 - `animations/Script.md` is the video script — a 2-column table (voiceover |
-  animation notes). Scenes `01`–`12` become `scenes/NN<name>.py`; talking-head
+  animation notes). Scenes `01`–`13` become `scenes/NN<name>.py`; talking-head
   segments `THA`–`THL` have no animation file. Part headers organize the game
   (negative parts count backward: −1 Endgame, −2 Middlegame, −3 Opening).
+- **Beats within a scene are separated by a literal `---` in BOTH columns.** The
+  Google-Doc→Markdown export flattens each cell to one line, so `---` is what
+  preserves the beat boundaries and the voiceover↔animation pairing: split both
+  cells on `---` and zip them (segment i = beat i = subscene a, b, c…). If a
+  scene has several beats but NO `---`, STOP and ask for them — don't guess the
+  boundaries. Full parsing/reminder rule is in the shared PREFLIGHT notes.
 - It's reference, not a spec — see the shared "Process" notes.
 
 ## Gameplay layout (dice + scorecard)
