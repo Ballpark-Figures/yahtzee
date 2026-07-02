@@ -14,9 +14,14 @@ from bpkfigures.line_graph import get_line_graph, line_point
 from assets import line_data as ld
 
 # ── plot geometry / look (knobs for the user) ─────────────────────────────────
-PLOT_C = [-1.15, -0.45, 0]
+# The plot sits a touch high inside the card so the "Turn" x-axis label clears the
+# rounded bottom edge; the title clears the top.
+CARD_C = [0, 0, 0]
+CARD_W = 13.4
+CARD_H = 7.4
+PLOT_C = [-1.15, -0.05, 0]
 PLOT_W = 8.0
-PLOT_H = 4.6
+PLOT_H = 4.35
 Y_MAX  = 35            # headroom above the tallest line (Large Straight ≈ 32.7)
 
 # One colour per line (drawn / listed in the assets/line_data.LINES order:
@@ -111,16 +116,19 @@ class LineGraph(YahtzeeScene):
         self.play(*anims, run_time=run_time)
 
     # ════════════════════════════════════════════════════════════════════════
-    # a : axes + title, no data yet
+    # a : axes + title + keep/drop scale, no data yet
     # ════════════════════════════════════════════════════════════════════════
     @subscene
     def axes_in(self):
         run_time = 1.2
         self._setup_plot()
-        self.card = get_card(13.4, 7.2, center=[0, -0.1, 0])
+        self._setup_keep_drop()
+        self.card = get_card(CARD_W, CARD_H, center=CARD_C)
         self.card.set_z_index(-1)
         self.play(FadeIn(self.card), run_time=run_time * 0.6)
-        self.play(FadeIn(self.frame), run_time=run_time)
+        self.play(FadeIn(self.frame),
+                  GrowFromCenter(self.kd_arrow), FadeIn(self.kd_labels),
+                  run_time=run_time)
 
     # ════════════════════════════════════════════════════════════════════════
     # b : the small-straight line (the worked example)
@@ -132,7 +140,7 @@ class LineGraph(YahtzeeScene):
                   FadeIn(self.end_labels[SM_STRAIGHT]), run_time=run_time)
 
     # ════════════════════════════════════════════════════════════════════════
-    # c : fill in the rest of the lines + the keep/drop scale
+    # c : fill in the rest of the lines
     # ════════════════════════════════════════════════════════════════════════
     @subscene
     def fill_rest(self):
@@ -143,9 +151,6 @@ class LineGraph(YahtzeeScene):
             *[FadeIn(self.end_labels[i]) for i in rest],
             run_time=run_time, lag_ratio=0.08,
         )
-        self._setup_keep_drop()
-        self.play(GrowFromCenter(self.kd_arrow),
-                  FadeIn(self.kd_labels), run_time=1.2)
 
     # ════════════════════════════════════════════════════════════════════════
     # d : lowest line = safest to zero — 4-of-a-kind, then yahtzee
