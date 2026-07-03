@@ -36,7 +36,7 @@ CARD_L = LEFT_SC                        # scorecard sits left the whole scene
 RC_RIGHT_EDGE = 7.05
 
 # beat b: 6 COLUMNS x 3 identical dice (col c = value c+1), sums add up, merge to 63
-GRID_DSZ  = 0.95
+GRID_DSZ  = 0.85
 GCOL_DX   = 1.15
 GROW_DY   = 1.6
 GCOL_X0, GROW_Y0 = -0.175, 1.85         # col-0 / row-0 die center
@@ -55,13 +55,13 @@ FILL_MAIN  = ACCENT_GREEN               # a default accent; black value-lines re
 FILL_OVER  = ACCENT_GOLD                # the "extra" that overflows / slides
 SUM_POS    = [6.2, 3.2, 0]             # running "sum of container values" corner
 
-# beat e-i: the table
+# beat e-i: the table (moved down; the caption line is centered above it)
 TB_X0, TB_DX = 0.7, 1.0                 # data col 0 center, col spacing
-TB_HEAD_Y    = 2.9
-TB_DY        = 1.05
+TB_HEAD_Y    = 2.45
+TB_DY        = 0.98
 TB_CW, TB_CH = 0.96, 0.88
-CELL_FS      = 32
-EV_POS       = [3.0, 3.45, 0]
+CELL_FS      = 26
+EV_CENTER    = [2.7, 3.15, 0]           # center of "avg top bonus pts  23.8"
 
 NEUTRAL_C = ManimColor(CARD_FILL)
 GREEN_C   = ManimColor(SCORE_GREEN)
@@ -238,10 +238,11 @@ class TopBonus(YahtzeeScene):
                                    font=FONT).move_to([TB_X0 - TB_DX, TB_HEAD_Y, 0])
         self.table_static = VGroup(cells, heads, rlabels, self.row_head)
 
-        self.ev_num = crisp_text(f"{BASE_EV:.1f}", font_size=58, color=BLACK,
-                                 font=FONT, weight="BOLD").move_to(EV_POS)
-        self.ev_cap = crisp_text("avg top-bonus pts", font_size=28, color=BLACK,
-                                 font=FONT).next_to(self.ev_num, LEFT, buff=0.35)
+        # the whole "avg top bonus pts  23.8" line, centered above the table
+        ev_cap = crisp_text("avg top bonus pts", font_size=30, color=BLACK, font=FONT)
+        ev_num = crisp_text(f"{BASE_EV:.1f}", font_size=58, color=BLACK,
+                            font=FONT, weight="BOLD")
+        self.ev_line = VGroup(ev_cap, ev_num).arrange(RIGHT, buff=0.4).move_to(EV_CENTER)
 
     def _cell_target(self, count, col):
         c = self.tcells[(count, col)]
@@ -331,7 +332,8 @@ class TopBonus(YahtzeeScene):
     def fill_containers(self):
         fade_rt, lift_rt, across_rt, drop_rt, clear_rt = 0.7, 0.6, 0.7, 0.7, 0.7
         cx1, cx3, cx4 = self._bg_geom[0][0], self._bg_geom[2][0], self._bg_geom[3][0]
-        hold_y, drop_y = TOP_Y + 2 * U + 0.7, TOP_Y - U
+        # the block rides ALONG the top (its bottom on the top line), not high above
+        top_ride_y, drop_y = TOP_Y + 2 * U, TOP_Y - U
 
         # swap the static corner "0" for a live counter
         self._sum_tr = ValueTracker(0)
@@ -352,18 +354,17 @@ class TopBonus(YahtzeeScene):
         self._fade([3, 6, 6, 16, 15, 18],    fade_rt, 64)
 
         # slide the surplus 4 from the fours into the threes: lift out, across, fall in
-        blk = self._block(cx4, TOP_Y + 2 * U)
+        blk = self._block(cx4, top_ride_y)              # already sits on the top line
         self.add(blk)
         self._fade([3, 6, 6, 12, 15, 18], 0.25)          # fours to full (hidden by blk)
-        self.play(blk.animate.move_to([cx4, hold_y, 0]), run_time=lift_rt)
-        self.play(blk.animate.move_to([cx3, hold_y, 0]), run_time=across_rt)
-        self.play(blk.animate.move_to([cx3, drop_y, 0]), run_time=drop_rt)  # rests on the water
+        self.play(blk.animate.move_to([cx3, top_ride_y, 0]), run_time=across_rt)  # slide along top
+        self.play(blk.animate.move_to([cx3, drop_y, 0]), run_time=drop_rt)        # drop in, rests on water
 
-        # pull it out, then fill the 3rd three AND empty the ones SIMULTANEOUSLY
-        self.play(blk.animate.move_to([cx3, hold_y, 0]), run_time=lift_rt)
+        # lift back to the top, fill the 3rd three AND empty the ones SIMULTANEOUSLY
+        self.play(blk.animate.move_to([cx3, top_ride_y, 0]), run_time=lift_rt)
         self._fade([0, 6, 9, 12, 15, 18], fade_rt)       # 3's 6->9 and 1's 3->0 together
-        self.play(blk.animate.move_to([cx1, hold_y, 0]), run_time=across_rt)
-        self.play(blk.animate.move_to([cx1, drop_y, 0]), run_time=drop_rt)  # falls to the empty ones
+        self.play(blk.animate.move_to([cx1, top_ride_y, 0]), run_time=across_rt)  # slide along top
+        self.play(blk.animate.move_to([cx1, drop_y, 0]), run_time=drop_rt)        # drop into the empty ones
 
         live_sum.clear_updaters()
         self.play(FadeOut(blk), *[FadeOut(g) for g in self.cfills.values()],
@@ -376,8 +377,7 @@ class TopBonus(YahtzeeScene):
         self._setup_table()
         tbl_rt, ev_rt = 0.8, 0.6
         self.play(FadeIn(self.table_static), run_time=tbl_rt)
-        self.play(FadeIn(self.ev_cap, shift=UP * 0.2),
-                  FadeIn(self.ev_num, shift=UP * 0.2), run_time=ev_rt)
+        self.play(FadeIn(self.ev_line, shift=UP * 0.2), run_time=ev_rt)
 
     def _reveal_row(self, count, run_time, lag=0.14):
         anims = []
