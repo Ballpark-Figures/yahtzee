@@ -64,10 +64,35 @@ way.
   swaps in invisibly. Do NOT try to re-parent the orphan into the group mid-scene:
   a freshly-added submobject isn't re-rendered until the group is next animated,
   so it just vanishes until the next card move.
+- **Enter the card with a SHIFT, not an opacity fade.** Animating the whole card
+  VGroup's opacity 0→1 (`set_opacity(0.0)` then a play back to `1.0`) corrupts the
+  (63) bar: `bar_fill` starts at ~0 height, and the opacity round-trip leaves it
+  rendering EMPTY/white through every later `transition()` — even though the box
+  numbers + Total still update fine. It reads as "the bar turns white" and cost
+  several scene-09 rounds. Slide the card in (`shift` + `animate.move_to`), the way
+  scene 05 does its entrance.
+- **To move the scorecard's box/bar changes IN THE SAME play as other animations**
+  (e.g. fills/reveals moving simultaneously), don't call `transition()` (it
+  self-`play`s). Pass your other anims as the `lead` of the card's `_animate_to(...)`
+  and drive the box texts yourself — see scene 09's `_card_and` helper. (A cleaner
+  fix would be an animation-returning `transition_anim()` on the asset; ASK first.)
 
 ## Style
 - Uses `bpkfigures` style + the local `config.py` for colors/fonts. The deep
   navy accent is `ACCENT_FILL` (renamed from the old battleship-ism `BOARD_FILL`).
+- **`crisp_text` WRAPS a long string.** It renders at `font_size * ss` with `ss`
+  capped so the supersampled size maxes ~240pt (i.e. any `font_size ≥ 24` hits it),
+  and at that size a long caption overflows the frame width and Pango silently
+  line-breaks it (bit us on "Avg Top Bonus Pts"). Keep the font under ~24, OR build
+  it small and `.scale()` up to the size you want — either keeps it one line. NB
+  this lives in the shared `crisp_text`, so it can bite any video.
+
+## Sourcing numbers (which venv)
+- The `state_explorer`-based number queries under `math/` (e.g.
+  `scene09_top_bonus_numbers.py`) need pandas/numpy/matplotlib, which live in the
+  video ROOT venv `yahtzee/.venv` — NOT `math/.venv` (no pandas). Run them as
+  `yahtzee/.venv/bin/python <script>.py` from `math/`; under `math/.venv` they die
+  with `ModuleNotFoundError: pandas`.
 
 ---
 
