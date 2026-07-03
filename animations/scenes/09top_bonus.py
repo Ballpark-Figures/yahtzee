@@ -226,13 +226,13 @@ class TopBonus(YahtzeeScene):
         # and scaling keeps it one crisp line.
         ev_cap = crisp_text("Avg Top Bonus Pts", font_size=14, color=BLACK,
                             font=FONT).scale(28 / 14)
-        ev_num = crisp_text(f"{BASE_EV:.1f}", font_size=46, color=BLACK,
+        ev_num = crisp_text(f"{BASE_EV:.1f}", font_size=40, color=BLACK,
                             font=FONT, weight="BOLD")
-        # align the caption's vertical center with the NUMBER's center (not the
-        # bbox, whose descenders in "Avg…Pts" would drag it off the digits' middle),
+        # nudge the caption down so its CAP-height middle (not its descender-lowered
+        # bbox center — "Avg"/"Top" have g/p) lines up with the number's middle,
         # then center the whole line horizontally at EV_CENTER
         ev_cap.next_to(ev_num, LEFT, buff=0.4)
-        ev_cap.set_y(ev_num.get_center()[1])
+        ev_cap.set_y(ev_num.get_center()[1] - 0.07 * ev_cap.height)
         self.ev_line = VGroup(ev_cap, ev_num).move_to(EV_CENTER)
 
     def _cell_target(self, count, col):
