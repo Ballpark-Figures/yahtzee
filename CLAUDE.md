@@ -50,6 +50,20 @@ way.
 - Columns: 1 = labels, 2 = value cells (`value_cells[0..12]`), 3 = summary. To
   place things in column 3, use the actual summary-cell center — NOT the midpoint
   to the card's panel edge (the rounded panel extends past the cells).
+- **`transition()` ORPHANS newly-added cell texts — don't move/fade a card you've
+  `transition()`-edited (a scene-05 trap that cost ~4 render round-trips).** When
+  `transition()` sets a box EMPTY→value it does `scene.add(new_text)`, so the text
+  lands at SCENE top-level, NOT inside the card's VGroup. Consequences: a cell you
+  mutated empty→value won't ride with the card — a later
+  `card.animate.move_to(…)` leaves it FLOATING, and `FadeOut(card)` leaves it
+  BEHIND. (Only empty→value cells that then persist matter: value→value changes
+  use `Transform` and stay in-group; cells cleared to `None` are removed.) If you
+  must move/fade a card after transition-editing it, **rebuild**: hard-clear the
+  old top-level mobjects (`for m in list(self.mobjects): self.remove(m)`, keeping
+  any you need) and add a FRESH `get_scorecard(...)` — an identical fresh card
+  swaps in invisibly. Do NOT try to re-parent the orphan into the group mid-scene:
+  a freshly-added submobject isn't re-rendered until the group is next animated,
+  so it just vanishes until the next card move.
 
 ## Style
 - Uses `bpkfigures` style + the local `config.py` for colors/fonts. The deep
