@@ -57,9 +57,9 @@ SUM_POS    = [6.2, 3.2, 0]             # running "sum of container values" corne
 
 # beat e-i: the table (moved down; the caption line is centered above it)
 TB_X0, TB_DX = 0.7, 1.0                 # data col 0 center, col spacing
-TB_HEAD_Y    = 2.45
-TB_DY        = 0.98
-TB_CW, TB_CH = 0.96, 0.88
+TB_HEAD_Y    = 2.25
+TB_DY        = 0.92
+TB_CW, TB_CH = 0.96, 0.82
 CELL_FS      = 26
 EV_CENTER    = [2.7, 3.15, 0]           # center of "avg top bonus pts  23.8"
 
@@ -238,9 +238,11 @@ class TopBonus(YahtzeeScene):
                                    font=FONT).move_to([TB_X0 - TB_DX, TB_HEAD_Y, 0])
         self.table_static = VGroup(cells, heads, rlabels, self.row_head)
 
-        # the whole "avg top bonus pts  23.8" line, centered above the table
-        ev_cap = crisp_text("avg top bonus pts", font_size=30, color=BLACK, font=FONT)
-        ev_num = crisp_text(f"{BASE_EV:.1f}", font_size=58, color=BLACK,
+        # the whole "avg top bonus pts  23.8" line, centered above the table.
+        # (font < 24 keeps crisp_text's supersampled size under the 240pt cap, above
+        # which this string overflows the frame width and Pango wraps it.)
+        ev_cap = crisp_text("avg top bonus pts", font_size=22, color=BLACK, font=FONT)
+        ev_num = crisp_text(f"{BASE_EV:.1f}", font_size=50, color=BLACK,
                             font=FONT, weight="BOLD")
         self.ev_line = VGroup(ev_cap, ev_num).arrange(RIGHT, buff=0.4).move_to(EV_CENTER)
 
