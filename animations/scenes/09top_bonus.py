@@ -55,13 +55,13 @@ FILL_MAIN  = ACCENT_GREEN               # a default accent; black value-lines re
 FILL_OVER  = ACCENT_GOLD                # the "extra" that overflows / slides
 SUM_POS    = [6.2, 3.2, 0]             # running "sum of container values" corner
 
-# beat e-i: the table (moved down; the caption line is centered above it)
+# beat e-i: the table (the caption line is centered BELOW it)
 TB_X0, TB_DX = 0.7, 1.0                 # data col 0 center, col spacing
-TB_HEAD_Y    = 2.25
-TB_DY        = 0.92
-TB_CW, TB_CH = 0.96, 0.82
+TB_HEAD_Y    = 2.9
+TB_DY        = 0.9
+TB_CW, TB_CH = 0.96, 0.8
 CELL_FS      = 26
-EV_CENTER    = [2.7, 3.15, 0]           # center of "avg top bonus pts  23.8"
+EV_CENTER    = [2.7, -2.85, 0]          # center of "avg top bonus pts  23.8", below table
 
 NEUTRAL_C = ManimColor(CARD_FILL)
 GREEN_C   = ManimColor(SCORE_GREEN)
@@ -185,9 +185,10 @@ class TopBonus(YahtzeeScene):
                          fill_opacity=0.95, stroke_width=0).move_to([cx, TOP_Y + oh / 2, 0])
         return VGroup(base, over).set_z_index(1)
 
-    def _fade(self, new_levels, run_time, sum_val=None):
+    def _fade(self, new_levels, run_time, sum_val=None, tally=False):
         """Move the fills to `new_levels` by CROSS-FADING each changed container
-        (no rising/emptying motion). Optionally count the corner sum to `sum_val`."""
+        (no rising/emptying motion). Optionally count the corner sum to `sum_val`,
+        and mirror the levels into the scorecard top boxes (`tally`)."""
         anims, swaps = [], {}
         for i in range(6):
             if new_levels[i] == self.levels[i]:
@@ -204,6 +205,8 @@ class TopBonus(YahtzeeScene):
             self.remove(self.cfills[i])
             self.cfills[i] = ng
         self.levels = list(new_levels)
+        if tally:                                        # scorecard mirrors the tally
+            self._tally(new_levels, run_time)
 
     def _block(self, cx, y):
         return Rectangle(width=CW * 0.9, height=4 * U, fill_color=FILL_OVER,
@@ -234,15 +237,19 @@ class TopBonus(YahtzeeScene):
             rlabels.add(crisp_text(str(count), font_size=38, color=BLACK,
                                    font=FONT, weight="BOLD").move_to(
                 [TB_X0 - TB_DX, y, 0]))
-        self.row_head = crisp_text("# scored", font_size=24, color=BLACK,
-                                   font=FONT).move_to([TB_X0 - TB_DX, TB_HEAD_Y, 0])
+        self.row_head = VGroup(                          # "# scored" on two lines
+            crisp_text("#", font_size=22, color=BLACK, font=FONT),
+            crisp_text("scored", font_size=22, color=BLACK, font=FONT),
+        ).arrange(DOWN, buff=0.06).move_to([TB_X0 - TB_DX, TB_HEAD_Y, 0])
         self.table_static = VGroup(cells, heads, rlabels, self.row_head)
 
-        # the whole "avg top bonus pts  23.8" line, centered above the table.
-        # (font < 24 keeps crisp_text's supersampled size under the 240pt cap, above
-        # which this string overflows the frame width and Pango wraps it.)
-        ev_cap = crisp_text("avg top bonus pts", font_size=22, color=BLACK, font=FONT)
-        ev_num = crisp_text(f"{BASE_EV:.1f}", font_size=50, color=BLACK,
+        # the whole "avg top bonus pts  23.8" line, centered BELOW the table (full
+        # size). ev_cap is built small then scaled up: crisp_text supersamples to
+        # 240pt at fs>=24, at which this string overflows the frame and Pango wraps
+        # it; building at 14 and scaling keeps it one crisp line.
+        ev_cap = crisp_text("avg top bonus pts", font_size=14, color=BLACK,
+                            font=FONT).scale(28 / 14)
+        ev_num = crisp_text(f"{BASE_EV:.1f}", font_size=58, color=BLACK,
                             font=FONT, weight="BOLD")
         self.ev_line = VGroup(ev_cap, ev_num).arrange(RIGHT, buff=0.4).move_to(EV_CENTER)
 
@@ -251,22 +258,44 @@ class TopBonus(YahtzeeScene):
         return (c.get_center(), c.width, c.height)
 
     def _highlight_cells(self, cells, *, hold=1.0, fade=0.25):
-        """Our established highlight() gold-hold, PLUS a thick black cell border and
-        enlarged cell text on the spotlighted cells; all restored after the hold."""
+        """Our established highlight() gold-hold, PLUS a thick black cell border on
+        the spotlighted cells (the text is NOT enlarged); restored after the hold."""
         rects   = [overlay_rect(self.tcells[c], color=ACCENT_GOLD, opacity=0.5)
                    for c in cells]
         borders = [self.tcells[c] for c in cells]
-        texts   = [self.ttexts[c] for c in cells]
-        for m in borders + texts:
-            m.save_state()
+        for b in borders:
+            b.save_state()
         self.play(*[FadeIn(r) for r in rects],
                   *[b.animate.set_stroke(BLACK, width=6) for b in borders],
-                  *[t.animate.scale(1.4) for t in texts], run_time=fade)
+                  run_time=fade)
         self.wait(hold)
         self.play(*[FadeOut(r) for r in rects],
-                  *[Restore(b) for b in borders],
-                  *[Restore(t) for t in texts], run_time=fade)
+                  *[Restore(b) for b in borders], run_time=fade)
         self.remove(*rects)
+
+    # ── scorecard (left) tie-ins used from d onward ─────────────────────────────
+    def _tally(self, levels, run_time):
+        """Mirror the container point-levels into the scorecard top boxes (0 -> empty)."""
+        changes = {}
+        for i in range(6):
+            v = levels[i] if levels[i] > 0 else None
+            if v != self.card.value_nums.get(i):
+                changes[i] = v
+        if changes:
+            self.card.transition(self, changes, run_time=run_time)
+
+    def _clear_top_boxes(self, run_time):
+        changes = {i: None for i in range(6) if self.card.value_nums.get(i) is not None}
+        if changes:
+            self.card.transition(self, changes, run_time=run_time)
+
+    def _cycle_boxes(self, values, *, appear=0.11, hold=0.35, clear=0.3):
+        """Quickly cycle the six top boxes through `values`, one at a time, then
+        clear them again (a transient flash-through)."""
+        for i, v in enumerate(values):
+            self.card.transition(self, {i: v}, run_time=appear)
+        self.wait(hold)
+        self._clear_top_boxes(clear)
 
     # ══ subscenes ═══════════════════════════════════════════════════════════════
     # a) beginning-of-game card slides in; highlight the top section (all 3 columns)
@@ -313,8 +342,9 @@ class TopBonus(YahtzeeScene):
         self.play(*anims, run_time=add_rt)
         self.wait(hold)
 
-        # merge every partial total into a single BLACK 63 (bottom right)
-        self.big63 = self._sum_text(63, [ROWSUM_X, COLSUM_Y, 0], fs=72)
+        # merge every partial total into a single BLACK 63 (bottom right), same
+        # size as the other sums
+        self.big63 = self._sum_text(63, [ROWSUM_X, COLSUM_Y, 0])
         self.play(ReplacementTransform(self.sum_texts, self.big63), run_time=merge_rt)
 
     # c) clear the right content (card stays); draw the containers as one continuous
@@ -345,15 +375,16 @@ class TopBonus(YahtzeeScene):
         self.remove(self.bg_sum)
         self.add(live_sum)
 
-        # one slot at a time across all six (each fades in): 1, then 2, then 3 of each
-        self._fade([1, 2, 3, 4, 5, 6],       fade_rt, 21)
-        self._fade([2, 4, 6, 8, 10, 12],     fade_rt, 42)
-        self._fade([3, 6, 9, 12, 15, 18],    fade_rt, 63)
+        # one slot at a time across all six (each fades in): 1, then 2, then 3 of
+        # each. The scorecard's top boxes track the same tally the whole way.
+        self._fade([1, 2, 3, 4, 5, 6],       fade_rt, 21, tally=True)
+        self._fade([2, 4, 6, 8, 10, 12],     fade_rt, 42, tally=True)
+        self._fade([3, 6, 9, 12, 15, 18],    fade_rt, 63, tally=True)
 
         # reconfigure (fade): 4 fours & 4 twos, then 2 of each, then 4 fours/2 threes
-        self._fade([3, 8, 9, 16, 15, 18],    fade_rt, 69)
-        self._fade([3, 4, 9,  8, 15, 18],    fade_rt, 51)
-        self._fade([3, 6, 6, 16, 15, 18],    fade_rt, 64)
+        self._fade([3, 8, 9, 16, 15, 18],    fade_rt, 69, tally=True)
+        self._fade([3, 4, 9,  8, 15, 18],    fade_rt, 51, tally=True)
+        self._fade([3, 6, 6, 16, 15, 18],    fade_rt, 64, tally=True)
 
         # slide the surplus 4 from the fours into the threes: lift out, across, fall in
         blk = self._block(cx4, top_ride_y)              # already sits on the top line
@@ -372,6 +403,7 @@ class TopBonus(YahtzeeScene):
         self.play(FadeOut(blk), *[FadeOut(g) for g in self.cfills.values()],
                   FadeOut(self.bg_outline), FadeOut(self.bg_lines),
                   FadeOut(self.bg_labels), FadeOut(live_sum), run_time=clear_rt)
+        self._clear_top_boxes(clear_rt)                  # reset the scorecard tally
 
     # e) empty table + the turn-0 EV (23.8)
     @subscene
@@ -391,28 +423,39 @@ class TopBonus(YahtzeeScene):
                 t.animate.set_opacity(1.0)))
         self.play(LaggedStart(*anims, lag_ratio=lag), run_time=run_time)  # cascade L->R
 
-    # f) reveal the count-3 row (barely changes the odds)
+    # f) cycle the scorecard through 3-of-each, then reveal the count-3 table row
     @subscene
     def fill_3(self):
+        self._cycle_boxes([3, 6, 9, 12, 15, 18])          # 3 of each
         self._reveal_row(3, 1.0)
 
-    # g) reveal the count-4 row (odds jump, most for larger numbers)
+    # g) cycle through 4-of-each, then reveal the count-4 row
     @subscene
     def fill_4(self):
+        self._cycle_boxes([4, 8, 12, 16, 20, 24])         # 4 of each
         self._reveal_row(4, 1.0)
 
-    # h) reveal count-2; highlight 2 ones, then 2 sixes
+    # h) cycle through 2-of-each, reveal count-2, then highlight 2 ones (put a 2 in
+    #    the Ones box) and 2 sixes (put a 12 in the Sixes box)
     @subscene
     def fill_2(self):
+        self._cycle_boxes([2, 4, 6, 8, 10, 12])           # 2 of each
         self._reveal_row(2, 1.0)
-        self._highlight_cells([(2, 0)], hold=1.0)     # 2 ones
-        self._highlight_cells([(2, 5)], hold=1.0)     # 2 sixes
+        self.card.transition(self, {0: 2}, run_time=0.3)  # 2 ones
+        self._highlight_cells([(2, 0)], hold=1.0)
+        self.card.transition(self, {5: 12}, run_time=0.3) # 2 sixes = 12
+        self._highlight_cells([(2, 5)], hold=1.0)
 
-    # i) reveal count-1, then count-0; highlight the 0 row in groups
+    # i) reveal count-1 then count-0; cycle 0s; then fill each box with 0 as its
+    #    table cell is highlighted
     @subscene
     def fill_1_0(self):
         self._reveal_row(1, 1.0)
         self._reveal_row(0, 1.0)
+        self._cycle_boxes([0, 0, 0, 0, 0, 0])             # cycle through 0s
+        self.card.transition(self, {0: 0, 1: 0}, run_time=0.3)
         self._highlight_cells([(0, 0), (0, 1)], hold=1.0)          # 0 ones/twos
+        self.card.transition(self, {2: 0}, run_time=0.3)
         self._highlight_cells([(0, 2)], hold=1.0)                  # 0 threes
+        self.card.transition(self, {3: 0, 4: 0, 5: 0}, run_time=0.3)
         self._highlight_cells([(0, 3), (0, 4), (0, 5)], hold=1.0)  # rest
