@@ -237,19 +237,19 @@ class TopBonus(YahtzeeScene):
             rlabels.add(crisp_text(str(count), font_size=38, color=BLACK,
                                    font=FONT, weight="BOLD").move_to(
                 [TB_X0 - TB_DX, y, 0]))
-        self.row_head = VGroup(                          # "# scored" on two lines
+        self.row_head = VGroup(                          # "# Scored" on two lines
             crisp_text("#", font_size=22, color=BLACK, font=FONT),
-            crisp_text("scored", font_size=22, color=BLACK, font=FONT),
+            crisp_text("Scored", font_size=22, color=BLACK, font=FONT),
         ).arrange(DOWN, buff=0.06).move_to([TB_X0 - TB_DX, TB_HEAD_Y, 0])
         self.table_static = VGroup(cells, heads, rlabels, self.row_head)
 
-        # the whole "avg top bonus pts  23.8" line, centered BELOW the table (full
-        # size). ev_cap is built small then scaled up: crisp_text supersamples to
-        # 240pt at fs>=24, at which this string overflows the frame and Pango wraps
-        # it; building at 14 and scaling keeps it one crisp line.
-        ev_cap = crisp_text("avg top bonus pts", font_size=14, color=BLACK,
+        # the whole "Avg Top Bonus Pts  23.8" line, centered BELOW the table. ev_cap
+        # is built small then scaled up: crisp_text supersamples to 240pt at fs>=24,
+        # at which this string overflows the frame and Pango wraps it; building at 14
+        # and scaling keeps it one crisp line.
+        ev_cap = crisp_text("Avg Top Bonus Pts", font_size=14, color=BLACK,
                             font=FONT).scale(28 / 14)
-        ev_num = crisp_text(f"{BASE_EV:.1f}", font_size=58, color=BLACK,
+        ev_num = crisp_text(f"{BASE_EV:.1f}", font_size=46, color=BLACK,
                             font=FONT, weight="BOLD")
         self.ev_line = VGroup(ev_cap, ev_num).arrange(RIGHT, buff=0.4).move_to(EV_CENTER)
 
@@ -303,9 +303,10 @@ class TopBonus(YahtzeeScene):
     def top_section(self):
         self._setup_card()
         in_rt = 0.9
-        self.card.shift(LEFT * 2.5).set_opacity(0.0)
+        home = self.card.get_center()
+        self.card.shift(LEFT * 3.5)                       # slide in from the left
         self.add(self.card)
-        self.play(self.card.animate.shift(RIGHT * 2.5).set_opacity(1.0), run_time=in_rt)
+        self.play(self.card.animate.move_to(home), run_time=in_rt)
         # a region spanning rows 0-5 across ALL three columns (incl. the (63) column)
         hdr = self.card.header_rect
         left, right = hdr.get_left()[0], hdr.get_right()[0]
