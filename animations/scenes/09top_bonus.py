@@ -185,29 +185,6 @@ class TopBonus(YahtzeeScene):
                          fill_opacity=0.95, stroke_width=0).move_to([cx, TOP_Y + oh / 2, 0])
         return VGroup(base, over).set_z_index(1)
 
-    def _fade(self, new_levels, run_time, sum_val=None, tally=False):
-        """Move the fills to `new_levels` by CROSS-FADING each changed container
-        (no rising/emptying motion). Optionally count the corner sum to `sum_val`,
-        and mirror the levels into the scorecard top boxes (`tally`)."""
-        anims, swaps = [], {}
-        for i in range(6):
-            if new_levels[i] == self.levels[i]:
-                continue
-            ng = self._cfill(i, new_levels[i])
-            anims.append(FadeOut(self.cfills[i]))
-            anims.append(FadeIn(ng))
-            swaps[i] = ng
-        if sum_val is not None:
-            anims.append(self._sum_tr.animate.set_value(sum_val))
-        if anims:
-            self.play(*anims, run_time=run_time)
-        for i, ng in swaps.items():
-            self.remove(self.cfills[i])
-            self.cfills[i] = ng
-        self.levels = list(new_levels)
-        if tally:                                        # scorecard mirrors the tally
-            self._tally(new_levels, run_time)
-
     def _block(self, cx, y):
         return Rectangle(width=CW * 0.9, height=4 * U, fill_color=FILL_OVER,
                          fill_opacity=0.95, stroke_width=0).set_z_index(2) \
@@ -257,45 +234,123 @@ class TopBonus(YahtzeeScene):
         c = self.tcells[(count, col)]
         return (c.get_center(), c.width, c.height)
 
-    def _highlight_cells(self, cells, *, hold=1.0, fade=0.25):
-        """Our established highlight() gold-hold, PLUS a thick black cell border on
-        the spotlighted cells (the text is NOT enlarged); restored after the hold."""
-        rects   = [overlay_rect(self.tcells[c], color=ACCENT_GOLD, opacity=0.5)
-                   for c in cells]
-        borders = [self.tcells[c] for c in cells]
-        for b in borders:
-            b.save_state()
-        self.play(*[FadeIn(r) for r in rects],
-                  *[b.animate.set_stroke(BLACK, width=6) for b in borders],
-                  run_time=fade)
-        self.wait(hold)
-        self.play(*[FadeOut(r) for r in rects],
-                  *[Restore(b) for b in borders], run_time=fade)
-        self.remove(*rects)
-
     # ── scorecard (left) tie-ins used from d onward ─────────────────────────────
-    def _tally(self, levels, run_time):
-        """Mirror the container point-levels into the scorecard top boxes (0 -> empty)."""
-        changes = {}
-        for i in range(6):
-            v = levels[i] if levels[i] > 0 else None
-            if v != self.card.value_nums.get(i):
-                changes[i] = v
-        if changes:
-            self.card.transition(self, changes, run_time=run_time)
+    def _card_and(self, changes, extra, run_time, *, flash=True):
+        """Like Scorecard.transition, but plays the box/bar changes together with
+        the `extra` animations in ONE play (so the scorecard moves SIMULTANEOUSLY
+        with the fills/reveals). Reuses the card's own _animate_to for the bar."""
+        card = self.card
+        lead = list(extra)
+        new_top, new_bot = card._top_sum, card._bottom_sum
+        for row, val in changes.items():
+            old_val = card.value_nums.get(row, 0)
+            delta = (0 if val is None else val) - old_val
+            if row < 6:
+                new_top += delta
+            else:
+                new_bot += delta
+            num = card.value_texts.get(row)
+            if val is None:
+                if num is not None:
+                    lead.append(FadeOut(num))
+                card.value_texts.pop(row, None)
+                card.value_nums.pop(row, None)
+            else:
+                bt = crisp_text(str(val), font_size=card.font_size, color=BLACK,
+                                font=FONT).move_to(card.value_cells[row].get_center())
+                if num is not None:
+                    lead.append(Transform(num, bt))
+                else:
+                    lead.append(FadeIn(bt))
+                    card.value_texts[row] = bt
+                card.value_nums[row] = val
+        card._animate_to(self, top=new_top, bottom=new_bot,
+                         lead=AnimationGroup(*lead) if lead else None,
+                         run_time=run_time, flash=flash)
 
     def _clear_top_boxes(self, run_time):
         changes = {i: None for i in range(6) if self.card.value_nums.get(i) is not None}
         if changes:
             self.card.transition(self, changes, run_time=run_time)
 
-    def _cycle_boxes(self, values, *, appear=0.11, hold=0.35, clear=0.3):
-        """Quickly cycle the six top boxes through `values`, one at a time, then
-        clear them again (a transient flash-through)."""
-        for i, v in enumerate(values):
-            self.card.transition(self, {i: v}, run_time=appear)
-        self.wait(hold)
+    def _mirror_changes(self, levels):
+        """Box changes so the top boxes match the container point-levels (0 -> empty)."""
+        return {i: (levels[i] if levels[i] > 0 else None)
+                for i in range(6) if (levels[i] or None) != self.card.value_nums.get(i)}
+
+    def _container_targets(self, new_levels):
+        """Fade anims to move the fills to new_levels; returns (anims, commit) where
+        commit() updates self.cfills / self.levels once the play has run."""
+        anims, swaps = [], {}
+        for i in range(6):
+            if new_levels[i] == self.levels[i]:
+                continue
+            ng = self._cfill(i, new_levels[i])
+            anims += [FadeOut(self.cfills[i]), FadeIn(ng)]
+            swaps[i] = ng
+
+        def commit():
+            for i, ng in swaps.items():
+                self.remove(self.cfills[i])
+                self.cfills[i] = ng
+            self.levels = list(new_levels)
+        return anims, commit
+
+    def _fill_step(self, new_levels, run_time, *, sum_val=None, box_changes=None,
+                   mirror=False):
+        """One container change; the scorecard boxes (+ bar) and the corner sum move
+        in the SAME play. mirror=True mirrors the whole tally; box_changes sets
+        specific boxes; neither leaves the boxes untouched (the block, not real dice)."""
+        anims, commit = self._container_targets(new_levels)
+        extra = list(anims)
+        if sum_val is not None:
+            extra.append(self._sum_tr.animate.set_value(sum_val))
+        changes = self._mirror_changes(new_levels) if mirror else box_changes
+        if changes:
+            self._card_and(changes, extra, run_time)
+        elif extra:
+            self.play(*extra, run_time=run_time)
+        commit()
+
+    def _reveal_and_cycle(self, count, box_values, run_time, *, lag=0.14, clear=0.3):
+        """Reveal table row `count` (cascading L->R) WHILE the scorecard cycles its
+        top boxes through box_values in sync, bar climbing; then clear the boxes."""
+        card = self.card
+        pairs = []
+        new_top = card._top_sum
+        for col in range(6):
+            cell, t = self.tcells[(count, col)], self.ttexts[(count, col)]
+            self.add(t); t.set_opacity(0.0)
+            cell_anim = AnimationGroup(
+                cell.animate.set_fill(_cell_color(TABLE[count][col]), opacity=1.0),
+                t.animate.set_opacity(1.0))
+            v = box_values[col]
+            bt = crisp_text(str(v), font_size=card.font_size, color=BLACK,
+                            font=FONT).move_to(card.value_cells[col].get_center())
+            card.value_texts[col] = bt
+            card.value_nums[col] = v
+            new_top += v
+            pairs.append(AnimationGroup(cell_anim, FadeIn(bt)))
+        card._animate_to(self, top=new_top,
+                         lead=LaggedStart(*pairs, lag_ratio=lag), run_time=run_time)
         self._clear_top_boxes(clear)
+
+    def _highlight_cells_with_box(self, cells, box_changes, *, hold=1.0, fade=0.25):
+        """Highlight table cells AND put a transient value in the given box(es); both
+        the highlight and the box value revert when the hold ends."""
+        rects   = [overlay_rect(self.tcells[c], color=ACCENT_GOLD, opacity=0.5)
+                   for c in cells]
+        borders = [self.tcells[c] for c in cells]
+        for b in borders:
+            b.save_state()
+        self._card_and(box_changes,
+                       [FadeIn(r) for r in rects]
+                       + [b.animate.set_stroke(BLACK, width=6) for b in borders], fade)
+        self.wait(hold)
+        self._card_and({row: None for row in box_changes},
+                       [FadeOut(r) for r in rects]
+                       + [Restore(b) for b in borders], fade)
+        self.remove(*rects)
 
     # ══ subscenes ═══════════════════════════════════════════════════════════════
     # a) beginning-of-game card slides in; highlight the top section (all 3 columns)
@@ -376,29 +431,31 @@ class TopBonus(YahtzeeScene):
         self.remove(self.bg_sum)
         self.add(live_sum)
 
-        # one slot at a time across all six (each fades in): 1, then 2, then 3 of
-        # each. The scorecard's top boxes track the same tally the whole way.
-        self._fade([1, 2, 3, 4, 5, 6],       fade_rt, 21, tally=True)
-        self._fade([2, 4, 6, 8, 10, 12],     fade_rt, 42, tally=True)
-        self._fade([3, 6, 9, 12, 15, 18],    fade_rt, 63, tally=True)
+        # one slot at a time across all six: 1, then 2, then 3 of each. The scorecard
+        # top boxes (+ bar) and the corner sum move IN THE SAME PLAY as each fill.
+        self._fill_step([1, 2, 3, 4, 5, 6],    fade_rt, sum_val=21, mirror=True)
+        self._fill_step([2, 4, 6, 8, 10, 12],  fade_rt, sum_val=42, mirror=True)
+        self._fill_step([3, 6, 9, 12, 15, 18], fade_rt, sum_val=63, mirror=True)
 
-        # reconfigure (fade): 4 fours & 4 twos, then 2 of each, then 4 fours/2 threes
-        self._fade([3, 8, 9, 16, 15, 18],    fade_rt, 69, tally=True)
-        self._fade([3, 4, 9,  8, 15, 18],    fade_rt, 51, tally=True)
-        self._fade([3, 6, 6, 16, 15, 18],    fade_rt, 64, tally=True)
+        # reconfigure: 4 fours & 4 twos, then 2 of each, then 4 fours/2 threes
+        self._fill_step([3, 8, 9, 16, 15, 18], fade_rt, sum_val=69, mirror=True)
+        self._fill_step([3, 4, 9,  8, 15, 18], fade_rt, sum_val=51, mirror=True)
+        self._fill_step([3, 6, 6, 16, 15, 18], fade_rt, sum_val=64, mirror=True)  # Threes 9->6
 
-        # slide the surplus 4 from the fours into the threes: lift out, across, fall in
+        # slide the surplus 4 from the fours into the threes: lift out, across, fall
+        # in. The scorecard 3's/1's track the real DICE (water), never the block.
         blk = self._block(cx4, top_ride_y)              # already sits on the top line
         self.add(blk)
-        self._fade([3, 6, 6, 12, 15, 18], 0.25)          # fours to full (hidden by blk)
+        self._fill_step([3, 6, 6, 12, 15, 18], 0.25)     # fours water->12 (block); Fours box stays 16
         self.play(blk.animate.move_to([cx3, top_ride_y, 0]), run_time=across_rt)  # slide along top
-        self.play(blk.animate.move_to([cx3, drop_y, 0]), run_time=drop_rt)        # drop in, rests on water
+        self.play(blk.animate.move_to([cx3, drop_y, 0]), run_time=drop_rt)        # rests on water; 3's box unchanged
 
-        # lift back to the top, fill the 3rd three AND empty the ones SIMULTANEOUSLY
+        # lift back to the top, then fill the 3rd three AND empty the ones together;
+        # the 3's box rises to 9 (a real three), the 1's box empties (down).
         self.play(blk.animate.move_to([cx3, top_ride_y, 0]), run_time=lift_rt)
-        self._fade([0, 6, 9, 12, 15, 18], fade_rt)       # 3's 6->9 and 1's 3->0 together
+        self._fill_step([0, 6, 9, 12, 15, 18], fade_rt, box_changes={2: 9, 0: None})
         self.play(blk.animate.move_to([cx1, top_ride_y, 0]), run_time=across_rt)  # slide along top
-        self.play(blk.animate.move_to([cx1, drop_y, 0]), run_time=drop_rt)        # drop into the empty ones
+        self.play(blk.animate.move_to([cx1, drop_y, 0]), run_time=drop_rt)        # rests in empty ones; box unchanged
 
         live_sum.clear_updaters()
         self.play(FadeOut(blk), *[FadeOut(g) for g in self.cfills.values()],
@@ -424,39 +481,31 @@ class TopBonus(YahtzeeScene):
                 t.animate.set_opacity(1.0)))
         self.play(LaggedStart(*anims, lag_ratio=lag), run_time=run_time)  # cascade L->R
 
-    # f) cycle the scorecard through 3-of-each, then reveal the count-3 table row
+    # f) reveal the count-3 row WHILE the scorecard cycles through 3-of-each
     @subscene
     def fill_3(self):
-        self._cycle_boxes([3, 6, 9, 12, 15, 18])          # 3 of each
-        self._reveal_row(3, 1.0)
+        self._reveal_and_cycle(3, [3, 6, 9, 12, 15, 18], 1.2)
 
-    # g) cycle through 4-of-each, then reveal the count-4 row
+    # g) reveal count-4 while cycling 4-of-each
     @subscene
     def fill_4(self):
-        self._cycle_boxes([4, 8, 12, 16, 20, 24])         # 4 of each
-        self._reveal_row(4, 1.0)
+        self._reveal_and_cycle(4, [4, 8, 12, 16, 20, 24], 1.2)
 
-    # h) cycle through 2-of-each, reveal count-2, then highlight 2 ones (put a 2 in
-    #    the Ones box) and 2 sixes (put a 12 in the Sixes box)
+    # h) reveal count-2 while cycling 2-of-each; then highlight 2 ones / 2 sixes,
+    #    each putting a transient value in the Ones / Sixes box that reverts after
     @subscene
     def fill_2(self):
-        self._cycle_boxes([2, 4, 6, 8, 10, 12])           # 2 of each
-        self._reveal_row(2, 1.0)
-        self.card.transition(self, {0: 2}, run_time=0.3)  # 2 ones
-        self._highlight_cells([(2, 0)], hold=1.0)
-        self.card.transition(self, {5: 12}, run_time=0.3) # 2 sixes = 12
-        self._highlight_cells([(2, 5)], hold=1.0)
+        self._reveal_and_cycle(2, [2, 4, 6, 8, 10, 12], 1.2)
+        self._highlight_cells_with_box([(2, 0)], {0: 2}, hold=1.0)    # 2 ones
+        self._highlight_cells_with_box([(2, 5)], {5: 12}, hold=1.0)   # 2 sixes = 12
 
-    # i) reveal count-1 then count-0; cycle 0s; then fill each box with 0 as its
-    #    table cell is highlighted
+    # i) reveal count-1, then reveal count-0 while cycling 0s; then fill each box
+    #    with a transient 0 as its cell is highlighted
     @subscene
     def fill_1_0(self):
         self._reveal_row(1, 1.0)
-        self._reveal_row(0, 1.0)
-        self._cycle_boxes([0, 0, 0, 0, 0, 0])             # cycle through 0s
-        self.card.transition(self, {0: 0, 1: 0}, run_time=0.3)
-        self._highlight_cells([(0, 0), (0, 1)], hold=1.0)          # 0 ones/twos
-        self.card.transition(self, {2: 0}, run_time=0.3)
-        self._highlight_cells([(0, 2)], hold=1.0)                  # 0 threes
-        self.card.transition(self, {3: 0, 4: 0, 5: 0}, run_time=0.3)
-        self._highlight_cells([(0, 3), (0, 4), (0, 5)], hold=1.0)  # rest
+        self._reveal_and_cycle(0, [0, 0, 0, 0, 0, 0], 1.2)
+        self._highlight_cells_with_box([(0, 0), (0, 1)], {0: 0, 1: 0}, hold=1.0)
+        self._highlight_cells_with_box([(0, 2)], {2: 0}, hold=1.0)
+        self._highlight_cells_with_box([(0, 3), (0, 4), (0, 5)],
+                                       {3: 0, 4: 0, 5: 0}, hold=1.0)
