@@ -4,6 +4,8 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
+import numpy as np
+
 from config import *
 from assets.scorecard import get_scorecard
 from assets.dice import get_die
@@ -29,38 +31,37 @@ COUNTS_TOP_DOWN = [0, 1, 2, 3, 4]      # row 0 sits at the TOP (per the user)
 
 # ── layout ─────────────────────────────────────────────────────────────────────
 CARD_L = LEFT_SC                        # scorecard sits left the whole scene
-# The shared right card: same height as the scorecard, nearly the full remaining
-# width (from just right of the scorecard to near the frame edge).
-RC     = [2.7, 0.0, 0]
-RC_W, RC_H = 8.7, 5.4
+# The shared right card is sized DYNAMICALLY in _make_right_card to match the
+# scorecard's exact height, and runs from just right of it to near the frame edge.
+RC_RIGHT_EDGE = 7.05
 
 # beat b: 6 COLUMNS x 3 identical dice (col c = value c+1), sums add up, merge to 63
-GRID_DSZ  = 0.8
-GCOL_DX   = 1.05
-GROW_DY   = 0.92
-GCOL_X0, GROW_Y0 = 0.35, 1.0            # col-0 / row-0 die center
-SUM_FS    = 32
-COLSUM_Y  = GROW_Y0 - 2 * GROW_DY - 0.72
-ROWSUM_X  = GCOL_X0 + 5 * GCOL_DX + 0.9
+GRID_DSZ  = 0.95
+GCOL_DX   = 1.15
+GROW_DY   = 1.6
+GCOL_X0, GROW_Y0 = -0.175, 1.85         # col-0 / row-0 die center
+SUM_FS    = 34
+COLSUM_Y  = GROW_Y0 - 2 * GROW_DY - 0.85
+ROWSUM_X  = GCOL_X0 + 5 * GCOL_DX + 0.75
 
 # beat c/d: the hanging containers
-U        = 0.17                         # points -> screen units
-TOP_Y    = 1.6                          # the common top the bars hang from
-BG_X0    = 0.5
-BG_DX    = 1.05
+U        = 0.27                         # points -> screen units
+TOP_Y    = 2.15                         # the common top the bars hang from
+BG_X0    = 0.3
+BG_DX    = 1.0
 CW       = 0.6                          # container inner width
-BG_LABEL_Y = -1.9
-FILL_BLUE  = "#9FC5E8"                  # light blue so the dashed value-lines read
-FILL_GOLD  = ACCENT_GOLD                # the "extra" that overflows / slides
-SUM_POS    = [6.4, 2.3, 0]             # running "sum of container values" corner
+BG_LABEL_Y = -3.15
+FILL_MAIN  = ACCENT_GREEN               # a default accent; black value-lines read on it
+FILL_OVER  = ACCENT_GOLD                # the "extra" that overflows / slides
+SUM_POS    = [6.2, 3.2, 0]             # running "sum of container values" corner
 
 # beat e-i: the table
 TB_X0, TB_DX = 0.7, 1.0                 # data col 0 center, col spacing
-TB_HEAD_Y    = 1.9
-TB_DY        = 0.82
-TB_CW, TB_CH = 0.92, 0.78
-CELL_FS      = 30
-EV_POS       = [3.0, 2.5, 0]
+TB_HEAD_Y    = 2.9
+TB_DY        = 1.05
+TB_CW, TB_CH = 0.96, 0.88
+CELL_FS      = 32
+EV_POS       = [3.0, 3.45, 0]
 
 NEUTRAL_C = ManimColor(CARD_FILL)
 GREEN_C   = ManimColor(SCORE_GREEN)
@@ -104,8 +105,13 @@ class TopBonus(YahtzeeScene):
         self.card = get_scorecard(center=CARD_L, scores=[None] * 14)
 
     def _make_right_card(self):
-        # ONE owner: beat b builds the shared right card; later beats reference it.
-        self.right_card = get_card(RC_W, RC_H, center=RC).set_z_index(-5)
+        # ONE owner: beat b builds the shared right card, sized to the scorecard's
+        # exact height so it reads as full-height.
+        top, bot = self.card.get_top()[1], self.card.get_bottom()[1]
+        left = self.card.get_right()[0] + 0.35
+        self.right_card = get_card(RC_RIGHT_EDGE - left, top - bot,
+                                   center=[(left + RC_RIGHT_EDGE) / 2,
+                                           (top + bot) / 2, 0]).set_z_index(-5)
 
     def _setup_grid(self):
         self._make_right_card()
@@ -136,68 +142,62 @@ class TopBonus(YahtzeeScene):
 
     def _setup_containers(self):
         self.levels = [0, 0, 0, 0, 0, 0]               # start empty; d fills them
-        walls, lines, tops, labels = VGroup(), VGroup(), VGroup(), VGroup()
         self._bg_geom = []
         for i in range(6):
             n = i + 1
             cx = BG_X0 + i * BG_DX
-            bottom = TOP_Y - 3 * n * U
-            self._bg_geom.append((cx, bottom, n))
-            walls.add(                                  # open-top U: no line over the mouth
-                Line([cx - CW / 2, TOP_Y, 0], [cx - CW / 2, bottom, 0],
-                     stroke_color=BLACK, stroke_width=3),
-                Line([cx + CW / 2, TOP_Y, 0], [cx + CW / 2, bottom, 0],
-                     stroke_color=BLACK, stroke_width=3),
-                Line([cx - CW / 2, bottom, 0], [cx + CW / 2, bottom, 0],
-                     stroke_color=BLACK, stroke_width=3),
-            )
+            self._bg_geom.append((cx, TOP_Y - 3 * n * U, n))
+
+        # ONE continuous outline, drawn left-to-right in a single clean sweep:
+        # down each container's left wall, across its bottom, up its right wall,
+        # then across the connector to the next — never over an open mouth.
+        pts = []
+        for cx, bottom, n in self._bg_geom:
+            l, r = cx - CW / 2, cx + CW / 2
+            pts += [[l, TOP_Y, 0], [l, bottom, 0], [r, bottom, 0], [r, TOP_Y, 0]]
+        self.bg_outline = VMobject(stroke_color=BLACK, stroke_width=3)
+        self.bg_outline.set_points_as_corners([np.array(p, dtype=float) for p in pts])
+        self.bg_outline.set_z_index(3)
+
+        lines, labels = VGroup(), VGroup()
+        for cx, bottom, n in self._bg_geom:
             for k in (1, 2):                            # value-lines at 1 and 2 dice
                 y = bottom + k * n * U
                 lines.add(DashedLine([cx - CW / 2, y, 0], [cx + CW / 2, y, 0],
                                      dash_length=0.09, stroke_color=BLACK,
                                      stroke_width=2))
-            labels.add(get_die(n, size=0.4).move_to([cx, BG_LABEL_Y, 0]))
-        for i in range(5):                              # top segments BETWEEN containers
-            x1 = self._bg_geom[i][0] + CW / 2
-            x2 = self._bg_geom[i + 1][0] - CW / 2
-            tops.add(Line([x1, TOP_Y, 0], [x2, TOP_Y, 0],
-                          stroke_color=BLACK, stroke_width=3))
-        for grp in (walls, lines, tops):
-            grp.set_z_index(3)
-        self.bg_walls, self.bg_lines, self.bg_top, self.bg_labels = walls, lines, tops, labels
+            labels.add(get_die(n, size=0.42).move_to([cx, BG_LABEL_Y, 0]))
+        lines.set_z_index(3)
+        self.bg_lines, self.bg_labels = lines, labels
         self.cfills = {i: self._cfill(i, 0) for i in range(6)}
         self.bg_sum = self._sum_text(0, SUM_POS, fs=46)
 
     def _cfill(self, i, level):
-        """One container's fill: blue water (bottom→min(level,brim)) + gold overflow
+        """One container's fill: green water (bottom→min(level,brim)) + gold overflow
         (brim→level, above the top)."""
         cx, bottom, n = self._bg_geom[i]
         brim = 3 * n
         bh = min(level, brim) * U
-        base = Rectangle(width=CW * 0.9, height=max(bh, 1e-4), fill_color=FILL_BLUE,
+        base = Rectangle(width=CW * 0.9, height=max(bh, 1e-4), fill_color=FILL_MAIN,
                          fill_opacity=0.95, stroke_width=0).move_to([cx, bottom + bh / 2, 0])
         oh = max(level - brim, 0) * U
-        over = Rectangle(width=CW * 0.9, height=max(oh, 1e-4), fill_color=FILL_GOLD,
+        over = Rectangle(width=CW * 0.9, height=max(oh, 1e-4), fill_color=FILL_OVER,
                          fill_opacity=0.95, stroke_width=0).move_to([cx, TOP_Y + oh / 2, 0])
         return VGroup(base, over).set_z_index(1)
 
-    def _apply(self, new_levels, mode, run_time, sum_val=None):
-        """Move the container fills to `new_levels`. mode='grow' animates the water
-        rising/falling (a real fill); mode='fade' cross-fades (a reconfiguration —
-        scoring different dice). Optionally retitle the corner sum."""
+    def _fade(self, new_levels, run_time, sum_val=None):
+        """Move the fills to `new_levels` by CROSS-FADING each changed container
+        (no rising/emptying motion). Optionally count the corner sum to `sum_val`."""
         anims, swaps = [], {}
         for i in range(6):
             if new_levels[i] == self.levels[i]:
                 continue
             ng = self._cfill(i, new_levels[i])
-            if mode == "grow":
-                anims.append(Transform(self.cfills[i], ng))
-            else:
-                anims.append(FadeOut(self.cfills[i]))
-                anims.append(FadeIn(ng))
-                swaps[i] = ng
+            anims.append(FadeOut(self.cfills[i]))
+            anims.append(FadeIn(ng))
+            swaps[i] = ng
         if sum_val is not None:
-            anims.append(Transform(self.bg_sum, self._sum_text(sum_val, SUM_POS, fs=46)))
+            anims.append(self._sum_tr.animate.set_value(sum_val))
         if anims:
             self.play(*anims, run_time=run_time)
         for i, ng in swaps.items():
@@ -205,14 +205,8 @@ class TopBonus(YahtzeeScene):
             self.cfills[i] = ng
         self.levels = list(new_levels)
 
-    def _grow(self, levels, run_time, sum_val=None):
-        self._apply(levels, "grow", run_time, sum_val)
-
-    def _fade(self, levels, run_time, sum_val=None):
-        self._apply(levels, "fade", run_time, sum_val)
-
     def _block(self, cx, y):
-        return Rectangle(width=CW * 0.9, height=4 * U, fill_color=FILL_GOLD,
+        return Rectangle(width=CW * 0.9, height=4 * U, fill_color=FILL_OVER,
                          fill_opacity=0.95, stroke_width=0).set_z_index(2) \
                         .move_to([cx, y, 0])
 
@@ -232,21 +226,21 @@ class TopBonus(YahtzeeScene):
                     f"{TABLE[count][col]:.1f}", font_size=CELL_FS, color=BLACK,
                     font=FONT, weight="BOLD").move_to([x, y, 0])
 
-        heads = VGroup(*[get_die(col + 1, size=0.5).move_to(
+        heads = VGroup(*[get_die(col + 1, size=0.54).move_to(
             [TB_X0 + col * TB_DX, TB_HEAD_Y, 0]) for col in range(6)])
         rlabels = VGroup()
         for count in COUNTS_TOP_DOWN:
             y = TB_HEAD_Y - (COUNTS_TOP_DOWN.index(count) + 1) * TB_DY
-            rlabels.add(crisp_text(str(count), font_size=34, color=BLACK,
+            rlabels.add(crisp_text(str(count), font_size=38, color=BLACK,
                                    font=FONT, weight="BOLD").move_to(
                 [TB_X0 - TB_DX, y, 0]))
-        self.row_head = crisp_text("# scored", font_size=22, color=BLACK,
+        self.row_head = crisp_text("# scored", font_size=24, color=BLACK,
                                    font=FONT).move_to([TB_X0 - TB_DX, TB_HEAD_Y, 0])
         self.table_static = VGroup(cells, heads, rlabels, self.row_head)
 
-        self.ev_num = crisp_text(f"{BASE_EV:.1f}", font_size=54, color=BLACK,
+        self.ev_num = crisp_text(f"{BASE_EV:.1f}", font_size=58, color=BLACK,
                                  font=FONT, weight="BOLD").move_to(EV_POS)
-        self.ev_cap = crisp_text("avg top-bonus pts", font_size=26, color=BLACK,
+        self.ev_cap = crisp_text("avg top-bonus pts", font_size=28, color=BLACK,
                                  font=FONT).next_to(self.ev_num, LEFT, buff=0.35)
 
     def _cell_target(self, count, col):
@@ -317,58 +311,64 @@ class TopBonus(YahtzeeScene):
         self.wait(hold)
 
         # merge every partial total into a single BLACK 63 (bottom right)
-        self.big63 = self._sum_text(63, [ROWSUM_X, COLSUM_Y, 0], fs=70)
+        self.big63 = self._sum_text(63, [ROWSUM_X, COLSUM_Y, 0], fs=72)
         self.play(ReplacementTransform(self.sum_texts, self.big63), run_time=merge_rt)
 
-    # c) clear the right content (card stays); draw the six hanging containers, the
-    #    top connectors, and the running container-total (starts at 0)
+    # c) clear the right content (card stays); draw the containers as one continuous
+    #    stroke, then the value-lines, labels, and the container-total (starts at 0)
     @subscene
     def empty_containers(self):
         self._setup_containers()
-        clear_rt, draw_rt, line_rt = 0.6, 1.0, 0.6
+        clear_rt, draw_rt, line_rt = 0.6, 1.2, 0.6
         self.play(FadeOut(self.grid_dice), FadeOut(self.big63), run_time=clear_rt)
         self.add(*self.cfills.values())                 # invisible at level 0
-        self.play(LaggedStart(*[Create(m) for m in self.bg_walls], lag_ratio=0.04),
-                  Create(self.bg_top), run_time=draw_rt)
+        self.play(Create(self.bg_outline), run_time=draw_rt)
         self.play(FadeIn(self.bg_lines), FadeIn(self.bg_labels),
                   FadeIn(self.bg_sum), run_time=line_rt)
 
-    # d) the fill demo: 3-step fill, fade-reconfigures, then fall-in-from-the-top slides
+    # d) the fill demo: everything FADES; the corner total is a live counter
     @subscene
     def fill_containers(self):
-        fill_rt, fade_rt, lift_rt, across_rt, drop_rt, clear_rt = \
-            0.7, 0.7, 0.6, 0.7, 0.7, 0.7
+        fade_rt, lift_rt, across_rt, drop_rt, clear_rt = 0.7, 0.6, 0.7, 0.7, 0.7
         cx1, cx3, cx4 = self._bg_geom[0][0], self._bg_geom[2][0], self._bg_geom[3][0]
         hold_y, drop_y = TOP_Y + 2 * U + 0.7, TOP_Y - U
 
-        # fill one slot at a time across all six: 1 of each, 2 of each, 3 of each
-        self._grow([1, 2, 3, 4, 5, 6],       fill_rt, sum_val=21)
-        self._grow([2, 4, 6, 8, 10, 12],     fill_rt, sum_val=42)
-        self._grow([3, 6, 9, 12, 15, 18],    fill_rt, sum_val=63)
+        # swap the static corner "0" for a live counter
+        self._sum_tr = ValueTracker(0)
+        live_sum = always_redraw(lambda: crisp_text(
+            str(int(round(self._sum_tr.get_value()))), font_size=46, color=BLACK,
+            font=FONT, weight="BOLD").move_to(SUM_POS))
+        self.remove(self.bg_sum)
+        self.add(live_sum)
 
-        # reconfigure via FADE (scoring different dice, not filling/emptying)
-        self._fade([3, 8, 9, 16, 15, 18],    fade_rt, sum_val=69)   # 4 fours & 4 twos
-        self._fade([3, 4, 9,  8, 15, 18],    fade_rt, sum_val=51)   # 2 fours & 2 twos
-        self._fade([3, 6, 6, 16, 15, 18],    fade_rt, sum_val=64)   # 4 fours, 2 threes
+        # one slot at a time across all six (each fades in): 1, then 2, then 3 of each
+        self._fade([1, 2, 3, 4, 5, 6],       fade_rt, 21)
+        self._fade([2, 4, 6, 8, 10, 12],     fade_rt, 42)
+        self._fade([3, 6, 9, 12, 15, 18],    fade_rt, 63)
+
+        # reconfigure (fade): 4 fours & 4 twos, then 2 of each, then 4 fours/2 threes
+        self._fade([3, 8, 9, 16, 15, 18],    fade_rt, 69)
+        self._fade([3, 4, 9,  8, 15, 18],    fade_rt, 51)
+        self._fade([3, 6, 6, 16, 15, 18],    fade_rt, 64)
 
         # slide the surplus 4 from the fours into the threes: lift out, across, fall in
         blk = self._block(cx4, TOP_Y + 2 * U)
         self.add(blk)
-        self._grow([3, 6, 6, 12, 15, 18], 0.25)          # fours to full (hidden by blk)
+        self._fade([3, 6, 6, 12, 15, 18], 0.25)          # fours to full (hidden by blk)
         self.play(blk.animate.move_to([cx4, hold_y, 0]), run_time=lift_rt)
         self.play(blk.animate.move_to([cx3, hold_y, 0]), run_time=across_rt)
         self.play(blk.animate.move_to([cx3, drop_y, 0]), run_time=drop_rt)  # rests on the water
 
-        # pull it back out, add the 3rd 3 for real, empty the ones, slide into the ones
+        # pull it out, then fill the 3rd three AND empty the ones SIMULTANEOUSLY
         self.play(blk.animate.move_to([cx3, hold_y, 0]), run_time=lift_rt)
-        self._grow([3, 6, 9, 12, 15, 18], fade_rt)       # 3rd three (a real die)
-        self._fade([0, 6, 9, 12, 15, 18], fade_rt)       # zero the ones
+        self._fade([0, 6, 9, 12, 15, 18], fade_rt)       # 3's 6->9 and 1's 3->0 together
         self.play(blk.animate.move_to([cx1, hold_y, 0]), run_time=across_rt)
         self.play(blk.animate.move_to([cx1, drop_y, 0]), run_time=drop_rt)  # falls to the empty ones
 
+        live_sum.clear_updaters()
         self.play(FadeOut(blk), *[FadeOut(g) for g in self.cfills.values()],
-                  FadeOut(self.bg_walls), FadeOut(self.bg_lines), FadeOut(self.bg_top),
-                  FadeOut(self.bg_labels), FadeOut(self.bg_sum), run_time=clear_rt)
+                  FadeOut(self.bg_outline), FadeOut(self.bg_lines),
+                  FadeOut(self.bg_labels), FadeOut(live_sum), run_time=clear_rt)
 
     # e) empty table + the turn-0 EV (23.8)
     @subscene
