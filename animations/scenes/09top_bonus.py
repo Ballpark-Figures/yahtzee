@@ -204,7 +204,7 @@ class TopBonus(YahtzeeScene):
                 cells.add(cell)
                 self.ttexts[(count, col)] = crisp_text(
                     f"{TABLE[count][col]:.1f}", font_size=CELL_FS, color=BLACK,
-                    font=FONT, weight="BOLD").move_to([x, y, 0])
+                    font=FONT, weight="BOLD").move_to([x, y, 0]).set_z_index(5)
 
         heads = VGroup(*[get_die(col + 1, size=0.54).move_to(
             [TB_X0 + col * TB_DX, TB_HEAD_Y, 0]) for col in range(6)])
@@ -228,7 +228,12 @@ class TopBonus(YahtzeeScene):
                             font=FONT).scale(28 / 14)
         ev_num = crisp_text(f"{BASE_EV:.1f}", font_size=46, color=BLACK,
                             font=FONT, weight="BOLD")
-        self.ev_line = VGroup(ev_cap, ev_num).arrange(RIGHT, buff=0.4).move_to(EV_CENTER)
+        # align the caption's vertical center with the NUMBER's center (not the
+        # bbox, whose descenders in "Avg…Pts" would drag it off the digits' middle),
+        # then center the whole line horizontally at EV_CENTER
+        ev_cap.next_to(ev_num, LEFT, buff=0.4)
+        ev_cap.set_y(ev_num.get_center()[1])
+        self.ev_line = VGroup(ev_cap, ev_num).move_to(EV_CENTER)
 
     def _cell_target(self, count, col):
         c = self.tcells[(count, col)]
@@ -338,8 +343,10 @@ class TopBonus(YahtzeeScene):
     def _highlight_cells_with_box(self, cells, box_changes, *, hold=1.0, fade=0.25):
         """Highlight table cells AND put a transient value in the given box(es); both
         the highlight and the box value revert when the hold ends."""
+        # overlay sits ABOVE the cell fill but BELOW the numbers (z=5), so it tints
+        # the cell without ever hiding/dropping the EV number
         rects   = [overlay_rect(self.tcells[c], color=ACCENT_GOLD, opacity=0.5)
-                   for c in cells]
+                   .set_z_index(1) for c in cells]
         borders = [self.tcells[c] for c in cells]
         for b in borders:
             b.save_state()
@@ -351,6 +358,9 @@ class TopBonus(YahtzeeScene):
                        [FadeOut(r) for r in rects]
                        + [Restore(b) for b in borders], fade)
         self.remove(*rects)
+        for c in cells:                                  # make sure the numbers stay
+            self.ttexts[c].set_opacity(1.0)
+            self.add(self.ttexts[c])
 
     # ══ subscenes ═══════════════════════════════════════════════════════════════
     # a) beginning-of-game card slides in; highlight the top section (all 3 columns)
@@ -499,11 +509,11 @@ class TopBonus(YahtzeeScene):
         self._highlight_cells_with_box([(2, 0)], {0: 2}, hold=1.0)    # 2 ones
         self._highlight_cells_with_box([(2, 5)], {5: 12}, hold=1.0)   # 2 sixes = 12
 
-    # i) reveal count-1, then reveal count-0 while cycling 0s; then fill each box
-    #    with a transient 0 as its cell is highlighted
+    # i) reveal count-1 (cycling 1-of-each) then count-0 (cycling 0s); then fill
+    #    each box with a transient 0 as its cell is highlighted
     @subscene
     def fill_1_0(self):
-        self._reveal_row(1, 1.0)
+        self._reveal_and_cycle(1, [1, 2, 3, 4, 5, 6], 1.2)
         self._reveal_and_cycle(0, [0, 0, 0, 0, 0, 0], 1.2)
         self._highlight_cells_with_box([(0, 0), (0, 1)], {0: 0, 1: 0}, hold=1.0)
         self._highlight_cells_with_box([(0, 2)], {2: 0}, hold=1.0)
