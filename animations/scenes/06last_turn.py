@@ -38,10 +38,10 @@ R_3KIND, R_4KIND, R_FH, R_SMS, R_LGS, R_YAH, R_CHANCE = 6, 7, 8, 9, 10, 11, 12
 # card's actual width). The space that frees up on the right holds a WIDE 4th
 # column; the dice + guide lines are then centered in the gutter between the
 # card's real right edge and the frame's right edge (computed at runtime).
-COL4_W   = 2.2
-CARD_EDGE_BUFF = 0.12            # gap from the left frame edge
+COL4_W   = 3.0                   # wide 4th column (roomy histogram)
 FRAME_R  = 7.11                  # frame half-width
-DICE_DX  = 1.3                   # dice spread
+FRAME_T  = 4.0                   # frame half-height
+DICE_DX  = 1.15                  # dice spread
 
 
 class LastTurn(YahtzeeScene):
@@ -63,17 +63,27 @@ class LastTurn(YahtzeeScene):
             SAMPLE, center=ORIGIN,
             fourth_column=True, fourth_width=COL4_W,
         )
-        self.card.to_edge(LEFT, buff=CARD_EDGE_BUFF)   # flush left (real width)
+        # Position by the PANEL rectangle (cells[0]) — the card's overall bounding
+        # box has a phantom extension that throws off get_top()/to_edge(). Equal
+        # margins: panel's left margin = its top margin.
+        panel = self.card.cells[0]
+        top_margin = FRAME_T - panel.get_top()[1]
+        self.card.shift(RIGHT * ((-FRAME_R + top_margin) - panel.get_left()[0]))
         self.card_home = self.card.get_center().copy()
+        # keep the (63) bar neutral blue the whole scene (we ignore the bonus, so
+        # don't flash the red "top complete but missed 63" state at the start)
+        if self.card.bar_fill is not None:
+            self.card.bar_fill.set_fill(ACCENT_FILL, opacity=1.0)
 
     def _gutter_x(self):
-        """Center x of the empty gutter between the card's right edge and frame."""
-        return (self.card.get_right()[0] + FRAME_R) / 2
+        """Center x of the empty gutter between the panel's right edge and frame."""
+        return (self.card.cells[0].get_right()[0] + FRAME_R) / 2
 
     def _setup_board(self, start=(1, 2, 3, 4, 5)):
         ax = self._gutter_x()                          # dice centered in the gutter
+        half = 2 * DICE_DX + 0.7                        # lines just past the outer dice
         self.board = DiceBoard(area_x=ax, slot_dx=DICE_DX,
-                               line_x=(ax - 3.15, ax + 3.15))
+                               line_x=(ax - half, ax + half))
         self.board.place_initial(list(start))
 
     def _reset_board(self, start, run_time):
@@ -95,34 +105,53 @@ class LastTurn(YahtzeeScene):
         self.board.kept = []
         self.play(*[FadeIn(d) for d in self.board.dice], run_time=run_time)
 
-    def _push_forward(self, idxs, run_time, hold, dy=1.0, scale=1.18):
-        """'Push forward' the dice at `idxs` (step them out of the row toward the
-        viewer — down + scaled up), hold, then bring them back."""
+    def _keep_up(self, idxs, run_time, hold, up_band=3):
+        """The established 'keep' gesture: move the kept dice UP into the top row,
+        hold, then bring them back to their row."""
         dice = [self.board.dice[i] for i in idxs]
-        self.play(*[d.animate.shift(DOWN * dy).scale(scale) for d in dice], run_time=run_time)
+        homes = [d.get_center().copy() for d in dice]
+        self.play(*[d.animate.move_to(self.board._slot_point(up_band, s))
+                    for s, d in enumerate(dice)], run_time=run_time)
         self.wait(hold)
-        self.play(*[d.animate.shift(UP * dy).scale(1 / scale) for d in dice], run_time=run_time)
+        self.play(*[d.animate.move_to(h) for d, h in zip(dice, homes)], run_time=run_time)
 
-    # ── the box currently being covered stays highlighted for its whole section ─
-    def _hold_row(self, row, run_time=0.4):
-        self._release_row(run_time=0.0)          # drop any previous hold first
-        fill, border, bold = self.card._row_highlight(row, ACCENT_GOLD, 0.35)
-        self.card.labels[row].save_state()
-        self.play(FadeIn(fill), FadeIn(border),
-                  Transform(self.card.labels[row], bold), run_time=run_time)
-        self._held = (fill, border, row)
+    # ── the box(es) currently being covered stay highlighted for the section ───
+    def _hold_row(self, rows, run_time=0.4):
+        """Hold a persistent highlight on one or more rows (drops any prior hold)."""
+        self._release_row(run_time=0.0)
+        self._extend_hold(rows, run_time=run_time)
+
+    def _extend_hold(self, rows, run_time=0.4):
+        """Add rows to the current hold without dropping what's already held."""
+        rows = [rows] if isinstance(rows, int) else list(rows)
+        held = list(self._held or [])
+        existing = {r for _, _, r in held}
+        fades = []
+        for r in rows:
+            if r in existing:
+                continue
+            fill, border, bold = self.card._row_highlight(r, ACCENT_GOLD, 0.35)
+            self.card.labels[r].save_state()
+            fades += [FadeIn(fill), FadeIn(border), Transform(self.card.labels[r], bold)]
+            held.append((fill, border, r))
+        if fades:
+            self.play(*fades, run_time=run_time)
+        self._held = held
 
     def _release_row(self, run_time=0.3):
         held = getattr(self, "_held", None)
         if not held:
             return
-        fill, border, row = held
-        lbl = self.card.labels[row]
         if run_time > 0:
-            self.play(FadeOut(fill), FadeOut(border), Restore(lbl), run_time=run_time)
+            anims = []
+            for fill, border, r in held:
+                anims += [FadeOut(fill), FadeOut(border), Restore(self.card.labels[r])]
+            self.play(*anims, run_time=run_time)
         else:
-            lbl.restore()
-        self.remove(fill, border)
+            for fill, border, r in held:
+                self.card.labels[r].restore()
+        for fill, border, r in held:
+            self.remove(fill, border)
         self._held = None
 
     # ── column-4 bottom-block table (Prob Success | Avg Points) ───────────────
@@ -192,6 +221,10 @@ class LastTurn(YahtzeeScene):
         self._setup_hist()
         in_rt, move_rt = 1.0, 1.1
 
+        # the histogram is the same for every top box, so light up the whole top
+        # section (Threes is already held from b; add the other five)
+        self._extend_hold([0, 1, 3, 4, 5])
+
         # big + readable on the right: standing bars, 0-5 labels, % on each bar
         self.play(FadeIn(self.hist, shift=UP * 0.3),
                   FadeIn(self.hist_avg1, shift=UP * 0.3), run_time=in_rt)
@@ -201,18 +234,18 @@ class LastTurn(YahtzeeScene):
         # the "Number Rolled" axis label); swap the Avg for a big 2-line version
         # below the mini-histogram (live region tracks the card)
         top_c, _w, top_h = self.card.col4_region(range(6))
-        mini_c = top_c + UP * top_h * 0.22
-        self.hist_avg2.move_to(top_c + DOWN * top_h * 0.30)
+        mini_c = top_c + UP * top_h * 0.25
+        self.hist_avg2.move_to(top_c + DOWN * top_h * 0.33)
         xlab = self.hist.x_axis_label_text
         self.hist.remove(xlab)                       # so it isn't scaled with the rest
         self.play(
-            self.hist.animate.scale(0.38).move_to(mini_c),
+            self.hist.animate.scale(0.50).move_to(mini_c),
             FadeOut(xlab),
             FadeOut(self.hist_avg1),
             FadeIn(self.hist_avg2),
             run_time=move_rt,
         )
-        self._release_row()          # end the Threes highlight before the section ends
+        self._release_row()          # end the top-section highlight before the section ends
         self.wait(0.2)
 
     def _setup_hist(self):
@@ -220,7 +253,7 @@ class LastTurn(YahtzeeScene):
         counts = {0: 6.49, 1: 23.63, 2: 34.40, 3: 25.04, 4: 9.12, 5: 1.33}
         self.hist = get_histogram(
             None, counts=counts, is_vertical=False,      # standing bars
-            center=[self._gutter_x(), -0.2, 0], width=4.4, height=3.0,
+            center=[self._gutter_x(), -0.2, 0], width=4.4, height=2.5,
             bar_color=ACCENT_FILL, x_tick_step=1,         # label every value 0..5
             x_axis_label="Number Rolled",
             bar_labels="percent", bar_label_font_size=22,
@@ -281,14 +314,14 @@ class LastTurn(YahtzeeScene):
 
         self.card.transition(self, {R_FH: None}, run_time=clear_rt)
         self._hold_row(R_FH)
-        self._show_dice([2, 2, 4, 4, 5], band=2, run_time=show_rt)   # two pairs
-        self._push_forward([0, 1, 2, 3], push_rt, hold)             # keep 2244
+        self._show_dice([2, 2, 4, 4, 5], band=1, run_time=show_rt)   # two pairs
+        self._keep_up([0, 1, 2, 3], push_rt, hold)                 # keep 2244
         morph_dice(self, self.board.dice, [2, 2, 2, 4, 5], run_time=morph_rt)  # 3 of a kind
-        self._push_forward([0, 1, 2], push_rt, hold)               # keep 222
+        self._keep_up([0, 1, 2], push_rt, hold)                    # keep 222
         morph_dice(self, self.board.dice, [2, 2, 3, 4, 5], run_time=morph_rt)  # single pair
-        self._push_forward([0, 1], push_rt, hold)                  # keep 22
+        self._keep_up([0, 1], push_rt, hold)                       # keep 22
         morph_dice(self, self.board.dice, [2, 2, 2, 2, 5], run_time=morph_rt)  # 4 of a kind
-        self._push_forward([0, 1, 2], push_rt, hold)               # keep 3 of them
+        self._keep_up([0, 1, 2], push_rt, hold)                    # keep 3 of them
 
     # ── h) fill the Full House row (37%, EV 9.2) ─────────────────────────────
     @subscene
