@@ -91,8 +91,12 @@ class LastTurn(YahtzeeScene):
 
     def _show_dice(self, values, band, run_time):
         """Place the dice STATICALLY at `band` with `values` (fade out/in, no
-        roll) — for the keep-illustration sections (full house, straights)."""
-        self.play(*[FadeOut(d) for d in self.board.dice], run_time=run_time)
+        roll) — for the keep-illustration sections. Only fade out dice that are
+        actually on screen: re-fading a die a prior section already removed makes
+        manim re-add it at full opacity (a stale-value FLASH) before fading."""
+        shown = [d for d in self.board.dice if d in self.mobjects]
+        if shown:
+            self.play(*[FadeOut(d) for d in shown], run_time=run_time)
         for i, d in enumerate(self.board.dice):
             d.set_value(values[i])
             d.move_to(self.board._slot_point(band, i))
@@ -226,18 +230,15 @@ class LastTurn(YahtzeeScene):
                   FadeIn(self.hist_avg1, shift=UP * 0.3), run_time=in_rt)
         self.wait(0.5)
 
-        # park it in the TOP of column 4 (keep the % and the 0-5 labels, but drop
-        # the "Number Rolled" axis label); scale it to ~90% of the column width,
-        # sit it a bit low so the % labels clear the top, Avg 2.1 on one line below
+        # park it in the TOP of column 4 (keep the %, the 0-5 labels, AND the
+        # "Quantity Rolled" axis label); scale to ~90% of the column width, sit it
+        # a bit low so the % clear the top; Avg 2.1 on one line below
         top_c, colw, top_h = self.card.col4_region(range(6))
         scale = 0.9 * colw / self.hist.width
-        mini_c = top_c + UP * top_h * 0.12
-        self.hist_avg2.move_to(top_c + DOWN * top_h * 0.36)
-        xlab = self.hist.x_axis_label_text
-        self.hist.remove(xlab)                       # so it isn't scaled with the rest
+        mini_c = top_c + UP * top_h * 0.16
+        self.hist_avg2.move_to(top_c + DOWN * top_h * 0.42)
         self.play(
             self.hist.animate.scale(scale).move_to(mini_c),
-            FadeOut(xlab),
             FadeOut(self.hist_avg1),
             FadeIn(self.hist_avg2),
             run_time=move_rt,
@@ -252,8 +253,9 @@ class LastTurn(YahtzeeScene):
             None, counts=counts, is_vertical=False,      # standing bars
             center=[self._gutter_x(), -0.2, 0], width=4.4, height=2.2,
             bar_color=ACCENT_FILL, x_tick_step=1,         # label every value 0..5
-            x_axis_label="Number Rolled",
+            x_axis_label="Quantity Rolled",
             bar_labels="percent", bar_label_font_size=22, bar_label_weight="BOLD",
+            x_label_weight="BOLD", x_axis_label_weight="BOLD",
         )
         # big single-line caption for the on-the-right display
         self.hist_avg1 = crisp_text("Avg 2.1", font_size=32, color=BLACK,
@@ -548,7 +550,7 @@ class LastTurn(YahtzeeScene):
         new = crisp_text("Avg 4.67", font_size=30, color=BLACK, font=FONT,
                          weight="BOLD").move_to(self.ch_avg.get_center())
         self.play(Transform(self.ch_avg, new), run_time=avg_rt)
-        pt, et = self._table_row(R_CHANCE, "–", "23⅓")   # prob = dash, EV = 23 1/3
+        pt, et = self._table_row(R_CHANCE, "–", "23.3")   # prob = dash, EV = 23.3
         self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
         self._release_row()
         self.wait(0.2)
@@ -673,7 +675,7 @@ class LastTurn(YahtzeeScene):
     @subscene
     def threek_fill(self):
         fill_rt = 0.8
-        pt, et = self._table_row(R_3KIND, "71%", "15")
+        pt, et = self._table_row(R_3KIND, "71%", "15.0")
         self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
         self._release_row()
         self.wait(0.5)
