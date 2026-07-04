@@ -923,10 +923,17 @@ class Scorecard(VGroup):
         tr_bot = ValueTracker(old_bot)
         tr_yb  = ValueTracker(old_yb)
 
-        # The bar is green iff the bonus is earned (value >= 63); the switch is at
-        # the 63 threshold (masked by the flash), NOT a ramp over height.
+        # Bar colour matches the static build: GREEN once the bonus is earned
+        # (>= 63); else RED if the top section is COMPLETE but under 63 (finished
+        # the top, missed the bonus); else blue (still in progress). top_complete
+        # is fixed for this animation (value_nums is updated before _animate_to).
+        red_c = ManimColor(SCORE_RED)
+        top_complete = all(r in self.value_nums for r in range(6))
+
         def color_at(v):
-            return green_c if v >= 63 else ACCENT_FILL
+            if v >= 63:
+                return green_c
+            return red_c if top_complete else ACCENT_FILL
 
         def fill_for(v):
             h = max(bar_h * v / 63, 1e-4)   # keeps growing past 63 (overflow)

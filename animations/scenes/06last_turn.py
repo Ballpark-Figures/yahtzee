@@ -4,6 +4,7 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
+from manim import config as MCFG            # real frame is 16x9 (see manim.cfg)
 from config import *
 from assets.scorecard import get_scorecard
 from assets.dice import DiceBoard, morph_dice
@@ -34,14 +35,12 @@ R_THREES = 2
 R_3KIND, R_4KIND, R_FH, R_SMS, R_LGS, R_YAH, R_CHANCE = 6, 7, 8, 9, 10, 11, 12
 
 # ── layout ────────────────────────────────────────────────────────────────────
-# Card is snapped FLUSH to the left frame edge with to_edge(LEFT) (robust to the
-# card's actual width). The space that frees up on the right holds a WIDE 4th
-# column; the dice + guide lines are then centered in the gutter between the
-# card's real right edge and the frame's right edge (computed at runtime).
+# Frame is 16x9 (x-radius 8.0, y-radius 4.5) — READ from MCFG, never hardcode.
+# The card sits with EQUAL margins (left = top/bottom); the ~7-wide gutter to its
+# right holds the dice + guide lines, centered at runtime from the card's real
+# right edge (card bbox == its panel, so get_right() is accurate here).
 COL4_W   = 3.0                   # wide 4th column (roomy histogram)
-FRAME_R  = 7.11                  # frame half-width
-FRAME_T  = 4.0                   # frame half-height
-DICE_DX  = 1.15                  # dice spread
+DICE_DX  = 1.4                   # dice spread (the gutter has room)
 
 
 class LastTurn(YahtzeeScene):
@@ -56,34 +55,31 @@ class LastTurn(YahtzeeScene):
 
     # ── shared build helpers ─────────────────────────────────────────────────
     def _setup_card(self):
-        # Keep the normal 3 columns (labels/values/summary) + the new 4th info
-        # column. A box is open through the whole scene, so the top bar reads as
-        # "in progress" (blue), not the red "missed the 63 bonus".
+        # Normal 3 columns (labels/values/summary) + the new 4th info column.
+        # (The (63) bar's colour is left to the scorecard — red when the top is
+        # complete and < 63, which is correct here; we do NOT override it.)
         self.card = get_scorecard(
             SAMPLE, center=ORIGIN,
             fourth_column=True, fourth_width=COL4_W,
         )
-        # Position by the PANEL rectangle (cells[0]) — the card's overall bounding
-        # box has a phantom extension that throws off get_top()/to_edge(). Equal
-        # margins: panel's left margin = its top margin.
+        # Position by the panel rectangle (cells[0] == the card's bbox), against
+        # the REAL frame (16x9). Equal margins: left margin = top margin.
         panel = self.card.cells[0]
-        top_margin = FRAME_T - panel.get_top()[1]
-        self.card.shift(RIGHT * ((-FRAME_R + top_margin) - panel.get_left()[0]))
+        top_margin = MCFG.frame_y_radius - panel.get_top()[1]
+        self.card.shift(RIGHT * ((-MCFG.frame_x_radius + top_margin) - panel.get_left()[0]))
         self.card_home = self.card.get_center().copy()
-        # keep the (63) bar neutral blue the whole scene (we ignore the bonus, so
-        # don't flash the red "top complete but missed 63" state at the start)
-        if self.card.bar_fill is not None:
-            self.card.bar_fill.set_fill(ACCENT_FILL, opacity=1.0)
 
     def _gutter_x(self):
-        """Center x of the empty gutter between the panel's right edge and frame."""
-        return (self.card.cells[0].get_right()[0] + FRAME_R) / 2
+        """Center x of the gutter between the panel's right edge and the frame."""
+        return (self.card.cells[0].get_right()[0] + MCFG.frame_x_radius) / 2
 
     def _setup_board(self, start=(1, 2, 3, 4, 5)):
         ax = self._gutter_x()                          # dice centered in the gutter
-        half = 2 * DICE_DX + 0.7                        # lines just past the outer dice
+        panel_r = self.card.cells[0].get_right()[0]
+        # guide lines span the gutter (clear the card + the frame edge by 0.25),
+        # which keeps them centered on ax and bracketing the dice
         self.board = DiceBoard(area_x=ax, slot_dx=DICE_DX,
-                               line_x=(ax - half, ax + half))
+                               line_x=(panel_r + 0.25, MCFG.frame_x_radius - 0.25))
         self.board.place_initial(list(start))
 
     def _reset_board(self, start, run_time):
@@ -314,7 +310,7 @@ class LastTurn(YahtzeeScene):
 
         self.card.transition(self, {R_FH: None}, run_time=clear_rt)
         self._hold_row(R_FH)
-        self._show_dice([2, 2, 4, 4, 5], band=1, run_time=show_rt)   # two pairs
+        self._show_dice([2, 2, 4, 4, 5], band=2, run_time=show_rt)   # two pairs (one row below top)
         self._keep_up([0, 1, 2, 3], push_rt, hold)                 # keep 2244
         morph_dice(self, self.board.dice, [2, 2, 2, 4, 5], run_time=morph_rt)  # 3 of a kind
         self._keep_up([0, 1, 2], push_rt, hold)                    # keep 222
