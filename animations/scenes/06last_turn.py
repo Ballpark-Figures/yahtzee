@@ -387,3 +387,72 @@ class LastTurn(YahtzeeScene):
         self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
         self._release_row()
         self.wait(0.2)
+
+    # ── the three small straights (1234/2345/3456), 3/4 aligned, + a greyed
+    #    "extra die" column after the 6 ────────────────────────────────────────
+    def _setup_sms_triple(self):
+        ax = self._gutter_x()
+        sp, sz, dy = 0.92, 0.7, 1.05
+        def die(v, col, y):
+            return Die(value=v, size=sz).move_to([ax + (col - 3) * sp, y, 0])
+        ys = [dy, 0.0, -dy]
+        straights = [[1, 2, 3, 4], [2, 3, 4, 5], [3, 4, 5, 6]]
+        starts = [0, 1, 2]                       # each row's first value-column
+        self.sms_rows = VGroup(); self.sms_34 = VGroup(); self.sms_other = VGroup()
+        for vals, c0, y in zip(straights, starts, ys):
+            for j, v in enumerate(vals):
+                d = die(v, c0 + j, y)
+                self.sms_rows.add(d)
+                (self.sms_34 if v in (3, 4) else self.sms_other).add(d)
+        self.sms_grey = VGroup(*[die(1, 6, y).set_opacity(0.3) for y in ys])  # unused 5th die
+
+    # ── o) small straight: three ways + the extra unused die ─────────────────
+    @subscene
+    def sms_intro(self):
+        clear_rt, out_rt, in_rt = 0.5, 0.4, 0.8
+        self.card.transition(self, {R_LGS: 40, R_SMS: None}, run_time=clear_rt)  # refill LgS, open SmS
+        self._hold_row(R_SMS)
+        self.play(*[FadeOut(d) for d in self.board.dice], run_time=out_rt)
+        self._setup_sms_triple()
+        self.play(FadeIn(self.sms_rows), FadeIn(self.sms_grey), run_time=in_rt)
+
+    # ── p) always need a 3 and a 4 ───────────────────────────────────────────
+    @subscene
+    def sms_need34(self):
+        hl = 1.2
+        highlight(self, [*self.sms_34], hold=hl)
+        highlight(self, [*self.sms_other], hold=hl)
+
+    # ── q) no 3 or 4 -> reroll everything (12256) ────────────────────────────
+    @subscene
+    def sms_no34(self):
+        out_rt, show_rt, hold = 0.4, 0.5, 1.1
+        self.play(FadeOut(self.sms_rows), FadeOut(self.sms_grey), run_time=out_rt)
+        self.sms_rows = self.sms_34 = self.sms_other = self.sms_grey = None
+        self._show_dice([1, 2, 2, 5, 6], band=2, run_time=show_rt)   # no 3 or 4
+        self.wait(hold)                                              # keep nothing, reroll all
+
+    # ── r) keep one each of 3,4 (and 2,5) — 22336 -> keep 23 ─────────────────
+    @subscene
+    def sms_keep(self):
+        morph_rt, push_rt, hold = 0.5, 0.4, 0.9
+        morph_dice(self, self.board.dice, [2, 2, 3, 3, 6], run_time=morph_rt)   # 22336
+        self._keep_up([0, 2], push_rt, hold)                        # keep 2, 3
+
+    # ── s) keep a 1 (1&2 no 5) / a 6 (5&6 no 2): 12236->123, 13356->356 ──────
+    @subscene
+    def sms_1or6(self):
+        morph_rt, push_rt, hold = 0.5, 0.4, 0.8
+        morph_dice(self, self.board.dice, [1, 2, 2, 3, 6], run_time=morph_rt)   # 12236
+        self._keep_up([0, 1, 3], push_rt, hold)                     # keep 1, 2, 3
+        morph_dice(self, self.board.dice, [1, 3, 3, 5, 6], run_time=morph_rt)   # 13356
+        self._keep_up([1, 3, 4], push_rt, hold)                     # keep 3, 5, 6
+
+    # ── t) fill the Small Straight row (62%, EV 18.5) ────────────────────────
+    @subscene
+    def sms_fill(self):
+        fill_rt = 0.8
+        pt, et = self._table_row(R_SMS, "62%", "18.5")
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self._release_row()
+        self.wait(0.2)
