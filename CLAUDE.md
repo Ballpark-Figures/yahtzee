@@ -76,6 +76,25 @@ way.
   self-`play`s). Pass your other anims as the `lead` of the card's `_animate_to(...)`
   and drive the box texts yourself — see scene 09's `_card_and` helper. (A cleaner
   fix would be an animation-returning `transition_anim()` on the asset; ASK first.)
+- **DON'T position the card off its VGroup bounding box — it has a PHANTOM
+  extension.** `card.get_left()/get_right()/get_top()/get_bottom()` (and anything
+  built on them, e.g. `to_edge`) do NOT match the visible panel: the group bbox
+  extends ~1 unit past the rendered card, so `to_edge(LEFT)` shoves it partly
+  off-screen and margin math from `get_top()` comes out wrong. This silently wrecked
+  scene-06 layout for many rounds (card too far left, dice mis-centred against a
+  bogus right edge, guide lines running under the card). MEASURE the real rendered
+  geometry before positioning — don't trust the bbox, and don't eyeball a still to
+  check it (see the shared "measure, don't eyeball" note). The exact culprit
+  sub-mobject is still TBD; until it's found, get true edges by measuring, not from
+  `get_*` on the group.
+- **The (63) top bar is RED when the top section is COMPLETE and its sum < 63** —
+  that's INTENDED (you filled the whole top and missed the 63 bonus), not a bug and
+  not a flash. The real bug: the scoring/transition animator (`_animate_to`) only
+  ever paints the bar blue (`ACCENT_FILL`) for sums < 63 — it never re-applies the
+  red — so the moment ANY scoring animation runs, a still-complete-&-<63 top wrongly
+  turns (and stays) blue. Fix is in the animator: make it match the STATIC build's
+  colour logic (red for complete-&-<63). Do NOT "fix" the inconsistency by forcing
+  the fill blue — that's backwards (it deletes the correct red).
 
 ## Style
 - Uses `bpkfigures` style + the local `config.py` for colors/fonts. The deep
