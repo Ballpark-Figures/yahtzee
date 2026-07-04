@@ -29,6 +29,25 @@ way.
   (4 bands; dice roll UP from band 0 → 1 → 2 → 3, separated by 3 guide lines).
   `99test.py` is the canonical example. Default die size is `DIE_SIZE = 0.95`.
 - Scorecard sits at `LEFT_SC`; dice on the right at `slot_x(...)`.
+- **Rolling a turn:** `place_initial` (band 0) → `first_roll` (band 1) →
+  `keep(idxs)` + `roll_rest(vals)` (up to band 2) → `keep` + `roll_rest` (band 3).
+  `keep()` already moves kept dice UP a band and the reroll dice to the RIGHT.
+- **Illustrating a keep DECISION (no reroll)** — e.g. "here's what you'd keep":
+  use `DiceBoard.show_keep(keep_idxs, base_band)` / `regroup(band)` (shared in
+  `dice.py`; also module fns `show_keep_anims`/`regroup_anims`). Kept dice push
+  forward one band, reroll dice go to the RIGHT, and they STAY (idempotent, so it
+  morphs keep→keep). **DO NOT hand-roll this** (scene 06 reinvented it as
+  `_keep_up` and got it wrong — kept dice moved up-and-back, reroll dice never
+  moved right). Scene 04 is the reference user.
+- **BAND = which reroll (this determines the on-screen height).** A reroll
+  decision is drawn on the band of the roll you're evaluating; kept dice push up
+  one band:
+  - **FIRST reroll** → `base_band=1` (dice at band 1, keep → band 2). Sits LOWER
+    (2 rerolls of headroom left).
+  - **SECOND reroll / "last roll"** → `base_band=2` (dice at band 2, keep → band
+    3, the top). Sits HIGHER.
+  So the script saying "first roll" vs "last roll" for a case dictates its band.
+  Match the voiceover's reroll to the band, every time.
 
 ## Outcome grids (scenes 1 & 3)
 - The 6^5 dot build-up and the 252 distinct-outcome grid enumerate with
