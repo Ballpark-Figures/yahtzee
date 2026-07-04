@@ -432,6 +432,38 @@ def slot_point(band, slot):
     return np.array([slot_x(slot), BAND_YS[band], 0.0])
 
 
+# ── Keep-DECISION illustration (the shared "push a keep forward" convention) ──
+# Kept dice push forward one band (into the left slots); the reroll dice stay on
+# the SAME band, shifted into the slots to the RIGHT of the kept. Stateless +
+# deterministic by keep-set, so calling repeatedly MORPHS one keep straight into
+# another (unlike keep()/roll_rest(), which advance a real roll).
+#
+# BAND-PER-REROLL CONVENTION — `base_band` encodes WHICH reroll it is (dice roll
+# UP one band per roll: band1 = first roll, band2 = second, band3 = final):
+#   • FIRST reroll  → base_band=1: dice at band 1, keep pushes up to band 2
+#                     (2 rerolls of headroom → the decision sits LOWER).
+#   • SECOND reroll → base_band=2: dice at band 2, keep pushes up to band 3
+#     ("last roll")   (the top → the decision sits HIGHER).
+# `point` is the (band, slot) -> position function (module slot_point by default;
+# a DiceBoard passes its own instance geometry).
+def show_keep_anims(dice, keep_idxs, base_band, point=slot_point):
+    keep_set = set(keep_idxs)
+    n = len(dice)
+    kept = [i for i in range(n) if i in keep_set]
+    others = [i for i in range(n) if i not in keep_set]
+    target = {}
+    for s, i in enumerate(kept):
+        target[i] = point(base_band + 1, s)
+    for j, i in enumerate(others):
+        target[i] = point(base_band, len(kept) + j)
+    return [dice[i].animate.move_to(target[i]) for i in range(n)]
+
+
+def regroup_anims(dice, band, point=slot_point):
+    """Anims to line all dice up in slot order at `band` (undo a keep split)."""
+    return [dice[i].animate.move_to(point(band, i)) for i in range(len(dice))]
+
+
 def roll_lines(x_left=-1.5, x_right=7.5, color=WHITE, opacity=0.45, stroke_width=2.0):
     lines = VGroup()
     for y in LINE_YS:
@@ -527,3 +559,14 @@ class DiceBoard:
                  for j, i in enumerate(others)]
         self.band = nb
         return anims
+
+    # ── Keep-DECISION illustration (no reroll) — see show_keep_anims above for
+    #    the convention + the band-per-reroll rule. These wrap it with the board's
+    #    OWN geometry (so they work with a custom area_x/slot_dx layout).
+    def show_keep(self, keep_idxs, base_band=None):
+        if base_band is None:
+            base_band = self.band
+        return show_keep_anims(self.dice, keep_idxs, base_band, self._slot_point)
+
+    def regroup(self, band):
+        return regroup_anims(self.dice, band, self._slot_point)

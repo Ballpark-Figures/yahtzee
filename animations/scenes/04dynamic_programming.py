@@ -8,7 +8,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
 from assets.scorecard import get_scorecard
-from assets.dice import DiceBoard, get_die, morph_dice, slot_point, slot_x, BAND_YS
+from assets.dice import (DiceBoard, get_die, morph_dice, slot_point, slot_x, BAND_YS,
+                         show_keep_anims, regroup_anims)
 from assets import dp_data as dp
 
 
@@ -77,24 +78,15 @@ class DynamicProgramming(YahtzeeScene):
         return slot_point(band, slot)
 
     def _regroup(self, dice, band, *, run_time):
-        """Line all five dice up in slot order at `band` (undo a keep split)."""
-        self.play(*[dice[i].animate.move_to(self._apos(band, i)) for i in range(5)],
-                  run_time=run_time)
+        """Line all five dice up in slot order at `band` (undo a keep split).
+        Thin wrapper over the shared assets.dice.regroup_anims."""
+        self.play(*regroup_anims(dice, band), run_time=run_time)
 
     def _show_keep(self, dice, keep_idxs, base_band, *, run_time):
-        """The DiceBoard.keep convention: kept dice push forward to `base_band`+1
-        (left slots); the rerolled dice stay in `base_band` (the slots after the
-        kept ones). Deterministic by keep-set, so it also animates keep→keep."""
-        keep_set = set(keep_idxs)
-        kept = [i for i in range(5) if i in keep_set]
-        others = [i for i in range(5) if i not in keep_set]
-        target = {}
-        for s, i in enumerate(kept):
-            target[i] = self._apos(base_band + 1, s)
-        for j, i in enumerate(others):
-            target[i] = self._apos(base_band, len(kept) + j)
-        self.play(*[dice[i].animate.move_to(target[i]) for i in range(5)],
-                  run_time=run_time)
+        """The keep-illustration convention (kept push forward, reroll dice to the
+        right) — now the shared assets.dice.show_keep_anims. See its docstring for
+        the band-per-reroll rule."""
+        self.play(*show_keep_anims(dice, keep_idxs, base_band), run_time=run_time)
 
     def _label(self, text, x, y, *, fs=None, color=BLACK, anchor=LEFT, dy=0.0):
         fs = self.LABEL_FS if fs is None else fs
