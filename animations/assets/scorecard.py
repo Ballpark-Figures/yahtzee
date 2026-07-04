@@ -99,12 +99,26 @@ class Scorecard(VGroup):
         section_gap=0.4,
         bottom_gap=1.0,
         show_summary=True,
+        fourth_column=False,
+        fourth_width=1.4,
     ):
         super().__init__()
         # show_summary=False removes the 3rd-column CONTENTS only (the (63) bar,
         # running totals, bottom total, grand total) — the column outline, the
         # box scores, and the Total footer bar all stay.
         self.show_summary = show_summary
+        # Optional 4th column (scene 06): an extra outlined column to the RIGHT of
+        # the summary column, for "other info" (a histogram in the top block, a
+        # Prob/Avg pair in the bottom block). OFF by default so every other scene
+        # is untouched. The asset only draws the empty column + exposes geometry
+        # (col4_x/width, top/bottom regions, per-row anchor cells); the SCENE fills
+        # it. Adding it widens full_width, so the whole card re-centers.
+        self.fourth_column = fourth_column
+        self.col4_width = fourth_width if fourth_column else None
+        # row -> invisible anchor Rectangle; part of the card VGroup so it moves
+        # with the card. Read live via col4_region()/col4_cells (never store the
+        # build-time coords — the card gets move_to()'d after _build).
+        self.col4_cells = {}
         self.cell_height = cell_height
         self.font_size   = font_size
         self.text_pad    = text_pad
@@ -135,7 +149,7 @@ class Scorecard(VGroup):
 
         self._build(scores, label_width, value_width, summary_width,
                     stroke_color, stroke_width, grid_color, grid_width,
-                    section_gap, bottom_gap)
+                    section_gap, bottom_gap, fourth_column, fourth_width)
 
         self.add(self.cells, self.labels, self.score_texts)
         # Keep all card text ABOVE any transient highlight fill (which sits at the
@@ -148,7 +162,7 @@ class Scorecard(VGroup):
     # ── Static build ─────────────────────────────────────────────────────────
     def _build(self, scores, label_width, value_width, summary_width,
                stroke_color, stroke_width, grid_color, grid_width,
-               section_gap, bottom_gap):
+               section_gap, bottom_gap, fourth_column=False, fourth_width=1.4):
         cell_height = self.cell_height
         font_size   = self.font_size
         text_pad    = self.text_pad
@@ -162,11 +176,13 @@ class Scorecard(VGroup):
         header_gap = cell_height * 0.32
         footer_gap = cell_height * 0.32
 
-        full_width = label_width + value_width + summary_width
+        col4_w     = fourth_width if fourth_column else 0
+        full_width = label_width + value_width + summary_width + col4_w
         left_edge  = -full_width / 2
         label_x    = left_edge + label_width / 2
         value_x    = left_edge + label_width + value_width / 2
         summary_x  = left_edge + label_width + value_width + summary_width / 2
+        fourth_x   = summary_x + summary_width / 2 + col4_w / 2
 
         bottom_edge = total_height / 2 - (BOTTOM_START + BOTTOM_ROWS) * cell_height - section_gap
         total_y     = bottom_edge - cell_height / 2 - footer_gap
@@ -232,6 +248,16 @@ class Scorecard(VGroup):
 
             cells.add(label_cell, value_cell)
             labels.add(text)
+
+            if fourth_column:
+                # invisible per-row anchor in col 4 (rides with the card, so the
+                # scene can align content to each row without re-measuring)
+                anchor = Rectangle(
+                    width=col4_w, height=cell_height,
+                    fill_opacity=0, stroke_width=0,
+                ).move_to(np.array([fourth_x, y, 0]))
+                self.col4_cells[i] = anchor
+                cells.add(anchor)
 
             if c is not None:
                 val, color, opacity = c["rows"][i]
@@ -325,6 +351,17 @@ class Scorecard(VGroup):
             fill_opacity=0, stroke_color=grid_color, stroke_width=grid_width,
         ).move_to(np.array([summary_x, bottom_summary_cy, 0])))
 
+        # ── Optional 4th column (top block + bottom block, mirroring summary) ──
+        if fourth_column:
+            cells.add(Rectangle(
+                width=col4_w, height=top_h,
+                fill_opacity=0, stroke_color=grid_color, stroke_width=grid_width,
+            ).move_to(np.array([fourth_x, top_summary_cy, 0])))
+            cells.add(Rectangle(
+                width=col4_w, height=bottom_h,
+                fill_opacity=0, stroke_color=grid_color, stroke_width=grid_width,
+            ).move_to(np.array([fourth_x, bottom_summary_cy, 0])))
+
         # ── Total footer (always shown; the number is omitted when scores=None)
         footer = Rectangle(
             width=full_width, height=cell_height * 1.18,
@@ -361,6 +398,19 @@ class Scorecard(VGroup):
             self.total_text.set_fill(WHITE, opacity=1.0 if grand_complete else 0.5)
             self.total_text.move_to(np.array([summary_x, total_y, 0]))
             score_texts.add(self.total_text)
+
+    # ── 4th column geometry (live, tracks the card's current position) ─────────
+    def col4_region(self, rows):
+        """Absolute (center, width, height) spanning the col-4 anchor `rows`
+        (an iterable of row indices). Computed from the live anchor cells, so it
+        is correct AFTER the card has been move_to()'d. Use for the top block
+        (rows 0..5) or bottom block (rows 6..12); per-row placement is
+        `col4_cells[i].get_center()`."""
+        cells = [self.col4_cells[r] for r in rows]
+        top = max(c.get_top()[1] for c in cells)
+        bot = min(c.get_bottom()[1] for c in cells)
+        x = cells[0].get_center()[0]
+        return np.array([x, (top + bot) / 2, 0]), self.col4_width, (top - bot)
 
     # ── Row highlighting ───────────────────────────────────────────────────────
     def _row_highlight(self, row, color, opacity):

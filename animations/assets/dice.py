@@ -455,13 +455,27 @@ class DiceBoard:
     Every method returns a list of animations to hand to `self.play(*...)`.
     """
 
-    def __init__(self, n=5, size=DIE_SIZE):
+    def __init__(self, n=5, size=DIE_SIZE, area_x=DICE_AREA_X, slot_dx=SLOT_DX,
+                 line_x=None):
+        # area_x / slot_dx let a scene tighten + shift the dice row (scene 06
+        # narrows the gutter to make room for the scorecard's 4th column). They
+        # default to the module constants, so every other scene is unchanged.
+        # line_x=(x_left, x_right) sets the guide-line span; None keeps the
+        # default extent.
+        self.area_x = area_x
+        self.slot_dx = slot_dx
         self.dice = [Die(value=1, size=size) for _ in range(n)]
-        self.lines = roll_lines()
+        self.lines = roll_lines() if line_x is None else roll_lines(x_left=line_x[0], x_right=line_x[1])
         self.band = 0
         self.slot = {i: i for i in range(n)}   # die index -> slot (0..4)
         self.kept = []
         self._pending = None
+
+    def _slot_x(self, slot):
+        return self.area_x + (slot - 2) * self.slot_dx
+
+    def _slot_point(self, band, slot):
+        return np.array([self._slot_x(slot), BAND_YS[band], 0.0])
 
     def all_mobjects(self):
         return VGroup(self.lines, *self.dice)
@@ -469,13 +483,13 @@ class DiceBoard:
     def place_initial(self, values):
         for i, d in enumerate(self.dice):
             d.set_value(values[i])
-            d.move_to(slot_point(0, i))
+            d.move_to(self._slot_point(0, i))
             self.slot[i] = i
         self.band = 0
         self.kept = []
 
     def first_roll(self, values):
-        anims = [RollDie(d, slot_point(1, self.slot[i]), values[i])
+        anims = [RollDie(d, self._slot_point(1, self.slot[i]), values[i])
                  for i, d in enumerate(self.dice)]
         self.band = 1
         return anims
@@ -493,11 +507,11 @@ class DiceBoard:
         anims = []
         for s, i in enumerate(kept):
             new_slot[i] = s
-            anims.append(self.dice[i].animate.move_to(slot_point(nb, s)))
+            anims.append(self.dice[i].animate.move_to(self._slot_point(nb, s)))
         for j, i in enumerate(others):
             s = len(kept) + j
             new_slot[i] = s
-            anims.append(self.dice[i].animate.move_to(slot_point(self.band, s)))
+            anims.append(self.dice[i].animate.move_to(self._slot_point(self.band, s)))
 
         self.slot = new_slot
         self.kept = kept
@@ -509,7 +523,7 @@ class DiceBoard:
         `values` is aligned with the non-kept dice in left-to-right order."""
         nb = self._pending["nb"]
         others = self._pending["others"]
-        anims = [RollDie(self.dice[i], slot_point(nb, self.slot[i]), values[j])
+        anims = [RollDie(self.dice[i], self._slot_point(nb, self.slot[i]), values[j])
                  for j, i in enumerate(others)]
         self.band = nb
         return anims
