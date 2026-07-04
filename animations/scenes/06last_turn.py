@@ -456,3 +456,99 @@ class LastTurn(YahtzeeScene):
         self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
         self._release_row()
         self.wait(0.2)
+
+    # ── CHANCE (u-aa) — ROUGH first pass; arrow choreography needs feel-tuning ─
+    #   a vertical column of dice 6..1; keep the high ones (>3.5), reroll the low
+    #   ones. Numbers walk 3.5 -> 4.25 (2nd reroll) -> 4.67 (1st reroll).
+    def _setup_chance_col(self):
+        ax = self._gutter_x()
+        self.ch_x = ax - 1.7                       # column on the left; arrows go right
+        sz, gap, y0 = 0.6, 0.52, 1.35
+        self.ch_dice = VGroup(*[
+            Die(value=v, size=sz).move_to([self.ch_x, y0 - i * gap, 0])
+            for i, v in enumerate([6, 5, 4, 3, 2, 1])])     # [0]=6 (top) .. [5]=1 (bottom)
+        self.ch_title = crisp_text("Second Reroll", font_size=26, color=BLACK,
+                                   font=FONT, weight="BOLD").move_to([self.ch_x, 2.15, 0])
+        self.ch_avg = crisp_text("Avg 3.5", font_size=30, color=BLACK,
+                                 font=FONT, weight="BOLD").move_to([self.ch_x, -1.65, 0])
+
+    def _keep_arrow(self, d):
+        return Arrow([d.get_right()[0], d.get_center()[1], 0],
+                     [self.ch_x + 1.5, d.get_center()[1], 0],
+                     buff=0.1, color=SCORE_GREEN, stroke_width=5)
+
+    def _reroll_arrow(self, d):
+        return Arrow(d.get_right(), self.ch_avg.get_top() + UP * 0.05,
+                     buff=0.12, color=SCORE_RED, stroke_width=5,
+                     max_tip_length_to_length_ratio=0.2)
+
+    # ── u) chance: treat each die on its own ─────────────────────────────────
+    @subscene
+    def chance_intro(self):
+        clear_rt, out_rt = 0.5, 0.4
+        self.card.transition(self, {R_SMS: 30, R_CHANCE: None}, run_time=clear_rt)
+        self._hold_row(R_CHANCE)
+        self.play(*[FadeOut(d) for d in self.board.dice], run_time=out_rt)
+
+    # ── v) second reroll: one die averages 3.5 ───────────────────────────────
+    @subscene
+    def chance_col(self):
+        in_rt = 0.8
+        self._setup_chance_col()
+        self.play(FadeIn(self.ch_title), FadeIn(self.ch_dice), FadeIn(self.ch_avg),
+                  run_time=in_rt)
+
+    # ── w) keep 4/5/6 (above 3.5), reroll 1/2/3 (below) ──────────────────────
+    @subscene
+    def chance_2nd_arrows(self):
+        rt = 0.8
+        ke = VGroup(*[self._keep_arrow(d) for d in self.ch_dice[0:3]])       # 6,5,4
+        rr = VGroup(*[self._reroll_arrow(d) for d in self.ch_dice[3:6]])     # 3,2,1
+        kl = crisp_text("keep", font_size=24, color=SCORE_GREEN, font=FONT,
+                        weight="BOLD").move_to([self.ch_x + 2.0, self.ch_dice[1].get_center()[1], 0])
+        rl = crisp_text("reroll", font_size=24, color=SCORE_RED, font=FONT,
+                        weight="BOLD").move_to([self.ch_x + 1.15, self.ch_dice[4].get_center()[1], 0])
+        self.ch_arrows = VGroup(ke, rr, kl, rl)
+        self.play(*[GrowArrow(a) for a in ke], *[GrowArrow(a) for a in rr],
+                  FadeIn(kl), FadeIn(rl), run_time=rt)
+
+    # ── x) that strategy averages 4.25 ───────────────────────────────────────
+    @subscene
+    def chance_425(self):
+        rt = 0.6
+        new = crisp_text("Avg 4.25", font_size=30, color=BLACK, font=FONT,
+                         weight="BOLD").move_to(self.ch_avg.get_center())
+        self.play(Transform(self.ch_avg, new), run_time=rt)
+
+    # ── y) first reroll now uses 4.25 (2 chances left), so reroll the 4 too ──
+    @subscene
+    def chance_1st(self):
+        title_rt, arr_rt = 0.7, 0.5
+        new_title = crisp_text("First Reroll", font_size=26, color=BLACK, font=FONT,
+                               weight="BOLD").move_to(self.ch_title.get_center())
+        self.play(Transform(self.ch_title, new_title), FadeOut(self.ch_arrows),
+                  run_time=title_rt)
+        a1 = self._reroll_arrow(self.ch_dice[5])          # the 1 -> reroll (4.25)
+        self.ch_first = VGroup(a1)
+        self.play(GrowArrow(a1), run_time=arr_rt)
+
+    # ── z) keep 5/6, reroll 1-4 ──────────────────────────────────────────────
+    @subscene
+    def chance_rest_arrows(self):
+        rt = 0.8
+        ke = VGroup(*[self._keep_arrow(d) for d in self.ch_dice[0:2]])       # 6,5
+        rr = VGroup(*[self._reroll_arrow(d) for d in self.ch_dice[2:5]])     # 4,3,2 (1 already drawn)
+        self.ch_first.add(ke, rr)
+        self.play(*[GrowArrow(a) for a in ke], *[GrowArrow(a) for a in rr], run_time=rt)
+
+    # ── aa) 4 2/3 per die -> 23 1/3 total for chance ─────────────────────────
+    @subscene
+    def chance_fill(self):
+        avg_rt, fill_rt = 0.6, 0.8
+        new = crisp_text("Avg 4.67", font_size=30, color=BLACK, font=FONT,
+                         weight="BOLD").move_to(self.ch_avg.get_center())
+        self.play(Transform(self.ch_avg, new), run_time=avg_rt)
+        pt, et = self._table_row(R_CHANCE, "–", "23⅓")   # prob = dash, EV = 23 1/3
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self._release_row()
+        self.wait(0.2)
