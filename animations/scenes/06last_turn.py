@@ -624,21 +624,29 @@ class LastTurn(YahtzeeScene):
         self.fk_bars = VGroup(g1, g6)
         self.play(FadeIn(g1), FadeIn(g6), run_time=bar_rt)
 
-    # ── zg) ...but keeping the 6s wins on POINTS (avg 6.2 vs 4.2) ─────────────
+    # ── zg) bars now = POINTS-IF-SUCCEED (full width), with the SUCCESS % filled,
+    #      so the FILLED AREA = EV. Keeping the 6s wins on points (6.2 vs 4.2). ──
+    #      SOURCED (math/scene06_last_turn_numbers.py): pts-if-succeed 8.1 / 27.1;
+    #      success 52% / 23%; filled = EV = 4.2 / 6.2.
     @subscene
     def fourk_ev_bars(self):
         rt = 0.9
         ax = self._gutter_x(); x0 = ax - 3.0
-        def ev_bar(bar, w):
-            nb = bar.copy().stretch_to_fit_width(max(w, 0.04)).set_fill(ACCENT_FILL)
-            nb.move_to([x0 + 0.65 + w / 2, bar.get_center()[1], 0])
-            return nb
-        b1 = ev_bar(self.fk_bar1, 4.18 * 0.55)
-        b6 = ev_bar(self.fk_bar6, 6.20 * 0.55)
-        l1 = crisp_text("avg 4.2", font_size=24, color=BLACK, font=FONT, weight="BOLD").next_to(b1, RIGHT, buff=0.15)
-        l6 = crisp_text("avg 6.2", font_size=24, color=BLACK, font=FONT, weight="BOLD").next_to(b6, RIGHT, buff=0.15)
-        self.play(Transform(self.fk_bar1, b1), Transform(self.fk_bar6, b6),
-                  Transform(self.fk_lbl1, l1), Transform(self.fk_lbl6, l6), run_time=rt)
+        sc = 0.15
+        def evbar(dval, y, pts, frac, ev):
+            d = Die(value=dval, size=0.55).move_to([x0, y, 0])
+            fw = pts * sc
+            outline = Rectangle(width=fw, height=0.5, fill_opacity=0.0,
+                                stroke_color=BLACK, stroke_width=2).move_to([x0 + 0.65 + fw / 2, y, 0])
+            fill = Rectangle(width=max(fw * frac, 0.03), height=0.5, fill_color=ACCENT_FILL,
+                             fill_opacity=1.0, stroke_width=0)
+            fill.align_to(outline, LEFT).set_y(y)
+            lbl = crisp_text(f"avg {ev}", font_size=22, color=BLACK, font=FONT,
+                             weight="BOLD").next_to(outline, RIGHT, buff=0.15)
+            return VGroup(d, fill, outline, lbl)
+        new = VGroup(evbar(1, 1.9, 8.1, 0.52, "4.2"), evbar(6, 0.55, 27.1, 0.23, "6.2"))
+        self.play(FadeOut(self.fk_bars), FadeIn(new), run_time=rt)
+        self.fk_bars = new
 
     # ── zh) several cases where fewer-larger beats more-smaller (keeps SOURCED)
     @subscene
@@ -677,13 +685,19 @@ class LastTurn(YahtzeeScene):
         morph_dice(self, self.board.dice, [3, 3, 3, 3, 1], run_time=morph_rt)   # 33331
         self._keep([0, 1, 2], 2, push_rt, hold)                     # keep 333 (reroll extra 3 & the 1)
 
-    # ── zk) first roll: usually keep the most, but many exceptions ───────────
-    #   (needs MORE examples — flagged; one counterintuitive case for now)
+    # ── zk) first roll: usually keep the most, but many exceptions — fewer of a
+    #      LARGER number over more of a smaller one (all SOURCED, 3-kind stage A) ─
     @subscene
     def threek_1st(self):
-        show_rt, push_rt, hold = 0.5, 0.4, 1.0
-        self._show_dice([2, 2, 3, 4, 5], band=1, run_time=show_rt)   # FIRST reroll -> band 1
-        self._keep([4], 1, push_rt, hold)                           # keep the lone 5 (counterintuitive)
+        show_rt, morph_rt, push_rt, hold = 0.5, 0.5, 0.4, 0.9
+        cases = [([1, 1, 1, 5, 5], [3, 4]),   # keep 55 over 111
+                 ([1, 1, 1, 4, 4], [3, 4]),   # keep 44 over 111
+                 ([1, 1, 4, 5, 6], [4])]      # keep the lone 6 over the pair of 1s
+        self._show_dice(cases[0][0], band=1, run_time=show_rt)   # FIRST reroll -> band 1
+        self._keep(cases[0][1], 1, push_rt, hold)
+        for vals, keep in cases[1:]:
+            morph_dice(self, self.board.dice, vals, run_time=morph_rt)
+            self._keep(keep, 1, push_rt, hold)
 
     # ── zl) fill the 3-of-a-kind row (71%, EV 15) ────────────────────────────
     @subscene

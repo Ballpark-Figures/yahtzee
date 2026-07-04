@@ -59,6 +59,32 @@ def p_success_from_roll(state, opening_roll, cat, forced_keepA=None):
     return p
 
 
+def points_if_succeed(state, opening_roll, cat, forced_keepA=None):
+    """E[box score | score > 0] from `opening_roll` under the stored policy (or a
+    forced first keep). Same forward replay as p_success_from_roll, but the
+    conditional mean of the score. (= EV / P(success); the 'points if you get it'
+    that the zg bars use for their WIDTH.)"""
+    from precomputed import KEEP_IDX
+    payload, row = get_state_row(state)
+    dA, dB = payload["decisions_A"][row], payload["decisions_B"][row]
+    i0 = dice_values_to_idx(opening_roll)
+    kA = KEEP_IDX[forced_keepA] if forced_keepA is not None else int(dA[i0])
+    fA, nA = REROLL_OUTCOMES[(i0, kA)]
+    sA = float(sum(nA))
+    tot_w = tot_s = 0.0
+    for iB, nb in zip(fA, nA):
+        kB = int(dB[int(iB)])
+        fB, nB = REROLL_OUTCOMES[(int(iB), kB)]
+        sB = float(sum(nB))
+        for iC, nc in zip(fB, nB):
+            sc = SCORE_ROWS[int(iC)][cat]
+            if sc > 0:
+                w = (nb / sA) * (nc / sB)
+                tot_w += w
+                tot_s += w * sc
+    return tot_s / tot_w if tot_w else 0.0
+
+
 def report():
     print("== TOP SECTION (Ones..Sixes) — expected COUNT of the target value ==")
     st = last_turn_state(ONES)
@@ -92,6 +118,11 @@ def report():
     p_keep6 = p_success_from_roll(fk, [1, 1, 1, 6, 6], FOUR_KIND)    # optimal = keep two 6s
     print(f"  keep the 1's (three-of-a-kind): {p_keep1*100:.1f}%")
     print(f"  keep the 6's (two-of-a-kind):   {p_keep6*100:.1f}%")
+    # zg bars: full width = points-if-succeed, filled = success% -> filled area = EV
+    pts1 = points_if_succeed(fk, [1, 1, 1, 6, 6], FOUR_KIND, forced_keepA=(3, 0, 0, 0, 0, 0))
+    pts6 = points_if_succeed(fk, [1, 1, 1, 6, 6], FOUR_KIND)
+    print(f"  points-if-succeed keep 1's: {pts1:.1f}  (x {p_keep1*100:.0f}% = {pts1*p_keep1:.1f} EV)")
+    print(f"  points-if-succeed keep 6's: {pts6:.1f}  (x {p_keep6*100:.0f}% = {pts6*p_keep6:.1f} EV)")
 
 
 if __name__ == "__main__":
