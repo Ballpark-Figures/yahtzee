@@ -491,7 +491,7 @@ class LastTurn(YahtzeeScene):
         for d in reroll:
             y = d.get_center()[1]
             num = crisp_text(reroll_val, font_size=26, color=BLACK, font=FONT,
-                             weight="BOLD").move_to([tgt_x, y, 0], aligned_edge=LEFT)
+                             weight="BOLD").move_to([self.ch_x2, y, 0])   # centered below the dupe dice
             a = Arrow(d.get_right(), [tgt_x, y, 0], buff=0.1, color=SCORE_RED,
                       stroke_width=5, max_tip_length_to_length_ratio=0.28)
             lbl = crisp_text("reroll", font_size=17, color=SCORE_RED, font=FONT,
@@ -533,7 +533,7 @@ class LastTurn(YahtzeeScene):
     def chance_425(self):
         rt = 0.6
         self.ch_result = crisp_text("Avg 4.25", font_size=28, color=BLACK, font=FONT,
-                                    weight="BOLD").move_to([self.ch_x2, self.ch_ybot, 0])
+                                    weight="BOLD").move_to([self.ch_x2, self.ch_avg.get_center()[1], 0])
         self.play(FadeIn(self.ch_result, shift=UP * 0.15), run_time=rt)
 
     # ── y) first reroll: rerolling now yields 4.25, so reroll the 4 too. The 1
@@ -569,7 +569,7 @@ class LastTurn(YahtzeeScene):
     def chance_fill(self):
         avg_rt, fill_rt = 0.6, 0.8
         self.ch_result = crisp_text("Avg 4.67", font_size=28, color=BLACK, font=FONT,
-                                    weight="BOLD").move_to([self.ch_x2, self.ch_ybot, 0])
+                                    weight="BOLD").move_to([self.ch_x2, self.ch_avg.get_center()[1], 0])
         self.play(FadeIn(self.ch_result, shift=UP * 0.15), run_time=avg_rt)
         pt, et = self._table_row(R_CHANCE, "–", "23.3")   # prob = dash, EV = 23.3
         self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
@@ -703,7 +703,7 @@ class LastTurn(YahtzeeScene):
         # both the DROPPED value (2s, 1s) and the KEPT shape (single/pair/pair+):
         cases = [([2, 2, 3, 4, 5], [4]),       # 22345: keep the single 5 over the pair of 2s (4K keeps 22)
                  ([1, 1, 1, 3, 3], [3, 4]),    # 11133: keep the pair of 3s over THREE 1s (4K keeps 111)
-                 ([1, 1, 3, 3, 6], [2, 3, 4])] # 11336: keep 3,3,6 over the pair of 1s (4K keeps 33)
+                 ([2, 2, 3, 3, 6], [2, 3, 4])] # 22336: keep 3,3,6 over the pair of 2s (4K keeps 33)
         self._show_dice(cases[0][0], band=1, run_time=show_rt)   # FIRST reroll -> band 1
         self._keep(cases[0][1], 1, push_rt, hold)
         for vals, keep in cases[1:]:
