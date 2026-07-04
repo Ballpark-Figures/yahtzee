@@ -7,7 +7,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 from manim import config as MCFG            # real frame is 16x9 (see manim.cfg)
 from config import *
 from assets.scorecard import get_scorecard
-from assets.dice import DiceBoard, morph_dice
+from assets.dice import DiceBoard, morph_dice, Die
 from bpkfigures.histogram import get_histogram
 
 
@@ -325,4 +325,65 @@ class LastTurn(YahtzeeScene):
         pt, et = self._table_row(R_FH, "37%", "9.2")
         self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
         self._release_row()          # end the Full House highlight before the section ends
+        self.wait(0.2)
+
+    # ── the two large straights, 2/3/4/5 aligned in columns (12345 / 23456) ───
+    def _setup_lgs_pair(self):
+        ax = self._gutter_x()
+        sp, sz, dy = 1.05, 0.8, 0.95
+        def die(v, col, y):
+            return Die(value=v, size=sz).move_to([ax + (col - 2.5) * sp, y, 0])
+        self.lgs_top = VGroup(*[die(v, c, dy) for c, v in enumerate([1, 2, 3, 4, 5])])
+        self.lgs_bot = VGroup(*[die(v, c + 1, -dy) for c, v in enumerate([2, 3, 4, 5, 6])])
+
+    # ── i) large straight: the two ways to make one ──────────────────────────
+    @subscene
+    def lgs_intro(self):
+        clear_rt, out_rt, in_rt = 0.5, 0.4, 0.8
+        self.card.transition(self, {R_FH: 25, R_LGS: None}, run_time=clear_rt)  # refill FH, open LgS
+        self._hold_row(R_LGS)
+        self.play(*[FadeOut(d) for d in self.board.dice], run_time=out_rt)      # clear the FH dice
+        self._setup_lgs_pair()
+        self.play(FadeIn(self.lgs_top, shift=UP * 0.2),
+                  FadeIn(self.lgs_bot, shift=DOWN * 0.2), run_time=in_rt)
+
+    # ── j) you need 2,3,4,5 and either a 1 or 6 ───────────────────────────────
+    @subscene
+    def lgs_strategy(self):
+        hl = 1.2
+        mid = [*self.lgs_top[1:5], *self.lgs_bot[0:4]]     # the 2,3,4,5 in both rows
+        ends = [self.lgs_top[0], self.lgs_bot[4]]          # the lone 1 and 6
+        highlight(self, mid, hold=hl)
+        highlight(self, ends, hold=hl)
+
+    # ── k) roll a 2/3/4/5 -> keep one of each (22334 -> keep 234) ─────────────
+    @subscene
+    def lgs_keep2345(self):
+        out_rt, show_rt, push_rt, hold = 0.4, 0.5, 0.4, 0.9
+        self.play(FadeOut(self.lgs_top), FadeOut(self.lgs_bot), run_time=out_rt)
+        self.lgs_top = self.lgs_bot = None
+        self._show_dice([2, 2, 3, 3, 4], band=2, run_time=show_rt)   # 22334
+        self._keep_up([0, 2, 4], push_rt, hold)                     # keep one 2, 3, 4
+
+    # ── l) 1/6 keeps a spot only if you'd keep >=4 dice (12346 -> keep 1234) ──
+    @subscene
+    def lgs_1or6(self):
+        morph_rt, push_rt, hold = 0.5, 0.4, 0.9
+        morph_dice(self, self.board.dice, [1, 2, 3, 4, 6], run_time=morph_rt)   # 12346
+        self._keep_up([0, 1, 2, 3], push_rt, hold)                  # keep the 1 (>=4 dice)
+
+    # ── m) otherwise reroll the 1s/6s (12336 -> keep 23) ─────────────────────
+    @subscene
+    def lgs_reroll16(self):
+        morph_rt, push_rt, hold = 0.5, 0.4, 0.9
+        morph_dice(self, self.board.dice, [1, 2, 3, 3, 6], run_time=morph_rt)   # 12336
+        self._keep_up([1, 2], push_rt, hold)                        # drop the 1 & 6, keep 23
+
+    # ── n) fill the Large Straight row (27%, EV 10.6) ────────────────────────
+    @subscene
+    def lgs_fill(self):
+        fill_rt = 0.8
+        pt, et = self._table_row(R_LGS, "27%", "10.6")
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self._release_row()
         self.wait(0.2)
