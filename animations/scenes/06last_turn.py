@@ -83,6 +83,26 @@ class LastTurn(YahtzeeScene):
         self.board.place_initial(list(start))
         self.play(*[FadeIn(d) for d in self.board.dice], run_time=run_time)
 
+    def _show_dice(self, values, band, run_time):
+        """Place the dice STATICALLY at `band` with `values` (fade out/in, no
+        roll) — for the keep-illustration sections (full house, straights)."""
+        self.play(*[FadeOut(d) for d in self.board.dice], run_time=run_time)
+        for i, d in enumerate(self.board.dice):
+            d.set_value(values[i])
+            d.move_to(self.board._slot_point(band, i))
+            self.board.slot[i] = i
+        self.board.band = band
+        self.board.kept = []
+        self.play(*[FadeIn(d) for d in self.board.dice], run_time=run_time)
+
+    def _push_forward(self, idxs, run_time, hold, dy=1.0, scale=1.18):
+        """'Push forward' the dice at `idxs` (step them out of the row toward the
+        viewer — down + scaled up), hold, then bring them back."""
+        dice = [self.board.dice[i] for i in idxs]
+        self.play(*[d.animate.shift(DOWN * dy).scale(scale) for d in dice], run_time=run_time)
+        self.wait(hold)
+        self.play(*[d.animate.shift(UP * dy).scale(1 / scale) for d in dice], run_time=run_time)
+
     # ── the box currently being covered stays highlighted for its whole section ─
     def _hold_row(self, row, run_time=0.4):
         self._release_row(run_time=0.0)          # drop any previous hold first
@@ -253,3 +273,28 @@ class LastTurn(YahtzeeScene):
     def highlight_34kind(self):
         hl_rt, hold = 0.4, 1.3
         self.card.highlight_rows(self, [R_3KIND, R_4KIND], run_time=hl_rt, hold=hold)
+
+    # ── g) full house: push-forward the groups you'd keep (2pair/3kind/pair/4kind)
+    @subscene
+    def fh_examples(self):
+        clear_rt, show_rt, push_rt, morph_rt, hold = 0.5, 0.5, 0.4, 0.5, 0.7
+
+        self.card.transition(self, {R_FH: None}, run_time=clear_rt)
+        self._hold_row(R_FH)
+        self._show_dice([2, 2, 4, 4, 5], band=2, run_time=show_rt)   # two pairs
+        self._push_forward([0, 1, 2, 3], push_rt, hold)             # keep 2244
+        morph_dice(self, self.board.dice, [2, 2, 2, 4, 5], run_time=morph_rt)  # 3 of a kind
+        self._push_forward([0, 1, 2], push_rt, hold)               # keep 222
+        morph_dice(self, self.board.dice, [2, 2, 3, 4, 5], run_time=morph_rt)  # single pair
+        self._push_forward([0, 1], push_rt, hold)                  # keep 22
+        morph_dice(self, self.board.dice, [2, 2, 2, 2, 5], run_time=morph_rt)  # 4 of a kind
+        self._push_forward([0, 1, 2], push_rt, hold)               # keep 3 of them
+
+    # ── h) fill the Full House row (37%, EV 9.2) ─────────────────────────────
+    @subscene
+    def fh_fill(self):
+        fill_rt = 0.8
+        pt, et = self._table_row(R_FH, "37%", "9.2")
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self._release_row()          # end the Full House highlight before the section ends
+        self.wait(0.2)
