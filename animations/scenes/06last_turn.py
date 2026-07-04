@@ -25,23 +25,23 @@ from bpkfigures.histogram import get_histogram
 
 # scores[0..5] Ones..Sixes | 6 3ofK | 7 4ofK | 8 FH | 9 SmS | 10 LgS |
 # 11 Yahtzee | 12 Chance | 13 yahtzee-bonus.  Yahtzee = 0 so no bonus is ever
-# available; top sum 59 < 63 so no top bonus either.
-SAMPLE = [3, 6, 9, 8, 15, 18,  18, 20, 25, 30, 40, 0, 22,  0]
+# available; top sum 62 < 63 so no top bonus either. Threes = 12 (matches the
+# four-3s the demo scores, so the box reads the same before and after).
+SAMPLE = [3, 6, 12, 8, 15, 18,  18, 20, 25, 30, 40, 0, 22,  0]
 
 # scorecard row indices (asset order: Yahtzee=11, Chance=12)
 R_THREES = 2
 R_3KIND, R_4KIND, R_FH, R_SMS, R_LGS, R_YAH, R_CHANCE = 6, 7, 8, 9, 10, 11, 12
 
 # ── layout ────────────────────────────────────────────────────────────────────
-# Normal column widths; a WIDER 4th column (more room for the histogram) is made
-# to fit by moving the card LEFT — its left edge sits at the frame edge and the
-# right edge extends into the space the dice vacate as they spread out right.
-CARD_C   = [-3.35, 0, 0]
-COL4_W   = 1.85
-# dice spread further apart on the right
-DICE_AX  = 3.9
-DICE_DX  = 1.3
-LINE_X   = (0.45, 7.0)           # guide lines span the dice gutter, clear of card
+# Card is snapped FLUSH to the left frame edge with to_edge(LEFT) (robust to the
+# card's actual width). The space that frees up on the right holds a WIDE 4th
+# column; the dice + guide lines are then centered in the gutter between the
+# card's real right edge and the frame's right edge (computed at runtime).
+COL4_W   = 2.2
+CARD_EDGE_BUFF = 0.12            # gap from the left frame edge
+FRAME_R  = 7.11                  # frame half-width
+DICE_DX  = 1.3                   # dice spread
 
 
 class LastTurn(YahtzeeScene):
@@ -60,12 +60,20 @@ class LastTurn(YahtzeeScene):
         # column. A box is open through the whole scene, so the top bar reads as
         # "in progress" (blue), not the red "missed the 63 bonus".
         self.card = get_scorecard(
-            SAMPLE, center=CARD_C,
+            SAMPLE, center=ORIGIN,
             fourth_column=True, fourth_width=COL4_W,
         )
+        self.card.to_edge(LEFT, buff=CARD_EDGE_BUFF)   # flush left (real width)
+        self.card_home = self.card.get_center().copy()
+
+    def _gutter_x(self):
+        """Center x of the empty gutter between the card's right edge and frame."""
+        return (self.card.get_right()[0] + FRAME_R) / 2
 
     def _setup_board(self, start=(1, 2, 3, 4, 5)):
-        self.board = DiceBoard(area_x=DICE_AX, slot_dx=DICE_DX, line_x=LINE_X)
+        ax = self._gutter_x()                          # dice centered in the gutter
+        self.board = DiceBoard(area_x=ax, slot_dx=DICE_DX,
+                               line_x=(ax - 3.15, ax + 3.15))
         self.board.place_initial(list(start))
 
     def _reset_board(self, start, run_time):
@@ -100,23 +108,21 @@ class LastTurn(YahtzeeScene):
     # ── column-4 bottom-block table (Prob Success | Avg Points) ───────────────
     def _col4_sub_x(self):
         cx = self.card.col4_cells[R_3KIND].get_center()[0]
-        return cx - 0.33, cx + 0.33          # (prob sub-column, avg sub-column)
+        return cx - 0.52, cx + 0.52          # (prob sub-column, avg sub-column)
 
     def _setup_table_headers(self):
         px, ax = self._col4_sub_x()
-        y = self.card.col4_cells[R_3KIND].get_top()[1] + 0.24
-        prob_h = VGroup(crisp_text("Prob", font_size=13, color=BLACK, font=FONT, weight="BOLD"),
-                        crisp_text("Success", font_size=13, color=BLACK, font=FONT, weight="BOLD")).arrange(DOWN, buff=0.02)
-        avg_h = VGroup(crisp_text("Avg", font_size=13, color=BLACK, font=FONT, weight="BOLD"),
-                       crisp_text("Points", font_size=13, color=BLACK, font=FONT, weight="BOLD")).arrange(DOWN, buff=0.02)
+        y = self.card.col4_cells[R_3KIND].get_top()[1] + 0.2
+        prob_h = crisp_text("Success %", font_size=14, color=BLACK, font=FONT, weight="BOLD")
+        avg_h = crisp_text("Avg Points", font_size=14, color=BLACK, font=FONT, weight="BOLD")
         prob_h.move_to([px, y, 0]); avg_h.move_to([ax, y, 0])
         self.col4_headers = VGroup(prob_h, avg_h)
 
     def _table_row(self, row, prob, ev):
         px, ax = self._col4_sub_x()
         y = self.card.col4_cells[row].get_center()[1]
-        pt = crisp_text(prob, font_size=19, color=BLACK, font=FONT, weight="BOLD").move_to([px, y, 0])
-        et = crisp_text(ev, font_size=19, color=BLACK, font=FONT, weight="BOLD").move_to([ax, y, 0])
+        pt = crisp_text(prob, font_size=25, color=BLACK, font=FONT, weight="BOLD").move_to([px, y, 0])
+        et = crisp_text(ev, font_size=25, color=BLACK, font=FONT, weight="BOLD").move_to([ax, y, 0])
         self.table_prob[row] = pt
         self.table_ev[row] = et
         return pt, et
@@ -130,7 +136,7 @@ class LastTurn(YahtzeeScene):
         # enter with a SHIFT (never an opacity fade — corrupts the card)
         self.card.shift(LEFT * 11)
         self.add(self.card)
-        self.play(self.card.animate.move_to(CARD_C), run_time=in_rt)
+        self.play(self.card.animate.move_to(self.card_home), run_time=in_rt)
 
         # "Highlight boxes one at a time" — a flash walking down every row.
         self.card.highlight_rows(self, list(range(13)), pulse=True,
@@ -186,6 +192,7 @@ class LastTurn(YahtzeeScene):
             FadeIn(self.hist_avg2),
             run_time=move_rt,
         )
+        self._release_row()          # end the Threes highlight before the section ends
         self.wait(0.2)
 
     def _setup_hist(self):
@@ -193,7 +200,7 @@ class LastTurn(YahtzeeScene):
         counts = {0: 6.49, 1: 23.63, 2: 34.40, 3: 25.04, 4: 9.12, 5: 1.33}
         self.hist = get_histogram(
             None, counts=counts, is_vertical=False,      # standing bars
-            center=[3.6, -0.2, 0], width=4.4, height=3.0,
+            center=[self._gutter_x(), -0.2, 0], width=4.4, height=3.0,
             bar_color=ACCENT_FILL, x_tick_step=1,         # label every value 0..5
             x_axis_label="Number Rolled",
             bar_labels="percent", bar_label_font_size=22,
@@ -213,9 +220,9 @@ class LastTurn(YahtzeeScene):
     def yah_roll(self):
         clear_rt, reset_rt, roll_rt, keep_rt = 0.6, 0.35, 0.7, 0.5
 
-        # refill Threes to its sample value, open + hold the Yahtzee box
-        self.card.transition(self, {R_THREES: 9, R_YAH: None}, run_time=clear_rt)
-        self._hold_row(R_YAH)                        # auto-releases the Threes hold
+        # open + hold the Yahtzee box (Threes already reads 12 from the demo)
+        self.card.transition(self, {R_YAH: None}, run_time=clear_rt)
+        self._hold_row(R_YAH)
         self._reset_board([2, 2, 4, 4, 6], reset_rt)
 
         self.play(*self.board.first_roll([2, 2, 4, 4, 6]), run_time=roll_rt)  # 22446
@@ -238,11 +245,11 @@ class LastTurn(YahtzeeScene):
         self.play(FadeIn(self.col4_headers), run_time=hdr_rt)
         pt, et = self._table_row(R_YAH, "5%", "2.3")
         self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self._release_row()          # end the Yahtzee highlight before the section ends
         self.wait(0.2)
 
     # ── f) "we'll get to 3 & 4 of a kind later" — highlight those two rows ────
     @subscene
     def highlight_34kind(self):
         hl_rt, hold = 0.4, 1.3
-        self._release_row()          # done covering Yahtzee
         self.card.highlight_rows(self, [R_3KIND, R_4KIND], run_time=hl_rt, hold=hold)
