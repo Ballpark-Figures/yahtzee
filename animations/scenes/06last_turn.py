@@ -50,7 +50,8 @@ class LastTurn(YahtzeeScene):
 
     def setup_scene(self):
         # Follows talking head THD — nothing on screen at frame 0.
-        pass
+        self.table_prob = {}   # scorecard row -> Prob-Success text  (col 4)
+        self.table_ev = {}     # scorecard row -> Avg-Points text    (col 4)
 
     # ── shared build helpers ─────────────────────────────────────────────────
     def _setup_card(self):
@@ -65,6 +66,37 @@ class LastTurn(YahtzeeScene):
     def _setup_board(self, start=(1, 2, 3, 4, 5)):
         self.board = DiceBoard(area_x=DICE_AX, slot_dx=DICE_DX, line_x=LINE_X)
         self.board.place_initial(list(start))
+
+    def _reset_board(self, start, run_time):
+        """Send the dice back to band 0 (below the bottom line) with the given
+        opening values, for a fresh 3-roll sequence in a new section."""
+        self.play(*[FadeOut(d) for d in self.board.dice], run_time=run_time)
+        self.board.place_initial(list(start))
+        self.play(*[FadeIn(d) for d in self.board.dice], run_time=run_time)
+
+    # ── column-4 bottom-block table (Prob Success | Avg Points) ───────────────
+    def _col4_sub_x(self):
+        cx = self.card.col4_cells[R_3KIND].get_center()[0]
+        return cx - 0.33, cx + 0.33          # (prob sub-column, avg sub-column)
+
+    def _setup_table_headers(self):
+        px, ax = self._col4_sub_x()
+        y = self.card.col4_cells[R_3KIND].get_top()[1] + 0.24
+        prob_h = VGroup(crisp_text("Prob", font_size=13, color=BLACK, font=FONT, weight="BOLD"),
+                        crisp_text("Success", font_size=13, color=BLACK, font=FONT, weight="BOLD")).arrange(DOWN, buff=0.02)
+        avg_h = VGroup(crisp_text("Avg", font_size=13, color=BLACK, font=FONT, weight="BOLD"),
+                       crisp_text("Points", font_size=13, color=BLACK, font=FONT, weight="BOLD")).arrange(DOWN, buff=0.02)
+        prob_h.move_to([px, y, 0]); avg_h.move_to([ax, y, 0])
+        self.col4_headers = VGroup(prob_h, avg_h)
+
+    def _table_row(self, row, prob, ev):
+        px, ax = self._col4_sub_x()
+        y = self.card.col4_cells[row].get_center()[1]
+        pt = crisp_text(prob, font_size=19, color=BLACK, font=FONT, weight="BOLD").move_to([px, y, 0])
+        et = crisp_text(ev, font_size=19, color=BLACK, font=FONT, weight="BOLD").move_to([ax, y, 0])
+        self.table_prob[row] = pt
+        self.table_ev[row] = et
+        return pt, et
 
     # ── a) intro: bring in the card, walk the boxes ──────────────────────────
     @subscene
@@ -148,3 +180,40 @@ class LastTurn(YahtzeeScene):
             crisp_text("Avg", font_size=30, color=BLACK, font=FONT, weight="BOLD"),
             crisp_text("2.1", font_size=36, color=BLACK, font=FONT, weight="BOLD"),
         ).arrange(DOWN, buff=0.06)
+
+    # ── d) yahtzee: keep the most-of; the example fails (33313, four 3s) ──────
+    @subscene
+    def yah_roll(self):
+        clear_rt, reset_rt, roll_rt, keep_rt = 0.6, 0.35, 0.7, 0.5
+
+        # refill Threes to its sample value, open the Yahtzee box
+        self.card.transition(self, {R_THREES: 9, R_YAH: None}, run_time=clear_rt)
+        self._reset_board([2, 2, 4, 4, 6], reset_rt)
+
+        self.play(*self.board.first_roll([2, 2, 4, 4, 6]), run_time=roll_rt)  # 22446
+        self.wait(0.15)
+        self.play(*self.board.keep([0, 1]), run_time=keep_rt)                 # keep 22
+        self.play(*self.board.roll_rest([3, 3, 3]), run_time=roll_rt)         # 22333
+        self.wait(0.15)
+        self.play(*self.board.keep([2, 3, 4]), run_time=keep_rt)              # keep 333
+        self.play(*self.board.roll_rest([3, 1]), run_time=roll_rt)            # 33313 (no yahtzee)
+        self.wait(0.3)
+        self.card.yahtzee(self, self.board.dice)                             # scores 0
+        self.wait(0.3)
+
+    # ── e) introduce the col-4 table; fill the Yahtzee row (5%, EV) ──────────
+    @subscene
+    def yah_fill(self):
+        self._setup_table_headers()
+        hdr_rt, fill_rt = 0.8, 0.8
+
+        self.play(FadeIn(self.col4_headers), run_time=hdr_rt)
+        pt, et = self._table_row(R_YAH, "5%", "2.3")
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self.wait(0.2)
+
+    # ── f) "we'll get to 3 & 4 of a kind later" — highlight those two rows ────
+    @subscene
+    def highlight_34kind(self):
+        hl_rt, hold = 0.4, 1.3
+        self.card.highlight_rows(self, [R_3KIND, R_4KIND], run_time=hl_rt, hold=hold)
