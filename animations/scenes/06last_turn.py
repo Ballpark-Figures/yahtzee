@@ -552,3 +552,125 @@ class LastTurn(YahtzeeScene):
         self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
         self._release_row()
         self.wait(0.2)
+
+    # ── zb) the complicated cases: 3 & 4 of a kind ───────────────────────────
+    @subscene
+    def fourk_highlight(self):
+        out_rt, clear_rt, hl_rt, hold = 0.4, 0.5, 0.4, 1.3
+        # clear the chance illustration, refill Chance, open 4-of-a-kind
+        self.play(FadeOut(self.ch_dice), FadeOut(self.ch_title),
+                  FadeOut(self.ch_avg), FadeOut(self.ch_first), run_time=out_rt)
+        self.ch_dice = self.ch_title = self.ch_avg = self.ch_first = None
+        self.card.transition(self, {R_CHANCE: 22, R_4KIND: None}, run_time=clear_rt)
+        self.card.highlight_rows(self, [R_3KIND, R_4KIND], run_time=hl_rt, hold=hold)
+        self._hold_row(R_4KIND)
+
+    # ── zc) last roll: keep whatever you have most of (11156 -> 111) ──────────
+    @subscene
+    def fourk_11156(self):
+        show_rt, push_rt, hold = 0.5, 0.4, 0.9
+        self._show_dice([1, 1, 1, 5, 6], band=2, run_time=show_rt)
+        self._keep_up([0, 1, 2], push_rt, hold)                     # keep 111
+
+    # ── zd) already have 4oak -> reroll the last die if <=3 (44442 -> 4444) ──
+    @subscene
+    def fourk_44442(self):
+        morph_rt, push_rt, hold = 0.5, 0.4, 0.9
+        morph_dice(self, self.board.dice, [4, 4, 4, 4, 2], run_time=morph_rt)
+        self._keep_up([0, 1, 2, 3], push_rt, hold)                  # keep 4444, reroll the 2
+
+    # ── ze) first roll: keep 4oak, reroll the other die if <5 (33334 -> 3333) ─
+    @subscene
+    def fourk_33334(self):
+        morph_rt, push_rt, hold = 0.5, 0.4, 0.9
+        morph_dice(self, self.board.dice, [3, 3, 3, 3, 4], run_time=morph_rt)
+        self._keep_up([0, 1, 2, 3], push_rt, hold)                  # keep 3333, reroll the 4
+
+    # ── the two "success bars" for 11166: keep the 1s vs keep the 6s ─────────
+    def _fk_bar(self, dval, w, txt, y, color):
+        ax = self._gutter_x()
+        x0 = ax - 3.0
+        d = Die(value=dval, size=0.55).move_to([x0, y, 0])
+        bar = Rectangle(width=max(w, 0.04), height=0.42, fill_color=color,
+                        fill_opacity=1.0, stroke_width=1.5, stroke_color=BLACK)
+        bar.move_to([x0 + 0.65 + w / 2, y, 0])
+        lbl = crisp_text(txt, font_size=24, color=BLACK, font=FONT,
+                         weight="BOLD").next_to(bar, RIGHT, buff=0.15)
+        return VGroup(d, bar, lbl), bar, lbl
+
+    # ── zf) 3 ones vs 2 sixes: keeping the 1s wins on SUCCESS (52% vs 23%) ────
+    @subscene
+    def fourk_11166_bars(self):
+        show_rt, bar_rt = 0.5, 0.8
+        self._show_dice([1, 1, 1, 6, 6], band=0, run_time=show_rt)   # low, bars above
+        g1, self.fk_bar1, self.fk_lbl1 = self._fk_bar(1, 0.52 * 4.0, "52%", 1.9, SCORE_GREEN)
+        g6, self.fk_bar6, self.fk_lbl6 = self._fk_bar(6, 0.23 * 4.0, "23%", 0.7, SCORE_GREEN)
+        self.fk_bars = VGroup(g1, g6)
+        self.play(FadeIn(g1), FadeIn(g6), run_time=bar_rt)
+
+    # ── zg) ...but keeping the 6s wins on POINTS (avg 6.2 vs 4.2) ─────────────
+    @subscene
+    def fourk_ev_bars(self):
+        rt = 0.9
+        ax = self._gutter_x(); x0 = ax - 3.0
+        def ev_bar(bar, w):
+            nb = bar.copy().stretch_to_fit_width(max(w, 0.04)).set_fill(ACCENT_FILL)
+            nb.move_to([x0 + 0.65 + w / 2, bar.get_center()[1], 0])
+            return nb
+        b1 = ev_bar(self.fk_bar1, 4.18 * 0.55)
+        b6 = ev_bar(self.fk_bar6, 6.20 * 0.55)
+        l1 = crisp_text("avg 4.2", font_size=24, color=BLACK, font=FONT, weight="BOLD").next_to(b1, RIGHT, buff=0.15)
+        l6 = crisp_text("avg 6.2", font_size=24, color=BLACK, font=FONT, weight="BOLD").next_to(b6, RIGHT, buff=0.15)
+        self.play(Transform(self.fk_bar1, b1), Transform(self.fk_bar6, b6),
+                  Transform(self.fk_lbl1, l1), Transform(self.fk_lbl6, l6), run_time=rt)
+
+    # ── zh) several cases where fewer-larger beats more-smaller (keeps SOURCED)
+    @subscene
+    def fourk_examples(self):
+        out_rt, show_rt, morph_rt, push_rt, hold = 0.4, 0.5, 0.5, 0.35, 0.7
+        self.play(FadeOut(self.fk_bars), run_time=out_rt)
+        self.fk_bars = None
+        cases = [([1, 1, 1, 4, 4], [3, 4]), ([1, 1, 1, 5, 5], [3, 4]),   # keep 44 / 55
+                 ([2, 2, 3, 5, 6], [4]),    ([1, 1, 2, 3, 6], [4]),      # keep the 6
+                 ([1, 1, 2, 3, 5], [4]),    ([1, 1, 2, 3, 4], [4])]      # keep the 5 / 4
+        self._show_dice(cases[0][0], band=2, run_time=show_rt)
+        self._keep_up(cases[0][1], push_rt, hold)
+        for vals, keep in cases[1:]:
+            morph_dice(self, self.board.dice, vals, run_time=morph_rt)
+            self._keep_up(keep, push_rt, hold)
+
+    # ── zi) fill the 4-of-a-kind row (28%, EV 5.6) ───────────────────────────
+    @subscene
+    def fourk_fill(self):
+        fill_rt = 0.8
+        pt, et = self._table_row(R_4KIND, "28%", "5.6")
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self._release_row()
+        self.wait(0.2)
+
+    # ── zj) 3 of a kind, second reroll: keep most; if 3oak reroll other 2 (<4)
+    @subscene
+    def threek_2nd(self):
+        clear_rt, show_rt, morph_rt, push_rt, hold = 0.5, 0.5, 0.5, 0.4, 0.9
+        self.card.transition(self, {R_4KIND: 20, R_3KIND: None}, run_time=clear_rt)  # refill 4K, open 3K
+        self._hold_row(R_3KIND)
+        self._show_dice([2, 2, 3, 4, 5], band=2, run_time=show_rt)   # 22345
+        self._keep_up([0, 1], push_rt, hold)                        # keep 22
+        morph_dice(self, self.board.dice, [3, 3, 3, 3, 1], run_time=morph_rt)   # 33331
+        self._keep_up([0, 1, 2], push_rt, hold)                     # keep 333 (reroll extra 3 & the 1)
+
+    # ── zk) first roll: usually keep the most, but many exceptions ───────────
+    @subscene
+    def threek_1st(self):
+        morph_rt, push_rt, hold = 0.5, 0.4, 1.0
+        morph_dice(self, self.board.dice, [2, 2, 3, 4, 5], run_time=morph_rt)   # 22345
+        self._keep_up([4], push_rt, hold)                           # keep the lone 5 (counterintuitive)
+
+    # ── zl) fill the 3-of-a-kind row (71%, EV 15) ────────────────────────────
+    @subscene
+    def threek_fill(self):
+        fill_rt = 0.8
+        pt, et = self._table_row(R_3KIND, "71%", "15")
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self._release_row()
+        self.wait(0.5)
