@@ -150,24 +150,24 @@ class LastTurn(YahtzeeScene):
             self.remove(fill, border)
         self._held = None
 
-    # ── column-4 bottom-block table (Prob Success | Avg Points) ───────────────
+    # ── column-4 bottom-block table (Prob | Avg Pts) ──────────────────────────
     def _col4_sub_x(self):
         cx = self.card.col4_cells[R_3KIND].get_center()[0]
-        return cx - 0.52, cx + 0.52          # (prob sub-column, avg sub-column)
+        return cx - 0.72, cx + 0.72          # (prob sub-column, avg sub-column)
 
     def _setup_table_headers(self):
         px, ax = self._col4_sub_x()
         y = self.card.col4_cells[R_3KIND].get_top()[1] + 0.2
-        prob_h = crisp_text("Success %", font_size=14, color=BLACK, font=FONT, weight="BOLD")
-        avg_h = crisp_text("Avg Points", font_size=14, color=BLACK, font=FONT, weight="BOLD")
+        prob_h = crisp_text("Prob", font_size=20, color=BLACK, font=FONT, weight="BOLD")
+        avg_h = crisp_text("Avg Pts", font_size=20, color=BLACK, font=FONT, weight="BOLD")
         prob_h.move_to([px, y, 0]); avg_h.move_to([ax, y, 0])
         self.col4_headers = VGroup(prob_h, avg_h)
 
     def _table_row(self, row, prob, ev):
         px, ax = self._col4_sub_x()
         y = self.card.col4_cells[row].get_center()[1]
-        pt = crisp_text(prob, font_size=25, color=BLACK, font=FONT, weight="BOLD").move_to([px, y, 0])
-        et = crisp_text(ev, font_size=25, color=BLACK, font=FONT, weight="BOLD").move_to([ax, y, 0])
+        pt = crisp_text(prob, font_size=29, color=BLACK, font=FONT, weight="BOLD").move_to([px, y, 0])
+        et = crisp_text(ev, font_size=29, color=BLACK, font=FONT, weight="BOLD").move_to([ax, y, 0])
         self.table_prob[row] = pt
         self.table_ev[row] = et
         return pt, et
@@ -227,15 +227,16 @@ class LastTurn(YahtzeeScene):
         self.wait(0.5)
 
         # park it in the TOP of column 4 (keep the % and the 0-5 labels, but drop
-        # the "Number Rolled" axis label); swap the Avg for a big 2-line version
-        # below the mini-histogram (live region tracks the card)
-        top_c, _w, top_h = self.card.col4_region(range(6))
-        mini_c = top_c + UP * top_h * 0.25
-        self.hist_avg2.move_to(top_c + DOWN * top_h * 0.33)
+        # the "Number Rolled" axis label); scale it to ~90% of the column width,
+        # sit it a bit low so the % labels clear the top, Avg 2.1 on one line below
+        top_c, colw, top_h = self.card.col4_region(range(6))
+        scale = 0.9 * colw / self.hist.width
+        mini_c = top_c + UP * top_h * 0.12
+        self.hist_avg2.move_to(top_c + DOWN * top_h * 0.36)
         xlab = self.hist.x_axis_label_text
         self.hist.remove(xlab)                       # so it isn't scaled with the rest
         self.play(
-            self.hist.animate.scale(0.50).move_to(mini_c),
+            self.hist.animate.scale(scale).move_to(mini_c),
             FadeOut(xlab),
             FadeOut(self.hist_avg1),
             FadeIn(self.hist_avg2),
@@ -249,7 +250,7 @@ class LastTurn(YahtzeeScene):
         counts = {0: 6.49, 1: 23.63, 2: 34.40, 3: 25.04, 4: 9.12, 5: 1.33}
         self.hist = get_histogram(
             None, counts=counts, is_vertical=False,      # standing bars
-            center=[self._gutter_x(), -0.2, 0], width=4.4, height=2.5,
+            center=[self._gutter_x(), -0.2, 0], width=4.4, height=2.2,
             bar_color=ACCENT_FILL, x_tick_step=1,         # label every value 0..5
             x_axis_label="Number Rolled",
             bar_labels="percent", bar_label_font_size=22,
@@ -258,11 +259,9 @@ class LastTurn(YahtzeeScene):
         self.hist_avg1 = crisp_text("Avg 2.1", font_size=32, color=BLACK,
                                     font=FONT, weight="BOLD")
         self.hist_avg1.next_to(self.hist, DOWN, buff=0.3)
-        # large 2-line caption for once it's parked in column 4
-        self.hist_avg2 = VGroup(
-            crisp_text("Avg", font_size=30, color=BLACK, font=FONT, weight="BOLD"),
-            crisp_text("2.1", font_size=36, color=BLACK, font=FONT, weight="BOLD"),
-        ).arrange(DOWN, buff=0.06)
+        # single-line caption (uniform size) for once it's parked in column 4
+        self.hist_avg2 = crisp_text("Avg 2.1", font_size=30, color=BLACK,
+                                    font=FONT, weight="BOLD")
 
     # ── d) yahtzee: keep the most-of; the example fails (33313, four 3s) ──────
     @subscene

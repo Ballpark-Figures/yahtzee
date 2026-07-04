@@ -933,7 +933,12 @@ class Scorecard(VGroup):
         def color_at(v):
             if v >= 63:
                 return green_c
-            return red_c if top_complete else ACCENT_FILL
+            # Red only once the top's FINAL (complete) sum is reached. While a
+            # score that completes the top is still counting in (v below new_top),
+            # stay blue — so it flips red at the END of the grow, not the start.
+            if top_complete and v >= new_top - 1e-6:
+                return red_c
+            return ACCENT_FILL
 
         def fill_for(v):
             h = max(bar_h * v / 63, 1e-4)   # keeps growing past 63 (overflow)
