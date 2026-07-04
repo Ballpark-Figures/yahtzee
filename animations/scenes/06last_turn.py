@@ -462,34 +462,42 @@ class LastTurn(YahtzeeScene):
         self.ch_dice = VGroup(*[
             Die(value=v, size=self.ch_sz).move_to([self.ch_x, y0 - i * gap, 0])
             for i, v in enumerate([6, 5, 4, 3, 2, 1])])     # [0]=6 (top) .. [5]=1 (bottom)
+        self.ch_ybot = -3.0                        # bottom summary labels (extra room below the 1)
         self.ch_title = crisp_text("Second Reroll", font_size=26, color=BLACK, font=FONT,
                                    weight="BOLD").move_to([(self.ch_x + self.ch_x2) / 2, 2.75, 0])
         self.ch_avg = crisp_text("Avg 3.5", font_size=28, color=BLACK, font=FONT,
-                                 weight="BOLD").move_to([self.ch_x, -2.75, 0])  # single-die avg
+                                 weight="BOLD").move_to([self.ch_x, self.ch_ybot, 0])  # single-die avg
 
     def _ch_arrows(self, keep_n, reroll_val):
         """Keep-arrows (kept die -> its own dupe die) and reroll-arrows (each
-        rerolled die -> its OWN copy of the reroll number), all horizontal, each
-        with a label above. Returns (keep_group, [(arrow, num, label), ...])."""
+        rerolled die -> its OWN copy of the reroll number), each labelled above.
+        Every arrow shares the SAME start x (die right edge) and SAME end x
+        (tgt_x = the second column's left edge), so all arrows are identical
+        length and built identically; the dupe dice and the reroll numbers are
+        both LEFT-aligned to tgt_x, so the two second-column stacks line up.
+        Returns (keeps, rerolls), each a list of (arrow, mob, label) triples."""
         keep, reroll = self.ch_dice[:keep_n], self.ch_dice[keep_n:]
-        g = VGroup()
+        tgt_x = self.ch_x2 - self.ch_sz / 2         # shared left edge of column 2
+        keeps = []
         for d in keep:
-            dup = Die(value=d.value, size=self.ch_sz).move_to([self.ch_x2, d.get_center()[1], 0])
-            a = Arrow(d.get_right(), dup.get_left(), buff=0.1, color=SCORE_GREEN,
+            y = d.get_center()[1]
+            dup = Die(value=d.value, size=self.ch_sz).move_to([self.ch_x2, y, 0])
+            a = Arrow(d.get_right(), [tgt_x, y, 0], buff=0.1, color=SCORE_GREEN,
                       stroke_width=5, max_tip_length_to_length_ratio=0.28)
             lbl = crisp_text("keep", font_size=17, color=SCORE_GREEN, font=FONT,
                              weight="BOLD").next_to(a, UP, buff=0.0)
-            g.add(a, dup, lbl)
-        arr = []
+            keeps.append((a, dup, lbl))
+        rerolls = []
         for d in reroll:
+            y = d.get_center()[1]
             num = crisp_text(reroll_val, font_size=26, color=BLACK, font=FONT,
-                             weight="BOLD").move_to([self.ch_x2 + 0.2, d.get_center()[1], 0])
-            a = Arrow(d.get_right(), num.get_left() + LEFT * 0.05, buff=0.1, color=SCORE_RED,
+                             weight="BOLD").move_to([tgt_x, y, 0], aligned_edge=LEFT)
+            a = Arrow(d.get_right(), [tgt_x, y, 0], buff=0.1, color=SCORE_RED,
                       stroke_width=5, max_tip_length_to_length_ratio=0.28)
             lbl = crisp_text("reroll", font_size=17, color=SCORE_RED, font=FONT,
                              weight="BOLD").next_to(a, UP, buff=0.0)
-            arr.append((a, num, lbl))
-        return g, arr
+            rerolls.append((a, num, lbl))
+        return keeps, rerolls
 
     # ── u) chance: treat each die on its own ─────────────────────────────────
     @subscene
@@ -509,19 +517,23 @@ class LastTurn(YahtzeeScene):
     # ── w) keep 4/5/6 -> themselves; reroll 1/2/3 -> its own 3.5 ─────────────
     @subscene
     def chance_2nd_arrows(self):
-        rt = 0.9
-        keeps, arr = self._ch_arrows(keep_n=3, reroll_val="3.5")
-        self.ch_2nd = VGroup(keeps, *[a for a, _, _ in arr], *[n for _, n, _ in arr],
-                             *[l for _, _, l in arr])
-        self.play(FadeIn(keeps), *[GrowArrow(a) for a, _, _ in arr],
-                  *[FadeIn(n) for _, n, _ in arr], *[FadeIn(l) for _, _, l in arr], run_time=rt)
+        reroll_rt, keep_rt = 0.8, 0.8
+        keeps, rerolls = self._ch_arrows(keep_n=3, reroll_val="3.5")
+        self.ch_2nd = VGroup(*[m for tr in keeps for m in tr],
+                             *[m for tr in rerolls for m in tr])
+        self.play(*[GrowArrow(a) for a, _, _ in rerolls],      # reroll first
+                  *[FadeIn(n) for _, n, _ in rerolls], *[FadeIn(l) for _, _, l in rerolls],
+                  run_time=reroll_rt)
+        self.play(*[GrowArrow(a) for a, _, _ in keeps],        # then keep
+                  *[FadeIn(dup) for _, dup, _ in keeps], *[FadeIn(l) for _, _, l in keeps],
+                  run_time=keep_rt)
 
     # ── x) that strategy averages 4.25 (end of the SECOND column) ────────────
     @subscene
     def chance_425(self):
         rt = 0.6
         self.ch_result = crisp_text("Avg 4.25", font_size=28, color=BLACK, font=FONT,
-                                    weight="BOLD").move_to([self.ch_x2 + 0.2, -2.75, 0])
+                                    weight="BOLD").move_to([self.ch_x2, self.ch_ybot, 0])
         self.play(FadeIn(self.ch_result, shift=UP * 0.15), run_time=rt)
 
     # ── y) first reroll: rerolling now yields 4.25, so reroll the 4 too. The 1
@@ -533,27 +545,31 @@ class LastTurn(YahtzeeScene):
                                weight="BOLD").move_to(self.ch_title.get_center())
         self.play(Transform(self.ch_title, new_title),
                   FadeOut(self.ch_2nd), FadeOut(self.ch_result), run_time=title_rt)
-        keeps, arr = self._ch_arrows(keep_n=2, reroll_val="4.25")  # keep 5,6; reroll 1-4
-        self.ch_1st = VGroup(keeps, *[a for a, _, _ in arr], *[n for _, n, _ in arr],
-                             *[l for _, _, l in arr])
-        a1, n1, l1 = arr[-1]                        # bottom die = the 1
+        keeps, rerolls = self._ch_arrows(keep_n=2, reroll_val="4.25")  # keep 5,6; reroll 1-4
+        self.ch_1st = VGroup(*[m for tr in keeps for m in tr],
+                             *[m for tr in rerolls for m in tr])
+        a1, n1, l1 = rerolls[-1]                    # bottom die = the 1
         self.play(GrowArrow(a1), FadeIn(n1), FadeIn(l1), run_time=arr_rt)
-        self._ch_1st_rest = (keeps, arr[:-1])
+        self._ch_1st_rest = (keeps, rerolls[:-1])
 
     # ── z) keep 5/6, reroll 1-4 (the rest of the arrows) ─────────────────────
     @subscene
     def chance_rest_arrows(self):
-        rt = 0.9
-        keeps, rest = self._ch_1st_rest
-        self.play(FadeIn(keeps), *[GrowArrow(a) for a, _, _ in rest],
-                  *[FadeIn(n) for _, n, _ in rest], *[FadeIn(l) for _, _, l in rest], run_time=rt)
+        reroll_rt, keep_rt = 0.8, 0.8
+        keeps, rest = self._ch_1st_rest             # rest = reroll triples except the 1
+        self.play(*[GrowArrow(a) for a, _, _ in rest],      # reroll first
+                  *[FadeIn(n) for _, n, _ in rest], *[FadeIn(l) for _, _, l in rest],
+                  run_time=reroll_rt)
+        self.play(*[GrowArrow(a) for a, _, _ in keeps],     # then keep
+                  *[FadeIn(dup) for _, dup, _ in keeps], *[FadeIn(l) for _, _, l in keeps],
+                  run_time=keep_rt)
 
     # ── za) 4 2/3 per die -> 23.3 total for chance ───────────────────────────
     @subscene
     def chance_fill(self):
         avg_rt, fill_rt = 0.6, 0.8
         self.ch_result = crisp_text("Avg 4.67", font_size=28, color=BLACK, font=FONT,
-                                    weight="BOLD").move_to([self.ch_x2 + 0.2, -2.75, 0])
+                                    weight="BOLD").move_to([self.ch_x2, self.ch_ybot, 0])
         self.play(FadeIn(self.ch_result, shift=UP * 0.15), run_time=avg_rt)
         pt, et = self._table_row(R_CHANCE, "–", "23.3")   # prob = dash, EV = 23.3
         self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
@@ -683,9 +699,11 @@ class LastTurn(YahtzeeScene):
     def threek_1st(self):
         show_rt, morph_rt, push_rt, hold = 0.5, 0.5, 0.4, 0.9
         # 3-kind-SPECIFIC counterintuitive keeps (the 4-kind answer differs here):
-        cases = [([2, 2, 3, 4, 5], [4]),      # keep the 5 over the pair of 2s (4K keeps 22)
-                 ([1, 1, 2, 2, 5], [4]),      # keep the 5 over TWO low pairs (4K keeps 22)
-                 ([2, 2, 3, 3, 6], [2, 3, 4])] # keep 3,3,6 over the pair of 2s (4K keeps 33)
+        # A RANGE of 3-kind-SPECIFIC keeps (the 4-kind answer differs), varying
+        # both the DROPPED value (2s, 1s) and the KEPT shape (single/pair/pair+):
+        cases = [([2, 2, 3, 4, 5], [4]),       # 22345: keep the single 5 over the pair of 2s (4K keeps 22)
+                 ([1, 1, 1, 3, 3], [3, 4]),    # 11133: keep the pair of 3s over THREE 1s (4K keeps 111)
+                 ([1, 1, 3, 3, 6], [2, 3, 4])] # 11336: keep 3,3,6 over the pair of 1s (4K keeps 33)
         self._show_dice(cases[0][0], band=1, run_time=show_rt)   # FIRST reroll -> band 1
         self._keep(cases[0][1], 1, push_rt, hold)
         for vals, keep in cases[1:]:
