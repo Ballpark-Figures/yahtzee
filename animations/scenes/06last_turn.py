@@ -253,7 +253,7 @@ class LastTurn(YahtzeeScene):
             center=[self._gutter_x(), -0.2, 0], width=4.4, height=2.2,
             bar_color=ACCENT_FILL, x_tick_step=1,         # label every value 0..5
             x_axis_label="Number Rolled",
-            bar_labels="percent", bar_label_font_size=22,
+            bar_labels="percent", bar_label_font_size=22, bar_label_weight="BOLD",
         )
         # big single-line caption for the on-the-right display
         self.hist_avg1 = crisp_text("Avg 2.1", font_size=32, color=BLACK,
