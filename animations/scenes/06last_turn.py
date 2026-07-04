@@ -33,15 +33,15 @@ R_THREES = 2
 R_3KIND, R_4KIND, R_FH, R_SMS, R_LGS, R_YAH, R_CHANCE = 6, 7, 8, 9, 10, 11, 12
 
 # ── layout ────────────────────────────────────────────────────────────────────
-# The 4-column card is ~6.5 wide (about half the frame), so its leftmost
-# non-clipping center is ~-3.65 — it can't reach the usual LEFT_SC (-4.74).
-CARD_C   = [-3.65, 0, 0]
-COL4_W   = 1.4
-# dice: tighter + shifted right so the wide card fits (script: "remove space to
-# left of first die and right of last die")
-DICE_AX  = 3.8
-DICE_DX  = 1.15
-LINE_X   = (0.2, 6.9)            # guide lines span the dice gutter, clear of card
+# Normal column widths; a WIDER 4th column (more room for the histogram) is made
+# to fit by moving the card LEFT — its left edge sits at the frame edge and the
+# right edge extends into the space the dice vacate as they spread out right.
+CARD_C   = [-3.35, 0, 0]
+COL4_W   = 1.85
+# dice spread further apart on the right
+DICE_AX  = 3.9
+DICE_DX  = 1.3
+LINE_X   = (0.45, 7.0)           # guide lines span the dice gutter, clear of card
 
 
 class LastTurn(YahtzeeScene):
@@ -52,6 +52,7 @@ class LastTurn(YahtzeeScene):
         # Follows talking head THD — nothing on screen at frame 0.
         self.table_prob = {}   # scorecard row -> Prob-Success text  (col 4)
         self.table_ev = {}     # scorecard row -> Avg-Points text    (col 4)
+        self._held = None      # (fill, border, row) of the currently-held row
 
     # ── shared build helpers ─────────────────────────────────────────────────
     def _setup_card(self):
@@ -73,6 +74,28 @@ class LastTurn(YahtzeeScene):
         self.play(*[FadeOut(d) for d in self.board.dice], run_time=run_time)
         self.board.place_initial(list(start))
         self.play(*[FadeIn(d) for d in self.board.dice], run_time=run_time)
+
+    # ── the box currently being covered stays highlighted for its whole section ─
+    def _hold_row(self, row, run_time=0.4):
+        self._release_row(run_time=0.0)          # drop any previous hold first
+        fill, border, bold = self.card._row_highlight(row, ACCENT_GOLD, 0.35)
+        self.card.labels[row].save_state()
+        self.play(FadeIn(fill), FadeIn(border),
+                  Transform(self.card.labels[row], bold), run_time=run_time)
+        self._held = (fill, border, row)
+
+    def _release_row(self, run_time=0.3):
+        held = getattr(self, "_held", None)
+        if not held:
+            return
+        fill, border, row = held
+        lbl = self.card.labels[row]
+        if run_time > 0:
+            self.play(FadeOut(fill), FadeOut(border), Restore(lbl), run_time=run_time)
+        else:
+            lbl.restore()
+        self.remove(fill, border)
+        self._held = None
 
     # ── column-4 bottom-block table (Prob Success | Avg Points) ───────────────
     def _col4_sub_x(self):
@@ -119,8 +142,9 @@ class LastTurn(YahtzeeScene):
         self._setup_board()
         clear_rt, in_rt, roll_rt, keep_rt, score_rt = 0.7, 0.8, 0.7, 0.5, 1.1
 
-        # clear just the Threes box; hold it highlighted for the section
+        # clear just the Threes box; hold it highlighted for the whole section
         self.card.transition(self, {R_THREES: None}, run_time=clear_rt)
+        self._hold_row(R_THREES)
         self.play(FadeIn(self.board.lines), *[FadeIn(d) for d in self.board.dice],
                   run_time=in_rt)
 
@@ -147,14 +171,17 @@ class LastTurn(YahtzeeScene):
                   FadeIn(self.hist_avg1, shift=UP * 0.3), run_time=in_rt)
         self.wait(0.5)
 
-        # park it in the TOP of column 4; drop the %; swap the Avg for a big
-        # 2-line version below the mini-histogram (live region tracks the card)
+        # park it in the TOP of column 4 (keep the % and the 0-5 labels, but drop
+        # the "Number Rolled" axis label); swap the Avg for a big 2-line version
+        # below the mini-histogram (live region tracks the card)
         top_c, _w, top_h = self.card.col4_region(range(6))
-        mini_c = top_c + UP * top_h * 0.24
-        self.hist_avg2.move_to(top_c + DOWN * top_h * 0.28)
+        mini_c = top_c + UP * top_h * 0.22
+        self.hist_avg2.move_to(top_c + DOWN * top_h * 0.30)
+        xlab = self.hist.x_axis_label_text
+        self.hist.remove(xlab)                       # so it isn't scaled with the rest
         self.play(
-            self.hist.animate.scale(0.30).move_to(mini_c),
-            FadeOut(self.hist.bar_labels),
+            self.hist.animate.scale(0.38).move_to(mini_c),
+            FadeOut(xlab),
             FadeOut(self.hist_avg1),
             FadeIn(self.hist_avg2),
             run_time=move_rt,
@@ -168,7 +195,7 @@ class LastTurn(YahtzeeScene):
             None, counts=counts, is_vertical=False,      # standing bars
             center=[3.6, -0.2, 0], width=4.4, height=3.0,
             bar_color=ACCENT_FILL, x_tick_step=1,         # label every value 0..5
-            x_axis_label="number obtained",
+            x_axis_label="Number Rolled",
             bar_labels="percent", bar_label_font_size=22,
         )
         # big single-line caption for the on-the-right display
@@ -186,8 +213,9 @@ class LastTurn(YahtzeeScene):
     def yah_roll(self):
         clear_rt, reset_rt, roll_rt, keep_rt = 0.6, 0.35, 0.7, 0.5
 
-        # refill Threes to its sample value, open the Yahtzee box
+        # refill Threes to its sample value, open + hold the Yahtzee box
         self.card.transition(self, {R_THREES: 9, R_YAH: None}, run_time=clear_rt)
+        self._hold_row(R_YAH)                        # auto-releases the Threes hold
         self._reset_board([2, 2, 4, 4, 6], reset_rt)
 
         self.play(*self.board.first_roll([2, 2, 4, 4, 6]), run_time=roll_rt)  # 22446
@@ -216,4 +244,5 @@ class LastTurn(YahtzeeScene):
     @subscene
     def highlight_34kind(self):
         hl_rt, hold = 0.4, 1.3
+        self._release_row()          # done covering Yahtzee
         self.card.highlight_rows(self, [R_3KIND, R_4KIND], run_time=hl_rt, hold=hold)
