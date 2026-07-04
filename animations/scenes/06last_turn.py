@@ -33,13 +33,15 @@ R_THREES = 2
 R_3KIND, R_4KIND, R_FH, R_SMS, R_LGS, R_YAH, R_CHANCE = 6, 7, 8, 9, 10, 11, 12
 
 # ── layout ────────────────────────────────────────────────────────────────────
-CARD_C   = [-2.8, 0, 0]          # 4-column card sits left; dice tightened right
-COL4_W   = 1.5
+# The 4-column card is ~6.5 wide (about half the frame), so its leftmost
+# non-clipping center is ~-3.65 — it can't reach the usual LEFT_SC (-4.74).
+CARD_C   = [-3.65, 0, 0]
+COL4_W   = 1.4
 # dice: tighter + shifted right so the wide card fits (script: "remove space to
 # left of first die and right of last die")
 DICE_AX  = 3.8
 DICE_DX  = 1.15
-LINE_X   = (0.8, 6.9)
+LINE_X   = (0.2, 6.9)            # guide lines span the dice gutter, clear of card
 
 
 class LastTurn(YahtzeeScene):
@@ -106,17 +108,23 @@ class LastTurn(YahtzeeScene):
     @subscene
     def top_histogram(self):
         self._setup_hist()
-        in_rt, move_rt = 1.0, 1.0
+        in_rt, move_rt = 1.0, 1.1
 
-        self.play(FadeIn(self.hist, shift=UP * 0.3), run_time=in_rt)
-        self.wait(0.4)
+        # big + readable on the right: standing bars, 0-5 labels, % on each bar
+        self.play(FadeIn(self.hist, shift=UP * 0.3),
+                  FadeIn(self.hist_avg1, shift=UP * 0.3), run_time=in_rt)
+        self.wait(0.5)
 
-        # move it into the top block of column 4 (live region, tracks the card),
-        # drop the % labels
-        top_c, _w, _h = self.card.col4_region(range(6))
+        # park it in the TOP of column 4; drop the %; swap the Avg for a big
+        # 2-line version below the mini-histogram (live region tracks the card)
+        top_c, _w, top_h = self.card.col4_region(range(6))
+        mini_c = top_c + UP * top_h * 0.24
+        self.hist_avg2.move_to(top_c + DOWN * top_h * 0.28)
         self.play(
-            self.hist.animate.scale(0.32).move_to(top_c),
-            FadeOut(self.hist_pcts),
+            self.hist.animate.scale(0.30).move_to(mini_c),
+            FadeOut(self.hist.bar_labels),
+            FadeOut(self.hist_avg1),
+            FadeIn(self.hist_avg2),
             run_time=move_rt,
         )
         self.wait(0.2)
@@ -125,18 +133,18 @@ class LastTurn(YahtzeeScene):
         # count distribution of the target value after 3 rolls (SOURCED)
         counts = {0: 6.49, 1: 23.63, 2: 34.40, 3: 25.04, 4: 9.12, 5: 1.33}
         self.hist = get_histogram(
-            None, counts=counts, is_vertical=True,
-            center=[3.6, -0.6, 0], width=4.2, height=3.0,
-            bar_color=ACCENT_FILL, x_axis_label="number obtained",
+            None, counts=counts, is_vertical=False,      # standing bars
+            center=[3.6, -0.2, 0], width=4.4, height=3.0,
+            bar_color=ACCENT_FILL, x_tick_step=1,         # label every value 0..5
+            x_axis_label="number obtained",
+            bar_labels="percent", bar_label_font_size=22,
         )
-        # percentage labels on the bars (dropped when it parks in col 4)
-        self.hist_pcts = VGroup()
-        for bar, (v, p) in zip(self.hist.bars, counts.items()):
-            t = crisp_text(f"{p:.0f}%", font_size=18, color=BLACK, font=FONT)
-            t.next_to(bar, UP, buff=0.08)
-            self.hist_pcts.add(t)
-        self.hist.add(self.hist_pcts)
-        # "Avg 2.1" caption below the histogram
-        self.hist_avg = crisp_text("Avg 2.1", font_size=26, color=BLACK, font=FONT, weight="BOLD")
-        self.hist_avg.next_to(self.hist, DOWN, buff=0.25)
-        self.hist.add(self.hist_avg)
+        # big single-line caption for the on-the-right display
+        self.hist_avg1 = crisp_text("Avg 2.1", font_size=32, color=BLACK,
+                                    font=FONT, weight="BOLD")
+        self.hist_avg1.next_to(self.hist, DOWN, buff=0.3)
+        # large 2-line caption for once it's parked in column 4
+        self.hist_avg2 = VGroup(
+            crisp_text("Avg", font_size=30, color=BLACK, font=FONT, weight="BOLD"),
+            crisp_text("2.1", font_size=36, color=BLACK, font=FONT, weight="BOLD"),
+        ).arrange(DOWN, buff=0.06)
