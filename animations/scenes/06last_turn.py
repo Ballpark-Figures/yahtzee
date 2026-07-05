@@ -167,11 +167,34 @@ class LastTurn(YahtzeeScene):
         prob_h.move_to([px, y, 0]); avg_h.move_to([ax, y, 0])
         self.col4_headers = VGroup(prob_h, avg_h)
 
+    # Heatmap colouring for the Prob / Avg Pts numbers: low = red, high = green,
+    # on a FIXED conceptual scale (Prob 0-100%, Avg Pts 0-25 near the max EV).
+    # Midpoint is ACCENT_ORANGE, not a pale yellow, so mid values stay readable
+    # as bold text on the cream card.
+    PROB_MAX, EV_MAX = 100.0, 25.0
+
+    def _heat_color(self, alpha):
+        lo, hi = ManimColor(SCORE_RED), ManimColor(SCORE_GREEN)   # hex strs -> ManimColor
+        a = max(0.0, min(1.0, alpha))
+        if a < 0.5:
+            return interpolate_color(lo, ACCENT_ORANGE, a * 2)
+        return interpolate_color(ACCENT_ORANGE, hi, (a - 0.5) * 2)
+
+    def _val_color(self, s, denom):
+        """Map a table string ('37%', '9.2') to a heatmap colour on a 0..denom
+        scale; a dash (no value, e.g. Chance prob) stays neutral BLACK."""
+        try:
+            v = float(s.replace("%", "").strip())
+        except ValueError:
+            return BLACK
+        return self._heat_color(v / denom)
+
     def _table_row(self, row, prob, ev):
         px, ax = self._col4_sub_x()
         y = self.card.col4_cells[row].get_center()[1]
-        pt = crisp_text(prob, font_size=29, color=BLACK, font=FONT, weight="BOLD").move_to([px, y, 0])
-        et = crisp_text(ev, font_size=29, color=BLACK, font=FONT, weight="BOLD").move_to([ax, y, 0])
+        pcol, ecol = self._val_color(prob, self.PROB_MAX), self._val_color(ev, self.EV_MAX)
+        pt = crisp_text(prob, font_size=29, color=pcol, font=FONT, weight="BOLD").move_to([px, y, 0])
+        et = crisp_text(ev, font_size=29, color=ecol, font=FONT, weight="BOLD").move_to([ax, y, 0])
         self.table_prob[row] = pt
         self.table_ev[row] = et
         return pt, et
