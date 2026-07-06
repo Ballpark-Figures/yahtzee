@@ -30,11 +30,12 @@ CARD_B = [3, 8, 12, 12, 15, 18, 26,  0, 25, 30, 40,  0, 28, 0]
 CARD_D = [1, 8, 9, None, 20, None, 20, 18, 25, None, 40, None, 22, 0]
 D_TOP_DEVS = {0: -2, 1: +2, 2: 0, 4: +5}      # filled top box -> (score − 3×face)
 # Beats e/f: two mid-game 4-col cards with the SAME number of boxes filled (9
-# each). LEFT is well ahead (expected final ~269 vs ~209 — see scene12_numbers).
-# RIGHT's top is 39, so after zeroing the 1s it needs FOUR sixes (24) to still get
-# the bonus; keeping the Yahtzee (zeroing Ones) is EV-better than zeroing Yahtzee.
+# each). LEFT is ahead (expected final ~269 vs ~232 — see scene12_numbers).
+# RIGHT's top outside 1s/6s is 44, so zeroing the 1s (vs a modest 3) raises the
+# bonus from THREE sixes (44+3+18=65) to FOUR (44+0+18=62<63; needs 24) — the 1s
+# decision legitimately changes the sixes you need.
 CARD_L = [3, 6, 9, 12, 15, 18, None, 28, 25, None, 40, None, None, 0]   # open: 3ofK,SmS,Yz,Ch
-CARD_R = [None, 6, 6, 12, 15, None, 18, None, 25, 30, 40, None, 15, 0]   # top 39; open: Ones,Sixes,4ofK,Yz
+CARD_R = [None, 8, 9, 12, 15, None, 18, None, 25, 30, 40, None, 15, 0]   # top 44; open: Ones,Sixes,4ofK,Yz
 
 # ── scorecard row indices (asset convention) ──────────────────────────────────
 R_3K, R_4K, R_FH, R_SS, R_LS, R_YZ, R_CH = 6, 7, 8, 9, 10, 11, 12

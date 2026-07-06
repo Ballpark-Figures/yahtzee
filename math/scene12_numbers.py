@@ -92,15 +92,27 @@ def main():
         print(f"    {int(r['reduced_points']):2d} pts : {r['p_reduced_points']:.4%}")
 
     print("\nBeats e/f — expected FINAL totals for the two mid-game cards:")
+    # NB: these V's are EXPECTED-SCORE-optimal. The actual 2-player choice
+    # maximises WIN PROBABILITY, which this pipeline does NOT compute — so treat
+    # the expected finals as rough standings, not as the strategy justification.
     # sc rows: 0-5 Ones..Sixes | 6 3ofK | 7 4ofK | 8 FH | 9 SmS | 10 LgS | 11 Yz | 12 Ch
     left_top = {0: 3, 1: 6, 2: 9, 3: 12, 4: 15, 5: 18}          # 63 (bonus)
     left_bot = {7: 28, 8: 25, 10: 40}                           # open: 3ofK, SmS, Yz, Ch
-    right_top = {1: 6, 2: 6, 3: 12, 4: 15}                      # 39 -> zeroing Ones needs FOUR 6s
+    right_top = {1: 8, 2: 9, 3: 12, 4: 15}                      # 44 ; open: Ones, Sixes
     right_bot = {6: 18, 8: 25, 9: 30, 10: 40, 12: 15}           # open: 4ofK, Yz
     for name, top, bot in [("LEFT (ahead)", left_top, left_bot),
                            ("RIGHT(behind)", right_top, right_bot)]:
         locked, v, exp = expected_final(list(top) + list(bot), top, bot)
         print(f"  {name}: locked={locked:5.1f}  + V(rest)={v:7.4f}  ->  expected final = {exp:7.2f}")
+
+    # The point of the RIGHT card: zeroing the 1s (vs a modest 3) raises how many
+    # 6s the bonus needs. Pure arithmetic (top-outside-1s/6s = 44).
+    T = sum(right_top.values())
+    print(f"\n  RIGHT top (excl. Ones/Sixes) = {T}; bonus needs 63:")
+    for ones in (3, 0):
+        need = 63 - T - ones
+        sixes = max(0, -(-need // 6)) * 6      # smallest multiple of 6 >= need
+        print(f"    Ones={ones}: need Sixes >= {need:2d}  ->  {sixes} ({sixes // 6} sixes)")
 
 
 if __name__ == "__main__":
