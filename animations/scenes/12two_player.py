@@ -195,7 +195,7 @@ class TwoPlayer(YahtzeeScene):
         in_rt, step_rt, hold = 1.0, 1.1, 0.7
 
         ev_live = always_redraw(self._ev_number)
-        self.play(FadeIn(self.card, shift=RIGHT * 0.5),
+        self.play(self.card.slide_in(self, play=False),
                   FadeIn(self.ev_label, shift=UP * 0.2),
                   FadeIn(ev_live), run_time=in_rt)
         self.wait(0.4)
@@ -285,8 +285,8 @@ class TwoPlayer(YahtzeeScene):
                   FadeOut(self.panel), FadeOut(self.panel_card), run_time=out_rt)
         self.card = self.panel = self.panel_card = None
 
-        self.play(FadeIn(self.cA, shift=RIGHT * 0.4),
-                  FadeIn(self.cB, shift=LEFT * 0.4), run_time=in_rt)
+        self.play(self.cA.slide_in(self, from_dir=DOWN, play=False),
+                  self.cB.slide_in(self, from_dir=DOWN, play=False), run_time=in_rt)
         self.play(FadeIn(self.c4A), FadeIn(self.c4B), run_time=num_rt)
 
         # highlight the WHOLE 4th column, then the WHOLE 3rd column, on both cards
@@ -340,7 +340,7 @@ class TwoPlayer(YahtzeeScene):
                   run_time=out_rt)
         self.cA = self.cB = self.c4A = self.c4B = None
 
-        self.play(FadeIn(self.cD, shift=UP * 0.3), run_time=in_rt)
+        self.play(self.cD.slide_in(self, from_dir=DOWN, play=False), run_time=in_rt)
 
         self.cD.highlight_rows(self, [R_YZ], run_time=0.8)       # open Yahtzee -> 0
         self.play(FadeIn(self.d_yz0), run_time=step)
@@ -387,8 +387,8 @@ class TwoPlayer(YahtzeeScene):
         self.play(*[FadeOut(m) for m in clutter], run_time=out_rt)
         self.cD = None
 
-        self.play(FadeIn(self.eL, shift=RIGHT * 0.4),
-                  FadeIn(self.eR, shift=LEFT * 0.4), run_time=in_rt)
+        self.play(self.eL.slide_in(self, from_dir=DOWN, play=False),
+                  self.eR.slide_in(self, from_dir=DOWN, play=False), run_time=in_rt)
         self.play(FadeIn(self.e4L), FadeIn(self.e4R), run_time=num_rt)
 
         # LEFT (ahead): lock in easy points, then it's fine to zero the Yahtzee

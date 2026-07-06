@@ -224,12 +224,9 @@ class Reductions(YahtzeeScene):
         in_rt, hold = 0.9, 1.0
         c1, c2 = self.card1, self.card2
 
-        # entrance: build at home (setup), drop offscreen, rise back up
-        h1, h2 = c1.get_center(), c2.get_center()
-        c1.shift(DOWN * 8)
-        c2.shift(DOWN * 8)
-        self.add(c1, c2)
-        self.play(c1.animate.move_to(h1), c2.animate.move_to(h2), run_time=in_rt)
+        # entrance: both cards slide up from below (shared slide_in)
+        self.play(c1.slide_in(self, from_dir=DOWN, play=False),
+                  c2.slide_in(self, from_dir=DOWN, play=False), run_time=in_rt)
 
         # all filled boxes on BOTH at once, then Total row both, then top 3rd col both
         highlight(self, [self._box_target(c1, r) for r in FILLED_BOXES]

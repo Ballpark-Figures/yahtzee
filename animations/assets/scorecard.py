@@ -540,7 +540,8 @@ class Scorecard(VGroup):
                 scene.remove(n)
         return nums
 
-    def slide_in(self, scene, *, from_dir=LEFT, dist=None, run_time=1.0, lead=None):
+    def slide_in(self, scene, *, from_dir=LEFT, dist=None, run_time=1.0, lead=None,
+                 play=True):
         """The STANDARD scorecard entrance: slide it in from `from_dir` (DEFAULT:
         from the LEFT side) — shift it fully off-screen in that direction, add it,
         then animate back to its home position. Use this everywhere instead of
@@ -562,7 +563,10 @@ class Scorecard(VGroup):
             dist += margin
         self.shift(d * dist)
         scene.add(self)
-        anims = [self.animate.move_to(home)]
+        move = self.animate.move_to(home)
+        if not play:
+            return move          # caller composes it into a bigger play (e.g. a pair)
+        anims = [move]
         if lead is not None:
             anims += list(lead) if isinstance(lead, (list, tuple)) else [lead]
         scene.play(*anims, run_time=run_time)
