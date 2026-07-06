@@ -56,6 +56,7 @@ class ScrollTest(YahtzeeScene):
 
     @subscene
     def appear(self):
+        self.add(self.wheel)                       # enter() fades in dice-safe
         self.play(self.wheel.enter(), run_time=1.0)
 
     @subscene

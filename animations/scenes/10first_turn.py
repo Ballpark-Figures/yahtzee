@@ -16,18 +16,19 @@ THREE_KIND, FOUR_KIND, FULL_HOUSE = 6, 7, 8
 SMALL_STRAIGHT, LARGE_STRAIGHT, CHANCE, YAHTZEE = 9, 10, 11, 12
 
 # ── Wheel geometry (scorecard on the left at LEFT_SC, list on the right) ────────
-WHEEL_CX = 3.4                 # wheel centre x
-BOX_X, PTS_X, DICE_X, AVG_X = -3.6, -0.7, 1.2, 3.6   # column x's within a row
-FS = FONT_SIZE_SM
-DIE = 0.26
+WHEEL_CX = 3.3                 # wheel centre x
+BOX_X, PTS_X, DICE_X, AVG_X = -4.4, -0.7, 1.9, 4.4   # column x's within a row
+FS = 30.0                      # wheel text size
+DIE = 0.34                     # mini-die size
+GAP = 0.88                     # wheel centre-to-centre spacing
 
 
 def make_row(o):
     """One list row: Box | Points | mini dice | Avg total. Columns pinned at
-    fixed local x so they align when a row is centred."""
-    box = crisp_text(o["box"], font_size=FS)
-    pts = crisp_text(f"{o['points']} pts", font_size=FS)
-    dice = VGroup(*[get_die(v, size=DIE) for v in o["dice"]]).arrange(RIGHT, buff=0.04)
+    fixed local x so they align when a row is centred. Text is black."""
+    box = crisp_text(o["box"], font_size=FS, color=BLACK)
+    pts = crisp_text(f"{o['points']} pts", font_size=FS, color=BLACK)
+    dice = VGroup(*[get_die(v, size=DIE) for v in o["dice"]]).arrange(RIGHT, buff=0.05)
     avg = crisp_text(f"{o['ev']:.1f}", font_size=FS, color=ACCENT_FILL)
     box.move_to([BOX_X + box.width / 2, 0, 0])       # left edge pinned
     pts.move_to([PTS_X, 0, 0])
@@ -41,44 +42,28 @@ class FirstTurn(YahtzeeScene):
         self.data = first_turn_outcomes()["outcomes"]
         self.card = get_scorecard(center=LEFT_SC, scores=[None] * 14)
         rows = [make_row(o) for o in self.data]
-        self.wheel = ScrollList(rows, focus=0, radius=3, gap=0.72,
+        self.wheel = ScrollList(rows, focus=0, radius=3, gap=GAP,
                                 center=[WHEEL_CX, 0, 0])
         # Build small + scale to width so the long caption stays ONE line
         # (crisp_text wraps a long string at font_size >= ~24; see CLAUDE.md).
-        self.title = crisp_text("Average Points After First Turn", font_size=12)
-        self.title.scale_to_fit_width(5.8).move_to([WHEEL_CX, 3.6, 0])
-        self._cur_num = None
+        self.title = crisp_text("Average Points After First Turn", font_size=14,
+                                color=BLACK)
+        self.title.scale_to_fit_width(6.4).move_to([WHEEL_CX, 3.75, 0])
+        self._cur_num = None     # the currently-committed scorecard box number
 
     # ── helpers ────────────────────────────────────────────────────────────────
     def _idx(self, cat, points):
         return next(i for i, o in enumerate(self.data)
                     if o["cat"] == cat and o["points"] == points)
 
-    def _fill_anims(self, sc_row, value, color=BLACK):
-        """Anims to show `value` in the scorecard box, clearing the previous
-        'current' fill. Returns the anims so the caller can play them alongside a
-        scroll."""
-        num = crisp_text(str(value), font_size=SCORECARD_FONT_SIZE, color=color)
-        num.move_to(self.card.value_cells[sc_row].get_center())
-        anims = [FadeIn(num)]
-        if self._cur_num is not None:
-            anims.append(FadeOut(self._cur_num))
-        self._cur_num = num
-        return anims
-
-    def _reveal_neighbors(self, run_time):
-        """Fade in the wheel rows that are visible at the current focus but were
-        hidden (used after showing only the first entry)."""
-        pos = self.wheel._pos_value
-        anims = []
-        for i, r in enumerate(self.wheel.rows):
-            if i == round(pos):
-                continue
-            t = self.wheel._opacity_of(i - pos)
-            if t > 0.01:
-                r.set_opacity(t)
-                anims.append(FadeIn(r))
-        self.play(*anims, run_time=run_time)
+    def _commit_box(self, sc_row, value, *, color=ACCENT_GOLD, hold=0.5):
+        """Fill the scorecard box with `value` and a synced highlight (number +
+        highlight appear together); the number PERSISTS and the previously
+        committed number clears in the same beat."""
+        lead = [FadeOut(self._cur_num)] if self._cur_num is not None else None
+        nums = self.card.flash_rows(self, [(sc_row, value)], color=color,
+                                    keep=True, lead=lead, hold=hold)
+        self._cur_num = nums[0] if nums else None
 
     # ── beats ──────────────────────────────────────────────────────────────────
     @subscene
@@ -92,63 +77,55 @@ class FirstTurn(YahtzeeScene):
         # b) fill+highlight Yahtzee; show ONLY the first list row + title
         rt = 1.0
         self.wheel.set_focus(0)
-        for r in self.wheel.rows:
-            r.set_opacity(0)
+        self.wheel.hide_all()
         self.add(self.wheel)
-        r0 = self.wheel.rows[0]
-        r0.set_opacity(1.0)
-        self.play(FadeIn(r0), FadeIn(self.title),
-                  *self._fill_anims(11, 50), run_time=rt)
-        self.card.highlight_rows(self, [11], color=SCORE_GREEN, hold=0.6)
+        self.play(self.wheel.fade_in([0]), FadeIn(self.title), run_time=rt)
+        self._commit_box(11, 50, hold=0.6)
 
     @subscene
     def scroll_top(self):
         # c) fade in the rest, scroll through Sixes24 -> Threes12 one at a time
-        self._reveal_neighbors(run_time=0.8)
-        step_rt = 1.2
+        self.play(self.wheel.fade_in(), run_time=0.8)
+        scroll_rt = 1.0
         for idx in [self._idx(SIXES, 24), self._idx(FIVES, 20),
                     self._idx(LARGE_STRAIGHT, 40), self._idx(FOURS, 16),
                     self._idx(THREES, 12)]:
             o = self.data[idx]
-            self.play(self.wheel.scroll_to(idx),
-                      *self._fill_anims(o["sc_row"], o["points"]), run_time=step_rt)
-            self.card.highlight_rows(self, [o["sc_row"]], color=SCORE_GREEN, hold=0.4)
+            self.play(self.wheel.scroll_to(idx), run_time=scroll_rt)
+            self._commit_box(o["sc_row"], o["points"], hold=0.4)
 
     @subscene
     def three_of_number(self):
         # d) scroll to the first "3 of a number" (three 6s -> Sixes 18)
-        rt = 1.5
+        rt = 1.2
         idx = self._idx(SIXES, 18)
         o = self.data[idx]
-        self.play(self.wheel.scroll_to(idx),
-                  *self._fill_anims(o["sc_row"], o["points"]), run_time=rt)
-        self.card.highlight_rows(self, [o["sc_row"]], color=SCORE_GREEN, hold=0.5)
+        self.play(self.wheel.scroll_to(idx), run_time=rt)
+        self._commit_box(o["sc_row"], o["points"], hold=0.5)
 
     @subscene
     def full_house(self):
         # e) scroll to full house
-        rt = 1.5
+        rt = 1.2
         idx = self._idx(FULL_HOUSE, 25)
         o = self.data[idx]
-        self.play(self.wheel.scroll_to(idx),
-                  *self._fill_anims(o["sc_row"], o["points"]), run_time=rt)
-        self.card.highlight_rows(self, [o["sc_row"]], color=SCORE_GREEN, hold=0.5)
+        self.play(self.wheel.scroll_to(idx), run_time=rt)
+        self._commit_box(o["sc_row"], o["points"], hold=0.5)
 
     @subscene
     def straights(self):
         # f) large straight, then small straight
-        rt = 1.5
+        rt = 1.2
         for cat, pts in [(LARGE_STRAIGHT, 40), (SMALL_STRAIGHT, 30)]:
             idx = self._idx(cat, pts)
             o = self.data[idx]
-            self.play(self.wheel.scroll_to(idx),
-                      *self._fill_anims(o["sc_row"], o["points"]), run_time=rt)
-            self.card.highlight_rows(self, [o["sc_row"]], color=SCORE_GREEN, hold=0.5)
+            self.play(self.wheel.scroll_to(idx), run_time=rt)
+            self._commit_box(o["sc_row"], o["points"], hold=0.5)
 
     @subscene
     def two_or_fewer(self):
-        # g) no scroll; transient red demos of bad placements (black numbers flash
-        # in sync with the red highlight, then vanish — committed fill untouched)
+        # g) no scroll; transient RED demos of bad placements (black numbers flash
+        # in sync with the highlight, then vanish — committed fill untouched)
         self.card.flash_rows(self, [(3, 8), (4, 10), (5, 12)],
                              color=SCORE_RED, hold=0.8)              # two 4s/5s/6s
         self.card.flash_rows(self, [(1, 2), (2, 3), (3, 4), (4, 5), (5, 6)],
@@ -162,12 +139,12 @@ class FirstTurn(YahtzeeScene):
     @subscene
     def three_kind(self):
         # i) flag the 3kind box red, scroll to a 3kind example, then a NORMAL
-        # (green) flash for the one we'd actually use
+        # (default gold) flash for the one we'd actually use
         self.card.flash_rows(self, [(6, None)], color=SCORE_RED, hold=0.6)
-        rt = 1.5
+        rt = 1.2
         idx = self._idx(THREE_KIND, 28)
         self.play(self.wheel.scroll_to(idx), run_time=rt)
-        self.card.flash_rows(self, [(6, 28)], color=SCORE_GREEN, hold=0.8)
+        self.card.flash_rows(self, [(6, 28)], hold=0.8)   # default (gold)
 
     @subscene
     def worst(self):
@@ -175,6 +152,5 @@ class FirstTurn(YahtzeeScene):
         rt = 2.0
         idx = self._idx(CHANCE, 19)
         o = self.data[idx]
-        self.play(self.wheel.scroll_to(idx),
-                  *self._fill_anims(o["sc_row"], o["points"]), run_time=rt)
-        self.card.highlight_rows(self, [o["sc_row"]], color=SCORE_GREEN, hold=0.6)
+        self.play(self.wheel.scroll_to(idx), run_time=rt)
+        self._commit_box(o["sc_row"], o["points"], hold=0.6)
