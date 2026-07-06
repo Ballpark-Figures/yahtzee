@@ -205,10 +205,8 @@ class LastTurn(YahtzeeScene):
         self._setup_card()
         in_rt, hl_rt = 1.1, 3.0
 
-        # enter with a SHIFT (never an opacity fade — corrupts the card)
-        self.card.shift(LEFT * 11)
-        self.add(self.card)
-        self.play(self.card.animate.move_to(self.card_home), run_time=in_rt)
+        # shared slide-in entrance (from the side)
+        self.card.slide_in(self, run_time=in_rt)
 
         # "Highlight boxes one at a time" — a flash walking down every row.
         self.card.highlight_rows(self, list(range(13)), pulse=True,

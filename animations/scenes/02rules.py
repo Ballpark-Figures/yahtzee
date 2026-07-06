@@ -38,8 +38,8 @@ class Rules(YahtzeeScene):
     # ── a. bring scorecard in, THEN dice, THEN walk the highlight down ─────────
     @subscene
     def bring_in(self):
-        # scorecard first…
-        self.play(FadeIn(self.card, shift=RIGHT * 2.0), run_time=1.0)
+        # scorecard first… (shared slide-in entrance, from the side)
+        self.card.slide_in(self, run_time=1.0)
         self.wait(0.2)
         # …then the dice (and guide lines)…
         dice = self.board.dice

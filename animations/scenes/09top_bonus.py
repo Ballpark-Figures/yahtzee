@@ -368,10 +368,7 @@ class TopBonus(YahtzeeScene):
     def top_section(self):
         self._setup_card()
         in_rt = 0.9
-        home = self.card.get_center()
-        self.card.shift(LEFT * 3.5)                       # slide in from the left
-        self.add(self.card)
-        self.play(self.card.animate.move_to(home), run_time=in_rt)
+        self.card.slide_in(self, run_time=in_rt)          # shared slide-in, from the left
         # a region spanning rows 0-5 across ALL three columns (incl. the (63) column)
         hdr = self.card.header_rect
         left, right = hdr.get_left()[0], hdr.get_right()[0]

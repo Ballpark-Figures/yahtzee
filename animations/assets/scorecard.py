@@ -531,14 +531,27 @@ class Scorecard(VGroup):
         for n in nums:
             scene.remove(n)
 
-    def slide_in(self, scene, *, from_dir=DOWN, dist=8.0, run_time=1.0, lead=None):
-        """The STANDARD scorecard entrance: build it at its home position, then
-        slide it in from `from_dir` (shift off, add, animate back). Use this
-        everywhere instead of hand-rolling an entrance — an opacity fade corrupts
-        the (63) bar (see CLAUDE.md), so we always slide. Pass `lead` to play
-        other anims alongside the slide."""
+    def slide_in(self, scene, *, from_dir=LEFT, dist=None, run_time=1.0, lead=None):
+        """The STANDARD scorecard entrance: slide it in from `from_dir` (DEFAULT:
+        from the LEFT side) — shift it fully off-screen in that direction, add it,
+        then animate back to its home position. Use this everywhere instead of
+        hand-rolling an entrance; an opacity fade corrupts the (63) bar (see
+        CLAUDE.md), so we always SLIDE. `dist=None` auto-computes the smallest
+        shift that starts the card just past the real frame edge; pass an explicit
+        `dist` to override. `lead` plays other anims (e.g. dice) with the slide."""
+        d = np.array(from_dir, dtype=float)
+        norm = np.linalg.norm(d)
+        if norm:
+            d = d / norm
         home = self.get_center().copy()
-        self.shift(from_dir * dist)
+        if dist is None:
+            fx, fy, margin = config.frame_x_radius, config.frame_y_radius, 0.4
+            if abs(d[0]) >= abs(d[1]):                     # horizontal slide
+                dist = (home[0] if d[0] < 0 else -home[0]) + self.width / 2 + fx
+            else:                                          # vertical slide
+                dist = (home[1] if d[1] < 0 else -home[1]) + self.height / 2 + fy
+            dist += margin
+        self.shift(d * dist)
         scene.add(self)
         anims = [self.animate.move_to(home)]
         if lead is not None:
