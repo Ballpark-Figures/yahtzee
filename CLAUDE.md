@@ -66,6 +66,17 @@ way.
 - `show_summary=False` removes ONLY the 3rd-column CONTENTS ((63) bar, running
   totals, bottom total, grand-total number). Column outline, box scores (col 2),
   and the Total footer bar all stay.
+- **A "blank scorecard" (script term) = the START of the game, NOT a stripped
+  card.** It's a NORMAL empty card WITH its 3rd column present (the (63) bar and
+  0 totals) — do NOT reach for `show_summary=False`. This has bitten more than
+  once (scene 12 beat a): `show_summary=False` is only for when a beat genuinely
+  has no use for the summary column (e.g. its own content fills col 3).
+- **A mid-game (incomplete) card GREYS its 3rd-column summary to 0.5 opacity**
+  (`bar_number`/`cap_label`/`bottom_total_text`/`total_text` + the bonus labels).
+  If a mid-game card should read full-strength, un-grey them (set opacity 1.0
+  after `get_scorecard` — scene 12's `_ungrey` helper). NB this greying looks
+  wrong in a lot of situations; we may just want to REMOVE it from the asset
+  (summary always full opacity) for consistency — ASK before that asset change.
 - Columns: 1 = labels, 2 = value cells (`value_cells[0..12]`), 3 = summary. To
   place things in column 3, use the actual summary-cell center — NOT the midpoint
   to the card's panel edge (the rounded panel extends past the cells).
@@ -95,6 +106,13 @@ way.
   self-`play`s). Pass your other anims as the `lead` of the card's `_animate_to(...)`
   and drive the box texts yourself — see scene 09's `_card_and` helper. (A cleaner
   fix would be an animation-returning `transition_anim()` on the asset; ASK first.)
+  **But note the LEAD runs BEFORE the bar/counters** — `_animate_to` plays
+  `LaggedStart(lead, moves, lag_ratio=COUNTER_LAG)` with `COUNTER_LAG=0.7`, so an
+  anim you pass as the lead (e.g. an external counter) finishes as the bar is only
+  starting. To make an external animation move in LOCKSTEP with the bar, set
+  `card.COUNTER_LAG = 0.0` on the instance (it's a per-instance feel knob) so lead
+  and bar start together — that's how scene 12 beat a syncs its expected-score
+  counter to the (63) bar.
 - **Card size vs the frame.** A full scorecard is ~8.46 wide × 8.30 tall, so it
   nearly fills the 16×9 frame (leaves ~0.35 margin top/bottom, comfortable width).
   Its bounding box DOES equal the visible panel — `card.get_left/right/top/bottom`
