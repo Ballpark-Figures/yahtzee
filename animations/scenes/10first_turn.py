@@ -19,22 +19,25 @@ SMALL_STRAIGHT, LARGE_STRAIGHT, CHANCE, YAHTZEE = 9, 10, 11, 12
 # wheel centre x is computed at runtime (centred between the card + frame edge)
 BOX_X, PTS_X, DICE_X, AVG_X = -4.4, -0.7, 1.9, 4.4   # column x's within a row
 FS = 30.0                      # wheel text size
-DIE = 0.34                     # mini-die size
+DIE = 0.40                     # mini-die size
 GAP = 0.88                     # wheel centre-to-centre spacing
 
 
 def make_row(o):
     """One list row: Box | Points | mini dice | Avg total. Columns pinned at
-    fixed local x so they align when a row is centred. Text is black."""
+    fixed local x. Every cell's cap/digit band is aligned to a common top (via a
+    reference '0') so ascenders/descenders — e.g. the 'p' in 'pts' — don't make
+    one column sit higher than the next; the dice centre on that same band."""
     box = crisp_text(o["box"], font_size=FS, color=BLACK)
     unit = "pt" if o["points"] == 1 else "pts"
     pts = crisp_text(f"{o['points']} {unit}", font_size=FS, color=BLACK)
     dice = VGroup(*[get_die(v, size=DIE) for v in o["dice"]]).arrange(RIGHT, buff=0.05)
     avg = crisp_text(f"{o['ev']:.1f}", font_size=FS, color=ACCENT_FILL)
-    box.move_to([BOX_X + box.width / 2, 0, 0])       # left edge pinned
-    pts.move_to([PTS_X, 0, 0])
+    ref = crisp_text("0", font_size=FS)               # digit-band reference (y=0)
+    box.move_to([BOX_X + box.width / 2, 0, 0]).align_to(ref, UP)   # left edge pinned
+    pts.move_to([PTS_X, 0, 0]).align_to(ref, UP)
+    avg.move_to([AVG_X - avg.width / 2, 0, 0]).align_to(ref, UP)   # right edge pinned
     dice.move_to([DICE_X, 0, 0])
-    avg.move_to([AVG_X - avg.width / 2, 0, 0])        # right edge pinned
     return VGroup(box, pts, dice, avg)
 
 
