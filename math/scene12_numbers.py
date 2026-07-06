@@ -95,7 +95,7 @@ def main():
     # sc rows: 0-5 Ones..Sixes | 6 3ofK | 7 4ofK | 8 FH | 9 SmS | 10 LgS | 11 Yz | 12 Ch
     left_top = {0: 3, 1: 6, 2: 9, 3: 12, 4: 15, 5: 18}          # 63 (bonus)
     left_bot = {7: 28, 8: 25, 10: 40}                           # open: 3ofK, SmS, Yz, Ch
-    right_top = {1: 8, 2: 12, 3: 16, 4: 20}                     # 56 (open: Ones, Sixes)
+    right_top = {1: 6, 2: 6, 3: 12, 4: 15}                      # 39 -> zeroing Ones needs FOUR 6s
     right_bot = {6: 18, 8: 25, 9: 30, 10: 40, 12: 15}           # open: 4ofK, Yz
     for name, top, bot in [("LEFT (ahead)", left_top, left_bot),
                            ("RIGHT(behind)", right_top, right_bot)]:
