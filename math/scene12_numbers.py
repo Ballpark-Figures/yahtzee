@@ -25,11 +25,29 @@ from constants import *  # THREES, SIXES, CHANCE, NUM_CATEGORIES, ...
 from reduced_game_state import ReducedGameState
 from state_explorer import (
     state_value,
+    mask_from_categories,
     load_reduced_point_df,
     reduced_point_matchup_table,
     reduced_point_marginal,
     win_prob_given_reduced_point_diff,
 )
+
+# scorecard-asset row index -> math category index (differ only for Yz/Chance)
+SC_TO_MATH = {11: YAHTZEE, 12: CHANCE}
+
+
+def expected_final(filled_sc_rows, top_boxes, bottom_boxes):
+    """Expected FINAL total for a mid-game card = points already locked in +
+    V(reduced state). `top_boxes`/`bottom_boxes` are {sc_row: points} of the
+    FILLED boxes; filled_sc_rows lists every filled row (for the mask)."""
+    upper = sum(top_boxes.values())
+    top_bonus = 35 if upper >= 63 else 0
+    locked = upper + top_bonus + sum(bottom_boxes.values())
+    math_cats = [SC_TO_MATH.get(r, r) for r in filled_sc_rows]
+    st = ReducedGameState(filled_mask=mask_from_categories(math_cats),
+                          upper_total=min(upper, 63), yahtzee_eligible=False)
+    v = state_value(st)
+    return locked, v, locked + v
 
 
 def committed_total(open_cat, points, upper_total):
@@ -72,6 +90,17 @@ def main():
     print("\n  reduced-point marginal (P of each simplified total):")
     for _, r in marg.iterrows():
         print(f"    {int(r['reduced_points']):2d} pts : {r['p_reduced_points']:.4%}")
+
+    print("\nBeats e/f — expected FINAL totals for the two mid-game cards:")
+    # sc rows: 0-5 Ones..Sixes | 6 3ofK | 7 4ofK | 8 FH | 9 SmS | 10 LgS | 11 Yz | 12 Ch
+    left_top = {0: 3, 1: 6, 2: 9, 3: 12, 4: 15, 5: 18}          # 63 (bonus)
+    left_bot = {7: 28, 8: 25, 10: 40}                           # open: 3ofK, SmS, Yz, Ch
+    right_top = {1: 8, 2: 12, 3: 16, 4: 20}                     # 56 (open: Ones, Sixes)
+    right_bot = {6: 18, 8: 25, 9: 30, 10: 40, 12: 15}           # open: 4ofK, Yz
+    for name, top, bot in [("LEFT (ahead)", left_top, left_bot),
+                           ("RIGHT(behind)", right_top, right_bot)]:
+        locked, v, exp = expected_final(list(top) + list(bot), top, bot)
+        print(f"  {name}: locked={locked:5.1f}  + V(rest)={v:7.4f}  ->  expected final = {exp:7.2f}")
 
 
 if __name__ == "__main__":
