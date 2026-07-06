@@ -491,6 +491,61 @@ class Scorecard(VGroup):
         for fill, border, _bold in pieces:
             scene.remove(fill, border)
 
+    def flash_rows(self, scene, entries, *, color=ACCENT_GOLD, opacity=0.45,
+                   fade=0.25, hold=0.9, lag_ratio=0.0):
+        """Like highlight_rows, but each entry may carry a TRANSIENT number that
+        fades in/out in exact sync with the highlight, then is removed — the
+        committed cell contents are untouched. `entries` = [(row, value|None), …].
+        Used for "here's a placement you could make" demos (e.g. bad turn-1 boxes
+        in red, a legit-but-rare one in green)."""
+        entries = list(entries)
+        rows = [r for r, _ in entries]
+        pieces = [self._row_highlight(r, color, opacity) for r in rows]
+        nums = []
+        for row, value in entries:
+            if value is not None:
+                n = crisp_text(str(value), font_size=self.font_size,
+                               color=BLACK, font=FONT)
+                n.move_to(self.value_cells[row].get_center())
+                nums.append(n)
+        for r in rows:
+            self.labels[r].save_state()
+        scene.play(
+            LaggedStart(*[AnimationGroup(FadeIn(fill), FadeIn(border),
+                                         Transform(self.labels[r], bold))
+                          for (fill, border, bold), r in zip(pieces, rows)],
+                        lag_ratio=lag_ratio),
+            *[FadeIn(n) for n in nums],
+            run_time=fade,
+        )
+        scene.wait(hold)
+        scene.play(
+            *[FadeOut(fill) for fill, _b, _bold in pieces],
+            *[FadeOut(border) for _f, border, _bold in pieces],
+            *[Restore(self.labels[r]) for r in rows],
+            *[FadeOut(n) for n in nums],
+            run_time=fade,
+        )
+        for fill, border, _bold in pieces:
+            scene.remove(fill, border)
+        for n in nums:
+            scene.remove(n)
+
+    def slide_in(self, scene, *, from_dir=DOWN, dist=8.0, run_time=1.0, lead=None):
+        """The STANDARD scorecard entrance: build it at its home position, then
+        slide it in from `from_dir` (shift off, add, animate back). Use this
+        everywhere instead of hand-rolling an entrance — an opacity fade corrupts
+        the (63) bar (see CLAUDE.md), so we always slide. Pass `lead` to play
+        other anims alongside the slide."""
+        home = self.get_center().copy()
+        self.shift(from_dir * dist)
+        scene.add(self)
+        anims = [self.animate.move_to(home)]
+        if lead is not None:
+            anims += list(lead) if isinstance(lead, (list, tuple)) else [lead]
+        scene.play(*anims, run_time=run_time)
+        return self
+
     # ── Animation ────────────────────────────────────────────────────────────
     def animate_top_score(self, scene, row, dice, *, run_time=1.1):
         """Score top-section `row` (0=Ones..5=Sixes) from the dice that match

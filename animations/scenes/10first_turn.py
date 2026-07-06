@@ -26,7 +26,7 @@ def make_row(o):
     """One list row: Box | Points | mini dice | Avg total. Columns pinned at
     fixed local x so they align when a row is centred."""
     box = crisp_text(o["box"], font_size=FS)
-    pts = crisp_text(str(o["points"]), font_size=FS)
+    pts = crisp_text(f"{o['points']} pts", font_size=FS)
     dice = VGroup(*[get_die(v, size=DIE) for v in o["dice"]]).arrange(RIGHT, buff=0.04)
     avg = crisp_text(f"{o['ev']:.1f}", font_size=FS, color=ACCENT_FILL)
     box.move_to([BOX_X + box.width / 2, 0, 0])       # left edge pinned
@@ -43,8 +43,10 @@ class FirstTurn(YahtzeeScene):
         rows = [make_row(o) for o in self.data]
         self.wheel = ScrollList(rows, focus=0, radius=3, gap=0.72,
                                 center=[WHEEL_CX, 0, 0])
-        self.title = crisp_text("Average Points After First Turn", font_size=FS)
-        self.title.move_to([WHEEL_CX, 3.6, 0])
+        # Build small + scale to width so the long caption stays ONE line
+        # (crisp_text wraps a long string at font_size >= ~24; see CLAUDE.md).
+        self.title = crisp_text("Average Points After First Turn", font_size=12)
+        self.title.scale_to_fit_width(5.8).move_to([WHEEL_CX, 3.6, 0])
         self._cur_num = None
 
     # ── helpers ────────────────────────────────────────────────────────────────
@@ -64,24 +66,6 @@ class FirstTurn(YahtzeeScene):
         self._cur_num = num
         return anims
 
-    def _flash_bad(self, items, *, hold=0.7):
-        """Transient red demo: flash the given scorecard rows red (with optional
-        numbers), then remove — WITHOUT touching the committed 'current' fill.
-        `items` = [(sc_row, value_or_None), ...]."""
-        nums = []
-        for sc_row, value in items:
-            if value is not None:
-                n = crisp_text(str(value), font_size=SCORECARD_FONT_SIZE,
-                               color=SCORE_RED)
-                n.move_to(self.card.value_cells[sc_row].get_center())
-                nums.append(n)
-        if nums:
-            self.play(*[FadeIn(n) for n in nums], run_time=0.3)
-        self.card.highlight_rows(self, [r for r, _ in items], color=SCORE_RED,
-                                 hold=hold)
-        if nums:
-            self.play(*[FadeOut(n) for n in nums], run_time=0.3)
-
     def _reveal_neighbors(self, run_time):
         """Fade in the wheel rows that are visible at the current focus but were
         hidden (used after showing only the first entry)."""
@@ -99,10 +83,9 @@ class FirstTurn(YahtzeeScene):
     # ── beats ──────────────────────────────────────────────────────────────────
     @subscene
     def bring_card(self):
-        # a) bring back the empty scorecard (slide up, per the card-entrance rule)
+        # a) bring back the empty scorecard (shared slide-in entrance)
         rt = 1.0
-        self.card.shift(DOWN * 9)
-        self.play(self.card.animate.move_to(LEFT_SC), run_time=rt)
+        self.card.slide_in(self, run_time=rt)
 
     @subscene
     def yahtzee_first(self):
@@ -164,23 +147,27 @@ class FirstTurn(YahtzeeScene):
 
     @subscene
     def two_or_fewer(self):
-        # g) no scroll; transient red demos of bad placements
-        self._flash_bad([(3, 8), (4, 10), (5, 12)], hold=0.8)          # two 4s/5s/6s
-        self._flash_bad([(1, 2), (2, 3), (3, 4), (4, 5), (5, 6)], hold=0.8)  # 23456 singles
+        # g) no scroll; transient red demos of bad placements (black numbers flash
+        # in sync with the red highlight, then vanish — committed fill untouched)
+        self.card.flash_rows(self, [(3, 8), (4, 10), (5, 12)],
+                             color=SCORE_RED, hold=0.8)              # two 4s/5s/6s
+        self.card.flash_rows(self, [(1, 2), (2, 3), (3, 4), (4, 5), (5, 6)],
+                             color=SCORE_RED, hold=0.8)              # 23456 singles
 
     @subscene
     def four_kind(self):
         # h) never fill 4-of-a-kind
-        self._flash_bad([(7, None)], hold=0.9)
+        self.card.flash_rows(self, [(7, None)], color=SCORE_RED, hold=0.9)
 
     @subscene
     def three_kind(self):
-        # i) highlight 3kind red, scroll to a 3kind example, transient fill
-        self._flash_bad([(6, None)], hold=0.6)
+        # i) flag the 3kind box red, scroll to a 3kind example, then a NORMAL
+        # (green) flash for the one we'd actually use
+        self.card.flash_rows(self, [(6, None)], color=SCORE_RED, hold=0.6)
         rt = 1.5
         idx = self._idx(THREE_KIND, 28)
         self.play(self.wheel.scroll_to(idx), run_time=rt)
-        self._flash_bad([(6, 28)], hold=0.8)
+        self.card.flash_rows(self, [(6, 28)], color=SCORE_GREEN, hold=0.8)
 
     @subscene
     def worst(self):
