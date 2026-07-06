@@ -144,6 +144,18 @@ way.
   video ROOT venv `yahtzee/.venv` — NOT `math/.venv` (no pandas). Run them as
   `yahtzee/.venv/bin/python <script>.py` from `math/`; under `math/.venv` they die
   with `ModuleNotFoundError: pandas`.
+- **Getting solver numbers INTO a scene — the data-module + cache convention.**
+  Compute in `animations/assets/<name>_data.py`: a `_compute()` that chdirs into
+  `math/`, calls `state_explorer` (the shared solver — never reinvent the math)
+  and returns JSON-able data; a public fn reads a COMMITTED `<name>_cache.json`
+  beside it if present, else computes + writes it, and its `__main__` unlinks +
+  regenerates the cache. The SCENE does `from assets import <name>_data` and reads
+  that — **render NEVER imports the solver** (it reads the committed JSON). Reference
+  users: `line_data.py` (scene 08), `dp_data.py` (04), `reductions_data.py` (05).
+  SEPARATELY keep a runnable `math/sceneNN_*_numbers.py` as human-readable
+  provenance (scenes 06/09/12; scene 10 = `scene10_first_turn_numbers.py`). Both
+  call `state_explorer`, so the query may be expressed twice but no math is
+  duplicated. Do NOT bury solver queries in a scene file.
 
 ---
 
