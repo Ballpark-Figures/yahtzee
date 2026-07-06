@@ -27,7 +27,8 @@ def make_row(o):
     """One list row: Box | Points | mini dice | Avg total. Columns pinned at
     fixed local x so they align when a row is centred. Text is black."""
     box = crisp_text(o["box"], font_size=FS, color=BLACK)
-    pts = crisp_text(f"{o['points']} pts", font_size=FS, color=BLACK)
+    unit = "pt" if o["points"] == 1 else "pts"
+    pts = crisp_text(f"{o['points']} {unit}", font_size=FS, color=BLACK)
     dice = VGroup(*[get_die(v, size=DIE) for v in o["dice"]]).arrange(RIGHT, buff=0.05)
     avg = crisp_text(f"{o['ev']:.1f}", font_size=FS, color=ACCENT_FILL)
     box.move_to([BOX_X + box.width / 2, 0, 0])       # left edge pinned
