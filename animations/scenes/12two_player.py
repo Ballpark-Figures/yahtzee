@@ -192,12 +192,11 @@ class TwoPlayer(YahtzeeScene):
     @subscene
     def expected_score(self):
         self._setup_expected()
-        in_rt, step_rt, hold = 1.0, 1.1, 0.7
 
         ev_live = always_redraw(self._ev_number)
         self.play(self.card.slide_in(self, play=False),
                   FadeIn(self.ev_label, shift=UP * 0.2),
-                  FadeIn(ev_live), run_time=in_rt)
+                  FadeIn(ev_live), run_time=1.0)
         self.wait(0.4)
 
         # each example is INDEPENDENT (same 12 from the start): the box fill, the
@@ -206,8 +205,8 @@ class TwoPlayer(YahtzeeScene):
         for row, ev in EV_STEPS:
             changes = {row: 12} if prev is None else {prev: None, row: 12}
             self._card_and(self.card, changes,
-                           [self.ev_tr.animate.set_value(ev)], run_time=step_rt)
-            self.wait(hold)
+                           [self.ev_tr.animate.set_value(ev)], run_time=1.1)
+            self.wait(0.7)
             prev = row
 
         self.remove(ev_live)
@@ -253,7 +252,6 @@ class TwoPlayer(YahtzeeScene):
 
     @subscene
     def simplified_score(self):
-        in_rt = 1.0
         self._setup_panel()
         # clear the sheet, drop the readout, and bring the panel in — ALL together
         # (don't wait for the bar to clear before the panel appears).
@@ -262,7 +260,7 @@ class TwoPlayer(YahtzeeScene):
                         FadeOut(self.ev_label, shift=UP * 0.2),
                         FadeIn(self.panel_card),
                         FadeIn(self.panel, shift=RIGHT * 0.4)],
-                       run_time=in_rt)
+                       run_time=1.0)
         self.ev_num = self.ev_label = None
 
     # ════════════════════════════════════════════════════════════════════════
@@ -279,15 +277,15 @@ class TwoPlayer(YahtzeeScene):
     @subscene
     def compare_cards(self):
         self._setup_compare()
-        out_rt, in_rt, num_rt, hold = 0.6, 0.9, 0.6, 1.2
+        hold = 1.2
 
         self.play(FadeOut(self.card, shift=LEFT * 0.4),
-                  FadeOut(self.panel), FadeOut(self.panel_card), run_time=out_rt)
+                  FadeOut(self.panel), FadeOut(self.panel_card), run_time=0.6)
         self.card = self.panel = self.panel_card = None
 
         self.play(self.cA.slide_in(self, from_dir=DOWN, play=False),
-                  self.cB.slide_in(self, from_dir=DOWN, play=False), run_time=in_rt)
-        self.play(FadeIn(self.c4A), FadeIn(self.c4B), run_time=num_rt)
+                  self.cB.slide_in(self, from_dir=DOWN, play=False), run_time=0.9)
+        self.play(FadeIn(self.c4A), FadeIn(self.c4B), run_time=0.6)
 
         # highlight the WHOLE 4th column, then the WHOLE 3rd column, on both cards
         self._col_highlight([self._col4_region(self.cA), self._col4_region(self.cB)], hold=hold)
@@ -333,14 +331,14 @@ class TwoPlayer(YahtzeeScene):
     @subscene
     def remaining_boxes(self):
         self._setup_remaining()
-        out_rt, in_rt, step, hold = 0.6, 0.9, 0.5, 0.8
+        step = 0.5
 
         self.play(FadeOut(self.cA, shift=LEFT * 0.4), FadeOut(self.cB, shift=RIGHT * 0.4),
                   FadeOut(self.c4A, shift=LEFT * 0.4), FadeOut(self.c4B, shift=RIGHT * 0.4),
-                  run_time=out_rt)
+                  run_time=0.6)
         self.cA = self.cB = self.c4A = self.c4B = None
 
-        self.play(self.cD.slide_in(self, from_dir=DOWN, play=False), run_time=in_rt)
+        self.play(self.cD.slide_in(self, from_dir=DOWN, play=False), run_time=0.9)
 
         self.cD.highlight_rows(self, [R_YZ], run_time=0.8)       # open Yahtzee -> 0
         self.play(FadeIn(self.d_yz0), run_time=step)
@@ -351,7 +349,7 @@ class TwoPlayer(YahtzeeScene):
         self.wait(0.2)
         self.play(FadeIn(self.d_sum), run_time=step)                  # their sum (+5)
         self.play(FadeIn(self.d_top2), run_time=step)                 # -> faded 2
-        self.wait(hold)
+        self.wait(0.8)
 
     # ════════════════════════════════════════════════════════════════════════
     # e/f) ahead -> secure sure points ; behind -> go big
@@ -381,15 +379,14 @@ class TwoPlayer(YahtzeeScene):
     @subscene
     def ahead(self):
         self._setup_two()
-        out_rt, in_rt, num_rt = 0.6, 0.9, 0.5
 
         clutter = [self.cD, self.d_yz0, self.d_ss1, self.d_devs, self.d_sum, self.d_top2]
-        self.play(*[FadeOut(m) for m in clutter], run_time=out_rt)
+        self.play(*[FadeOut(m) for m in clutter], run_time=0.6)
         self.cD = None
 
         self.play(self.eL.slide_in(self, from_dir=DOWN, play=False),
-                  self.eR.slide_in(self, from_dir=DOWN, play=False), run_time=in_rt)
-        self.play(FadeIn(self.e4L), FadeIn(self.e4R), run_time=num_rt)
+                  self.eR.slide_in(self, from_dir=DOWN, play=False), run_time=0.9)
+        self.play(FadeIn(self.e4L), FadeIn(self.e4R), run_time=0.5)
 
         # LEFT (ahead): lock in easy points, then it's fine to zero the Yahtzee
         self.eL.highlight_rows(self, [R_SS], run_time=0.9)

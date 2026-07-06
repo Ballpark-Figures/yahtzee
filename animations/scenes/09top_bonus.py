@@ -367,8 +367,7 @@ class TopBonus(YahtzeeScene):
     @subscene
     def top_section(self):
         self._setup_card()
-        in_rt = 0.9
-        self.card.slide_in(self, run_time=in_rt)          # shared slide-in, from the left
+        self.card.slide_in(self, run_time=0.9)          # shared slide-in, from the left
         # a region spanning rows 0-5 across ALL three columns (incl. the (63) column)
         hdr = self.card.header_rect
         left, right = hdr.get_left()[0], hdr.get_right()[0]
@@ -381,10 +380,9 @@ class TopBonus(YahtzeeScene):
     @subscene
     def three_of_each(self):
         self._setup_grid()
-        card_rt, pop, add_rt, hold, merge_rt = 0.6, 0.7, 1.2, 0.5, 1.0
-        self.play(FadeIn(self.right_card), run_time=card_rt)
+        self.play(FadeIn(self.right_card), run_time=0.6)
         self.play(LaggedStart(*[FadeIn(d, scale=0.6) for d in self.grid_dice],
-                              lag_ratio=0.04), run_time=pop)
+                              lag_ratio=0.04), run_time=0.7)
 
         # every column sum (3v, under each column) AND every row sum (21, right of
         # each row) form at the SAME time, each from copies of the relevant pips.
@@ -402,30 +400,29 @@ class TopBonus(YahtzeeScene):
             copies.add(pc); self.sum_texts.add(num)
             anims.append(ReplacementTransform(pc, num))
         self.add(copies)
-        self.play(*anims, run_time=add_rt)
-        self.wait(hold)
+        self.play(*anims, run_time=1.2)
+        self.wait(0.5)
 
         # merge every partial total into a single BLACK 63 (bottom right), same
         # size as the other sums
         self.big63 = self._sum_text(63, [ROWSUM_X, COLSUM_Y, 0])
-        self.play(ReplacementTransform(self.sum_texts, self.big63), run_time=merge_rt)
+        self.play(ReplacementTransform(self.sum_texts, self.big63), run_time=1.0)
 
     # c) clear the right content (card stays); draw the containers as one continuous
     #    stroke, then the value-lines, labels, and the container-total (starts at 0)
     @subscene
     def empty_containers(self):
         self._setup_containers()
-        clear_rt, draw_rt, line_rt = 0.6, 1.2, 0.6
-        self.play(FadeOut(self.grid_dice), FadeOut(self.big63), run_time=clear_rt)
+        self.play(FadeOut(self.grid_dice), FadeOut(self.big63), run_time=0.6)
         self.add(*self.cfills.values())                 # invisible at level 0
-        self.play(Create(self.bg_outline), run_time=draw_rt)
+        self.play(Create(self.bg_outline), run_time=1.2)
         self.play(FadeIn(self.bg_lines), FadeIn(self.bg_labels),
-                  FadeIn(self.bg_sum), run_time=line_rt)
+                  FadeIn(self.bg_sum), run_time=0.6)
 
     # d) the fill demo: everything FADES; the corner total is a live counter
     @subscene
     def fill_containers(self):
-        fade_rt, lift_rt, across_rt, drop_rt, clear_rt = 0.7, 0.6, 0.7, 0.7, 0.7
+        fade_rt, across_rt, drop_rt, clear_rt = 0.7, 0.7, 0.7, 0.7
         cx1, cx3, cx4 = self._bg_geom[0][0], self._bg_geom[2][0], self._bg_geom[3][0]
         # the block rides ALONG the top (its bottom on the top line), not high above
         top_ride_y, drop_y = TOP_Y + 2 * U, TOP_Y - U
@@ -459,7 +456,7 @@ class TopBonus(YahtzeeScene):
 
         # lift back to the top, then fill the 3rd three AND empty the ones together;
         # the 3's box rises to 9 (a real three), the 1's box empties (down).
-        self.play(blk.animate.move_to([cx3, top_ride_y, 0]), run_time=lift_rt)
+        self.play(blk.animate.move_to([cx3, top_ride_y, 0]), run_time=0.6)
         self._fill_step([0, 6, 9, 12, 15, 18], fade_rt, box_changes={2: 9, 0: None})
         self.play(blk.animate.move_to([cx1, top_ride_y, 0]), run_time=across_rt)  # slide along top
         self.play(blk.animate.move_to([cx1, drop_y, 0]), run_time=drop_rt)        # rests in empty ones; box unchanged
@@ -474,9 +471,8 @@ class TopBonus(YahtzeeScene):
     @subscene
     def table_empty(self):
         self._setup_table()
-        tbl_rt, ev_rt = 0.8, 0.6
-        self.play(FadeIn(self.table_static), run_time=tbl_rt)
-        self.play(FadeIn(self.ev_line, shift=UP * 0.2), run_time=ev_rt)
+        self.play(FadeIn(self.table_static), run_time=0.8)
+        self.play(FadeIn(self.ev_line, shift=UP * 0.2), run_time=0.6)
 
     def _reveal_row(self, count, run_time, lag=0.14):
         anims = []
