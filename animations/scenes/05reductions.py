@@ -221,12 +221,12 @@ class Reductions(YahtzeeScene):
     @subscene
     def two_cards(self):
         self._setup_cards()
-        in_rt, hold = 0.9, 1.0
+        hold = 1.0
         c1, c2 = self.card1, self.card2
 
         # entrance: both cards slide up from below (shared slide_in)
         self.play(c1.slide_in(self, from_dir=DOWN, play=False),
-                  c2.slide_in(self, from_dir=DOWN, play=False), run_time=in_rt)
+                  c2.slide_in(self, from_dir=DOWN, play=False), run_time=0.9)
 
         # all filled boxes on BOTH at once, then Total row both, then top 3rd col both
         highlight(self, [self._box_target(c1, r) for r in FILLED_BOXES]
@@ -239,10 +239,10 @@ class Reductions(YahtzeeScene):
     #    there for the rest of the scene — the number/caption live on the right).
     @subscene
     def one_card(self):
-        move_rt, hold = 0.9, 1.0
+        hold = 1.0
         c1 = self.card1
         self.play(FadeOut(self.card2, shift=RIGHT * 0.6),
-                  c1.animate.move_to(CARD_L), run_time=move_rt)
+                  c1.animate.move_to(CARD_L), run_time=0.9)
         self.card2 = None
 
         highlight(self, [self._box_target(c1, r) for r in FILLED_BOXES], hold=hold)
@@ -255,10 +255,10 @@ class Reductions(YahtzeeScene):
     @subscene
     def reduce_first(self):
         self._setup_reduce_first()
-        appear, count, label_rt, hold = 0.6, 2.4, 0.6, 0.6
+        count, label_rt = 2.4, 0.6
         self.play(FadeIn(self._rf_start, shift=UP * 0.2),
-                  FadeIn(self._rf_from, shift=UP * 0.2), run_time=appear)
-        self.wait(hold)
+                  FadeIn(self._rf_from, shift=UP * 0.2), run_time=0.6)
+        self.wait(0.6)
         self._count_to(self._rf_start, SCENE1_POSITIONS, BLANK_A,
                        self._rf_from, self._rf_to, count=count, label_rt=label_rt)
 
@@ -279,14 +279,14 @@ class Reductions(YahtzeeScene):
     # e) top score only matters below 63 — top-section-only edits (bottom untouched)
     @subscene
     def cap_top_at_63(self):
-        edit_rt, gap, hold, restore_rt = 0.8, 0.35, 1.0, 0.8
+        hold = 1.0
         for changes in EX_TOPS:
-            self.card1.transition(self, changes, run_time=edit_rt)
-            self.wait(gap)
+            self.card1.transition(self, changes, run_time=0.8)
+            self.wait(0.35)
         # …only which boxes are still open matters (the 1's) —
         highlight(self, [self._box_target(self.card1, 0)], hold=hold)
         # — then restore the top section to its earlier state.
-        self.card1.transition(self, RESTORE_TOP, run_time=restore_rt)
+        self.card1.transition(self, RESTORE_TOP, run_time=0.8)
         # transition() adds new-value cell texts at SCENE level (orphaned from the
         # card group). Hard-swap the whole thing for a FRESH clean SCORES1 card
         # (identical → the instant swap is invisible): clear every top-level mobject
@@ -303,11 +303,11 @@ class Reductions(YahtzeeScene):
     @subscene
     def drop_bottom_total(self):
         self._setup_bottom_strike()
-        strike_rt, strike_hold, unstrike_rt, hold = 0.5, 0.5, 0.4, 1.0
+        hold = 1.0
         # cross out the bottom total, let it register, then REMOVE the cross-out…
-        self.play(Create(self.strike), run_time=strike_rt)
-        self.wait(strike_hold)
-        self.play(FadeOut(self.strike), run_time=unstrike_rt)
+        self.play(Create(self.strike), run_time=0.5)
+        self.wait(0.5)
+        self.play(FadeOut(self.strike), run_time=0.4)
         self.strike = None
         # …then highlight the open bottom boxes (all we actually need).
         highlight(self, [self._box_target(self.card1, r) for r in OPEN_BOTTOM],
@@ -328,18 +328,16 @@ class Reductions(YahtzeeScene):
     @subscene
     def perfect_average(self):
         self._setup_perfect_average()
-        fade, appear, step_rt, count_rt, settle, last_rt, lbl_rt = \
-            0.5, 0.7, 0.45, 0.55, 0.15, 2.0, 0.6
         sweep = self.sweep
 
         self.play(FadeOut(self.num, shift=UP * 0.2),
-                  FadeOut(self.num_label, shift=UP * 0.2), run_time=fade)
+                  FadeOut(self.num_label, shift=UP * 0.2), run_time=0.5)
         self.num = self.num_label = None
 
         # expected points remaining for the current (end-of-h) card
         start = self._ev_text(sweep[0]["remaining"], NUM_POS)
         self.play(FadeIn(self.ev_label, shift=UP * 0.2),
-                  FadeIn(start, shift=UP * 0.2), run_time=appear)
+                  FadeIn(start, shift=UP * 0.2), run_time=0.7)
         self.wait(0.3)
 
         tr = ValueTracker(sweep[0]["remaining"])
@@ -351,9 +349,9 @@ class Reductions(YahtzeeScene):
         # empty the card one box at a time (all but the last), re-reading the EV
         for step in sweep[1:-1]:
             self.card1.transition(self, {_sc_box(step["emptied"]): None},
-                                  run_time=step_rt)
-            self.play(tr.animate.set_value(step["remaining"]), run_time=count_rt)
-            self.wait(settle)
+                                  run_time=0.45)
+            self.play(tr.animate.set_value(step["remaining"]), run_time=0.55)
+            self.wait(0.15)
 
         # finale: the last count — remove the card, move + grow the number, and
         # drop the "Avg points remaining:" caption right away. Fade EVERYTHING
@@ -373,7 +371,7 @@ class Reductions(YahtzeeScene):
             move_t.animate.set_value(1.0),
             *[FadeOut(m) for m in clutter],
             self.ev_label.animate(rate_func=_out_first).set_opacity(0.0),
-            run_time=last_rt,
+            run_time=2.0,
         )
         self.remove(fin, self.ev_label, *clutter)
         final = self._moving_ev(v1, 1.0)
@@ -382,4 +380,4 @@ class Reductions(YahtzeeScene):
         # only once everything has stopped: the caption appears above it
         avg = crisp_text("Average total points:", font_size=LABEL_FS, color=BLACK,
                          font=FONT, weight="BOLD").next_to(final, UP, buff=0.55)
-        self.play(FadeIn(avg, shift=UP * 0.2), run_time=lbl_rt)
+        self.play(FadeIn(avg, shift=UP * 0.2), run_time=0.6)
