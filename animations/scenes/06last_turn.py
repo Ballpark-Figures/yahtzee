@@ -203,26 +203,25 @@ class LastTurn(YahtzeeScene):
     @subscene
     def intro(self):
         self._setup_card()
-        in_rt, hl_rt = 1.1, 3.0
 
         # shared slide-in entrance (from the side)
-        self.card.slide_in(self, run_time=in_rt)
+        self.card.slide_in(self, run_time=1.1)
 
         # "Highlight boxes one at a time" — a flash walking down every row.
         self.card.highlight_rows(self, list(range(13)), pulse=True,
-                                 lag_ratio=0.18, run_time=hl_rt)
+                                 lag_ratio=0.18, run_time=3.0)
 
     # ── b) top section: roll for threes (2 -> 3 -> 4 of them) ─────────────────
     @subscene
     def top_threes(self):
         self._setup_board()
-        clear_rt, in_rt, roll_rt, keep_rt, score_rt = 0.7, 0.8, 0.7, 0.5, 1.1
+        roll_rt, keep_rt, score_rt = 0.7, 0.5, 1.1
 
         # clear just the Threes box; hold it highlighted for the whole section
-        self.card.transition(self, {R_THREES: None}, run_time=clear_rt)
+        self.card.transition(self, {R_THREES: None}, run_time=0.7)
         self._hold_row(R_THREES)
         self.play(FadeIn(self.board.lines), *[FadeIn(d) for d in self.board.dice],
-                  run_time=in_rt)
+                  run_time=0.8)
 
         self.play(*self.board.first_roll([3, 3, 2, 4, 6]), run_time=roll_rt)   # 2 threes
         self.wait(0.2)
@@ -240,14 +239,13 @@ class LastTurn(YahtzeeScene):
     @subscene
     def top_histogram(self):
         self._setup_hist()
-        in_rt, move_rt = 1.0, 1.1
 
         # the histogram is the same for every top box, so light up the whole top
         # section (Threes is already held from b; add the other five)
         self._extend_hold([0, 1, 3, 4, 5])
 
         # big + readable on the right (Avg 2.1 is PART of the histogram group)
-        self.play(FadeIn(self.hist, shift=UP * 0.3), run_time=in_rt)
+        self.play(FadeIn(self.hist, shift=UP * 0.3), run_time=1.0)
         self.wait(0.5)
 
         # park the WHOLE histogram — bars, %, 0-5, "Quantity Rolled" AND Avg 2.1 —
@@ -255,7 +253,7 @@ class LastTurn(YahtzeeScene):
         # % clear the top)
         top_c, colw, top_h = self.card.col4_region(range(6))
         self.play(self.hist.animate.scale(0.92 * colw / self.hist.width).move_to(top_c),
-                  run_time=move_rt)
+                  run_time=1.1)
         self._release_row()          # end the top-section highlight before the section ends
         self.wait(0.2)
 
@@ -278,12 +276,12 @@ class LastTurn(YahtzeeScene):
     # ── d) yahtzee: keep the most-of; the example fails (33313, four 3s) ──────
     @subscene
     def yah_roll(self):
-        clear_rt, reset_rt, roll_rt, keep_rt = 0.6, 0.35, 0.7, 0.5
+        roll_rt, keep_rt = 0.7, 0.5
 
         # open + hold the Yahtzee box (Threes already reads 12 from the demo)
-        self.card.transition(self, {R_YAH: None}, run_time=clear_rt)
+        self.card.transition(self, {R_YAH: None}, run_time=0.6)
         self._hold_row(R_YAH)
-        self._reset_board([2, 2, 4, 4, 6], reset_rt)
+        self._reset_board([2, 2, 4, 4, 6], 0.35)
 
         self.play(*self.board.first_roll([2, 2, 4, 4, 6]), run_time=roll_rt)  # 22446
         self.wait(0.15)
@@ -300,28 +298,26 @@ class LastTurn(YahtzeeScene):
     @subscene
     def yah_fill(self):
         self._setup_table_headers()
-        hdr_rt, fill_rt = 0.8, 0.8
 
-        self.play(FadeIn(self.col4_headers), run_time=hdr_rt)
+        self.play(FadeIn(self.col4_headers), run_time=0.8)
         pt, et = self._table_row(R_YAH, "5%", "2.3")
-        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=0.8)
         self._release_row()          # end the Yahtzee highlight before the section ends
         self.wait(0.2)
 
     # ── f) "we'll get to 3 & 4 of a kind later" — highlight those two rows ────
     @subscene
     def highlight_34kind(self):
-        hl_rt, hold = 0.4, 1.3
-        self.card.highlight_rows(self, [R_3KIND, R_4KIND], run_time=hl_rt, hold=hold)
+        self.card.highlight_rows(self, [R_3KIND, R_4KIND], run_time=0.4, hold=1.3)
 
     # ── g) full house: push-forward the groups you'd keep (2pair/3kind/pair/4kind)
     @subscene
     def fh_examples(self):
-        clear_rt, show_rt, push_rt, morph_rt, hold = 0.5, 0.5, 0.4, 0.5, 0.7
+        push_rt, morph_rt, hold = 0.4, 0.5, 0.7
 
-        self.card.transition(self, {R_FH: None}, run_time=clear_rt)
+        self.card.transition(self, {R_FH: None}, run_time=0.5)
         self._hold_row(R_FH)
-        self._show_dice([2, 2, 4, 4, 5], band=2, run_time=show_rt)   # two pairs
+        self._show_dice([2, 2, 4, 4, 5], band=2, run_time=0.5)   # two pairs
         self._keep([0, 1, 2, 3], 2, push_rt, hold)                 # keep 2244
         morph_dice(self, self.board.dice, [2, 2, 2, 4, 5], run_time=morph_rt)  # 3 of a kind
         self._keep([0, 1, 2], 2, push_rt, hold)                    # keep 222
@@ -333,9 +329,8 @@ class LastTurn(YahtzeeScene):
     # ── h) fill the Full House row (37%, EV 9.2) ─────────────────────────────
     @subscene
     def fh_fill(self):
-        fill_rt = 0.8
         pt, et = self._table_row(R_FH, "37%", "9.2")
-        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=0.8)
         self._release_row()          # end the Full House highlight before the section ends
         self.wait(0.2)
 
@@ -351,13 +346,12 @@ class LastTurn(YahtzeeScene):
     # ── i) large straight: the two ways to make one ──────────────────────────
     @subscene
     def lgs_intro(self):
-        clear_rt, out_rt, in_rt = 0.5, 0.4, 0.8
-        self.card.transition(self, {R_FH: 25, R_LGS: None}, run_time=clear_rt)  # refill FH, open LgS
+        self.card.transition(self, {R_FH: 25, R_LGS: None}, run_time=0.5)  # refill FH, open LgS
         self._hold_row(R_LGS)
-        self.play(*[FadeOut(d) for d in self.board.dice], run_time=out_rt)      # clear the FH dice
+        self.play(*[FadeOut(d) for d in self.board.dice], run_time=0.4)      # clear the FH dice
         self._setup_lgs_pair()
         self.play(FadeIn(self.lgs_top, shift=UP * 0.2),
-                  FadeIn(self.lgs_bot, shift=DOWN * 0.2), run_time=in_rt)
+                  FadeIn(self.lgs_bot, shift=DOWN * 0.2), run_time=0.8)
 
     # ── j) you need 2,3,4,5 and either a 1 or 6 ───────────────────────────────
     @subscene
@@ -371,32 +365,28 @@ class LastTurn(YahtzeeScene):
     # ── k) roll a 2/3/4/5 -> keep one of each (22334 -> keep 234) ─────────────
     @subscene
     def lgs_keep2345(self):
-        out_rt, show_rt, push_rt, hold = 0.4, 0.5, 0.4, 0.9
-        self.play(FadeOut(self.lgs_top), FadeOut(self.lgs_bot), run_time=out_rt)
+        self.play(FadeOut(self.lgs_top), FadeOut(self.lgs_bot), run_time=0.4)
         self.lgs_top = self.lgs_bot = None
-        self._show_dice([2, 2, 3, 3, 4], band=2, run_time=show_rt)   # 22334
-        self._keep([0, 2, 4], 2, push_rt, hold)                     # keep one 2, 3, 4
+        self._show_dice([2, 2, 3, 3, 4], band=2, run_time=0.5)   # 22334
+        self._keep([0, 2, 4], 2, 0.4, 0.9)                     # keep one 2, 3, 4
 
     # ── l) 1/6 keeps a spot only if you'd keep >=4 dice (12346 -> keep 1234) ──
     @subscene
     def lgs_1or6(self):
-        morph_rt, push_rt, hold = 0.5, 0.4, 0.9
-        morph_dice(self, self.board.dice, [1, 2, 3, 4, 6], run_time=morph_rt)   # 12346
-        self._keep([0, 1, 2, 3], 2, push_rt, hold)                  # keep the 1 (>=4 dice)
+        morph_dice(self, self.board.dice, [1, 2, 3, 4, 6], run_time=0.5)   # 12346
+        self._keep([0, 1, 2, 3], 2, 0.4, 0.9)                  # keep the 1 (>=4 dice)
 
     # ── m) otherwise reroll the 1s/6s (12336 -> keep 23) ─────────────────────
     @subscene
     def lgs_reroll16(self):
-        morph_rt, push_rt, hold = 0.5, 0.4, 0.9
-        morph_dice(self, self.board.dice, [1, 2, 3, 3, 6], run_time=morph_rt)   # 12336
-        self._keep([1, 2], 2, push_rt, hold)                        # drop the 1 & 6, keep 23
+        morph_dice(self, self.board.dice, [1, 2, 3, 3, 6], run_time=0.5)   # 12336
+        self._keep([1, 2], 2, 0.4, 0.9)                        # drop the 1 & 6, keep 23
 
     # ── n) fill the Large Straight row (27%, EV 10.6) ────────────────────────
     @subscene
     def lgs_fill(self):
-        fill_rt = 0.8
         pt, et = self._table_row(R_LGS, "27%", "10.6")
-        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=0.8)
         self._release_row()
         self.wait(0.2)
 
@@ -423,12 +413,11 @@ class LastTurn(YahtzeeScene):
     # ── o) small straight: three ways + the extra unused die ─────────────────
     @subscene
     def sms_intro(self):
-        clear_rt, out_rt, in_rt = 0.5, 0.4, 0.8
-        self.card.transition(self, {R_LGS: 40, R_SMS: None}, run_time=clear_rt)  # refill LgS, open SmS
+        self.card.transition(self, {R_LGS: 40, R_SMS: None}, run_time=0.5)  # refill LgS, open SmS
         self._hold_row(R_SMS)
-        self.play(*[FadeOut(d) for d in self.board.dice], run_time=out_rt)
+        self.play(*[FadeOut(d) for d in self.board.dice], run_time=0.4)
         self._setup_sms_triple()
-        self.play(FadeIn(self.sms_rows), FadeIn(self.sms_grey), run_time=in_rt)
+        self.play(FadeIn(self.sms_rows), FadeIn(self.sms_grey), run_time=0.8)
 
     # ── p) always need a 3 and a 4 ───────────────────────────────────────────
     @subscene
@@ -440,18 +429,16 @@ class LastTurn(YahtzeeScene):
     # ── q) no 3 or 4 -> reroll everything (12256) ────────────────────────────
     @subscene
     def sms_no34(self):
-        out_rt, show_rt, hold = 0.4, 0.5, 1.1
-        self.play(FadeOut(self.sms_rows), FadeOut(self.sms_grey), run_time=out_rt)
+        self.play(FadeOut(self.sms_rows), FadeOut(self.sms_grey), run_time=0.4)
         self.sms_rows = self.sms_34 = self.sms_other = self.sms_grey = None
-        self._show_dice([1, 2, 2, 5, 6], band=2, run_time=show_rt)   # no 3 or 4
-        self.wait(hold)                                              # keep nothing, reroll all
+        self._show_dice([1, 2, 2, 5, 6], band=2, run_time=0.5)   # no 3 or 4
+        self.wait(1.1)                                              # keep nothing, reroll all
 
     # ── r) keep one each of 3,4 (and 2,5) — 22336 -> keep 23 ─────────────────
     @subscene
     def sms_keep(self):
-        morph_rt, push_rt, hold = 0.5, 0.4, 0.9
-        morph_dice(self, self.board.dice, [2, 2, 3, 3, 6], run_time=morph_rt)   # 22336
-        self._keep([0, 2], 2, push_rt, hold)                        # keep 2, 3
+        morph_dice(self, self.board.dice, [2, 2, 3, 3, 6], run_time=0.5)   # 22336
+        self._keep([0, 2], 2, 0.4, 0.9)                        # keep 2, 3
 
     # ── s) keep a 1 (1&2 no 5) / a 6 (5&6 no 2): 12236->123, 13356->356 ──────
     @subscene
@@ -465,9 +452,8 @@ class LastTurn(YahtzeeScene):
     # ── t) fill the Small Straight row (62%, EV 18.5) ────────────────────────
     @subscene
     def sms_fill(self):
-        fill_rt = 0.8
         pt, et = self._table_row(R_SMS, "62%", "18.5")
-        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=0.8)
         self._release_row()
         self.wait(0.2)
 
@@ -523,112 +509,101 @@ class LastTurn(YahtzeeScene):
     # ── u) chance: treat each die on its own ─────────────────────────────────
     @subscene
     def chance_intro(self):
-        clear_rt, out_rt = 0.5, 0.4
-        self.card.transition(self, {R_SMS: 30, R_CHANCE: None}, run_time=clear_rt)
+        self.card.transition(self, {R_SMS: 30, R_CHANCE: None}, run_time=0.5)
         self._hold_row(R_CHANCE)
-        self.play(*[FadeOut(d) for d in self.board.dice], run_time=out_rt)
+        self.play(*[FadeOut(d) for d in self.board.dice], run_time=0.4)
 
     # ── v) second reroll: the column of dice, one die averages 3.5 ───────────
     @subscene
     def chance_col(self):
-        in_rt = 0.8
         self._setup_chance_col()
-        self.play(FadeIn(self.ch_title), FadeIn(self.ch_dice), FadeIn(self.ch_avg), run_time=in_rt)
+        self.play(FadeIn(self.ch_title), FadeIn(self.ch_dice), FadeIn(self.ch_avg), run_time=0.8)
 
     # ── w) keep 4/5/6 -> themselves; reroll 1/2/3 -> its own 3.5 ─────────────
     @subscene
     def chance_2nd_arrows(self):
-        reroll_rt, keep_rt = 0.8, 0.8
         keeps, rerolls = self._ch_arrows(keep_n=3, reroll_val="3.5")
         self.ch_2nd = VGroup(*[m for tr in keeps for m in tr],
                              *[m for tr in rerolls for m in tr])
         self.play(*[GrowArrow(a) for a, _, _ in rerolls],      # reroll first
                   *[FadeIn(n) for _, n, _ in rerolls], *[FadeIn(l) for _, _, l in rerolls],
-                  run_time=reroll_rt)
+                  run_time=0.8)
         self.play(*[GrowArrow(a) for a, _, _ in keeps],        # then keep
                   *[FadeIn(dup) for _, dup, _ in keeps], *[FadeIn(l) for _, _, l in keeps],
-                  run_time=keep_rt)
+                  run_time=0.8)
 
     # ── x) that strategy averages 4.25 (end of the SECOND column) ────────────
     @subscene
     def chance_425(self):
-        rt = 0.6
         self.ch_result = crisp_text("Avg 4.25", font_size=28, color=BLACK, font=FONT,
                                     weight="BOLD").move_to([self.ch_x2, self.ch_avg.get_center()[1], 0])
-        self.play(FadeIn(self.ch_result, shift=UP * 0.15), run_time=rt)
+        self.play(FadeIn(self.ch_result, shift=UP * 0.15), run_time=0.6)
 
     # ── y) first reroll: rerolling now yields 4.25, so reroll the 4 too. The 1
     #      arrow is drawn first. ──────────────────────────────────────────────
     @subscene
     def chance_1st(self):
-        title_rt, arr_rt = 0.7, 0.5
         new_title = crisp_text("First Reroll", font_size=26, color=BLACK, font=FONT,
                                weight="BOLD").move_to(self.ch_title.get_center())
         self.play(Transform(self.ch_title, new_title),
-                  FadeOut(self.ch_2nd), FadeOut(self.ch_result), run_time=title_rt)
+                  FadeOut(self.ch_2nd), FadeOut(self.ch_result), run_time=0.7)
         keeps, rerolls = self._ch_arrows(keep_n=2, reroll_val="4.25")  # keep 5,6; reroll 1-4
         self.ch_1st = VGroup(*[m for tr in keeps for m in tr],
                              *[m for tr in rerolls for m in tr])
         a1, n1, l1 = rerolls[-1]                    # bottom die = the 1
-        self.play(GrowArrow(a1), FadeIn(n1), FadeIn(l1), run_time=arr_rt)
+        self.play(GrowArrow(a1), FadeIn(n1), FadeIn(l1), run_time=0.5)
         self._ch_1st_rest = (keeps, rerolls[:-1])
 
     # ── z) keep 5/6, reroll 1-4 (the rest of the arrows) ─────────────────────
     @subscene
     def chance_rest_arrows(self):
-        reroll_rt, keep_rt = 0.8, 0.8
         keeps, rest = self._ch_1st_rest             # rest = reroll triples except the 1
         self.play(*[GrowArrow(a) for a, _, _ in rest],      # reroll first
                   *[FadeIn(n) for _, n, _ in rest], *[FadeIn(l) for _, _, l in rest],
-                  run_time=reroll_rt)
+                  run_time=0.8)
         self.play(*[GrowArrow(a) for a, _, _ in keeps],     # then keep
                   *[FadeIn(dup) for _, dup, _ in keeps], *[FadeIn(l) for _, _, l in keeps],
-                  run_time=keep_rt)
+                  run_time=0.8)
 
     # ── za) 4 2/3 per die -> 23.3 total for chance ───────────────────────────
     @subscene
     def chance_fill(self):
-        avg_rt, fill_rt = 0.6, 0.8
         self.ch_result = crisp_text("Avg 4.67", font_size=28, color=BLACK, font=FONT,
                                     weight="BOLD").move_to([self.ch_x2, self.ch_avg.get_center()[1], 0])
-        self.play(FadeIn(self.ch_result, shift=UP * 0.15), run_time=avg_rt)
+        self.play(FadeIn(self.ch_result, shift=UP * 0.15), run_time=0.6)
         pt, et = self._table_row(R_CHANCE, "–", "23.3")   # prob = dash, EV = 23.3
-        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=0.8)
         self._release_row()
         self.wait(0.2)
 
     # ── zb) the complicated cases: 3 & 4 of a kind ───────────────────────────
     @subscene
     def fourk_highlight(self):
-        out_rt, clear_rt, hl_rt, hold = 0.4, 0.5, 0.4, 1.3
         # clear the chance illustration, refill Chance, open 4-of-a-kind
         self.play(FadeOut(self.ch_dice), FadeOut(self.ch_title), FadeOut(self.ch_avg),
-                  FadeOut(self.ch_1st), FadeOut(self.ch_result), run_time=out_rt)
+                  FadeOut(self.ch_1st), FadeOut(self.ch_result), run_time=0.4)
         self.ch_dice = self.ch_title = self.ch_avg = self.ch_1st = self.ch_result = None
-        self.card.transition(self, {R_CHANCE: 22, R_4KIND: None}, run_time=clear_rt)
-        self.card.highlight_rows(self, [R_3KIND, R_4KIND], run_time=hl_rt, hold=hold)
+        self.card.transition(self, {R_CHANCE: 22, R_4KIND: None}, run_time=0.5)
+        self.card.highlight_rows(self, [R_3KIND, R_4KIND], run_time=0.4, hold=1.3)
         self._hold_row(R_4KIND)
 
     # ── zc) last roll: keep whatever you have most of (11156 -> 111) ──────────
     @subscene
     def fourk_11156(self):
-        show_rt, push_rt, hold = 0.5, 0.4, 0.9
-        self._show_dice([1, 1, 1, 5, 6], band=2, run_time=show_rt)   # LAST roll -> band 2
-        self._keep([0, 1, 2], 2, push_rt, hold)                     # keep 111
+        self._show_dice([1, 1, 1, 5, 6], band=2, run_time=0.5)   # LAST roll -> band 2
+        self._keep([0, 1, 2], 2, 0.4, 0.9)                     # keep 111
 
     # ── zd) already have 4oak -> reroll the last die if <=3 (44442 -> 4444) ──
     @subscene
     def fourk_44442(self):
-        morph_rt, push_rt, hold = 0.5, 0.4, 0.9
-        morph_dice(self, self.board.dice, [4, 4, 4, 4, 2], run_time=morph_rt)   # still last roll
-        self._keep([0, 1, 2, 3], 2, push_rt, hold)                  # keep 4444, reroll the 2
+        morph_dice(self, self.board.dice, [4, 4, 4, 4, 2], run_time=0.5)   # still last roll
+        self._keep([0, 1, 2, 3], 2, 0.4, 0.9)                  # keep 4444, reroll the 2
 
     # ── ze) FIRST roll: keep 4oak, reroll the other die if <5 (33334 -> 3333) ─
     @subscene
     def fourk_33334(self):
-        show_rt, push_rt, hold = 0.5, 0.4, 0.9
-        self._show_dice([3, 3, 3, 3, 4], band=1, run_time=show_rt)   # FIRST reroll -> band 1 (lower)
-        self._keep([0, 1, 2, 3], 1, push_rt, hold)                  # keep 3333, reroll the 4
+        self._show_dice([3, 3, 3, 3, 4], band=1, run_time=0.5)   # FIRST reroll -> band 1 (lower)
+        self._keep([0, 1, 2, 3], 1, 0.4, 0.9)                  # keep 3333, reroll the 4
 
     # ── the two "success bars" for 11166: keep the 1s vs keep the 6s ─────────
     def _fk_bar(self, dval, w, txt, y, color):
@@ -645,13 +620,12 @@ class LastTurn(YahtzeeScene):
     # ── zf) 3 ones vs 2 sixes: keeping the 1s wins on SUCCESS (52% vs 23%) ────
     @subscene
     def fourk_11166_bars(self):
-        show_rt, bar_rt = 0.5, 0.8
-        self._show_dice([1, 1, 1, 6, 6], band=1, run_time=show_rt)   # FIRST reroll -> band 1
+        self._show_dice([1, 1, 1, 6, 6], band=1, run_time=0.5)   # FIRST reroll -> band 1
         # bars centered between the top & middle guide lines (band 2, ~1.125)
         g1, self.fk_bar1, self.fk_lbl1 = self._fk_bar(1, 0.52 * 4.0, "52%", 1.575, SCORE_GREEN)
         g6, self.fk_bar6, self.fk_lbl6 = self._fk_bar(6, 0.23 * 4.0, "23%", 0.675, SCORE_GREEN)
         self.fk_bars = VGroup(g1, g6)
-        self.play(FadeIn(g1), FadeIn(g6), run_time=bar_rt)
+        self.play(FadeIn(g1), FadeIn(g6), run_time=0.8)
 
     # ── zg) bars now = POINTS-IF-SUCCEED (full width), with the SUCCESS % filled,
     #      so the FILLED AREA = EV. Keeping the 6s wins on points (6.2 vs 4.2). ──
@@ -659,7 +633,6 @@ class LastTurn(YahtzeeScene):
     #      success 52% / 23%; filled = EV = 4.2 / 6.2.
     @subscene
     def fourk_ev_bars(self):
-        rt = 0.9
         ax = self._gutter_x(); x0 = ax - 3.0
         sc = 0.15
         def evbar(dval, y, pts, frac, ev):
@@ -674,68 +647,66 @@ class LastTurn(YahtzeeScene):
                              weight="BOLD").next_to(outline, RIGHT, buff=0.15)
             return VGroup(d, fill, outline, lbl)
         new = VGroup(evbar(1, 1.575, 8.1, 0.52, "4.2"), evbar(6, 0.675, 27.1, 0.23, "6.2"))
-        self.play(FadeOut(self.fk_bars), FadeIn(new), run_time=rt)
+        self.play(FadeOut(self.fk_bars), FadeIn(new), run_time=0.9)
         self.fk_bars = new
 
     # ── zh) several cases where fewer-larger beats more-smaller (keeps SOURCED)
     @subscene
     def fourk_examples(self):
-        out_rt, show_rt, morph_rt, push_rt, hold = 0.4, 0.5, 0.5, 0.35, 0.7
-        self.play(FadeOut(self.fk_bars), run_time=out_rt)
+        push_rt, hold = 0.35, 0.7
+        self.play(FadeOut(self.fk_bars), run_time=0.4)
         self.fk_bars = None
         cases = [([1, 1, 1, 4, 4], [3, 4]), ([1, 1, 1, 5, 5], [3, 4]),   # keep 44 / 55
                  ([2, 2, 3, 5, 6], [4]),    ([1, 1, 2, 3, 6], [4]),      # keep the 6
                  ([1, 1, 2, 3, 5], [4]),    ([1, 1, 2, 3, 4], [4])]      # keep the 5 / 4
         # FIRST reroll -> band 1; each case enters already pushed forward and
         # morphs to the next (no push-and-back)
-        self._show_dice(cases[0][0], band=1, run_time=show_rt)
+        self._show_dice(cases[0][0], band=1, run_time=0.5)
         self._keep(cases[0][1], 1, push_rt, hold)
         for vals, keep in cases[1:]:
-            morph_dice(self, self.board.dice, vals, run_time=morph_rt)
+            morph_dice(self, self.board.dice, vals, run_time=0.5)
             self._keep(keep, 1, push_rt, hold)
 
     # ── zi) fill the 4-of-a-kind row (28%, EV 5.6) ───────────────────────────
     @subscene
     def fourk_fill(self):
-        fill_rt = 0.8
         pt, et = self._table_row(R_4KIND, "28%", "5.6")
-        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=0.8)
         self._release_row()
         self.wait(0.2)
 
     # ── zj) 3 of a kind, second reroll: keep most; if 3oak reroll other 2 (<4)
     @subscene
     def threek_2nd(self):
-        clear_rt, show_rt, morph_rt, push_rt, hold = 0.5, 0.5, 0.5, 0.4, 0.9
-        self.card.transition(self, {R_4KIND: 20, R_3KIND: None}, run_time=clear_rt)  # refill 4K, open 3K
+        push_rt, hold = 0.4, 0.9
+        self.card.transition(self, {R_4KIND: 20, R_3KIND: None}, run_time=0.5)  # refill 4K, open 3K
         self._hold_row(R_3KIND)
-        self._show_dice([2, 2, 3, 4, 5], band=2, run_time=show_rt)   # 22345, 2nd reroll -> band 2
+        self._show_dice([2, 2, 3, 4, 5], band=2, run_time=0.5)   # 22345, 2nd reroll -> band 2
         self._keep([0, 1], 2, push_rt, hold)                        # keep 22
-        morph_dice(self, self.board.dice, [3, 3, 3, 3, 1], run_time=morph_rt)   # 33331
+        morph_dice(self, self.board.dice, [3, 3, 3, 3, 1], run_time=0.5)   # 33331
         self._keep([0, 1, 2], 2, push_rt, hold)                     # keep 333 (reroll extra 3 & the 1)
 
     # ── zk) first roll: usually keep the most, but many exceptions — fewer of a
     #      LARGER number over more of a smaller one (all SOURCED, 3-kind stage A) ─
     @subscene
     def threek_1st(self):
-        show_rt, morph_rt, push_rt, hold = 0.5, 0.5, 0.4, 0.9
+        push_rt, hold = 0.4, 0.9
         # 3-kind-SPECIFIC counterintuitive keeps (the 4-kind answer differs here):
         # A RANGE of 3-kind-SPECIFIC keeps (the 4-kind answer differs), varying
         # both the DROPPED value (2s, 1s) and the KEPT shape (single/pair/pair+):
         cases = [([2, 2, 3, 4, 5], [4]),       # 22345: keep the single 5 over the pair of 2s (4K keeps 22)
                  ([1, 1, 1, 3, 3], [3, 4]),    # 11133: keep the pair of 3s over THREE 1s (4K keeps 111)
                  ([2, 2, 3, 3, 6], [2, 3, 4])] # 22336: keep 3,3,6 over the pair of 2s (4K keeps 33)
-        self._show_dice(cases[0][0], band=1, run_time=show_rt)   # FIRST reroll -> band 1
+        self._show_dice(cases[0][0], band=1, run_time=0.5)   # FIRST reroll -> band 1
         self._keep(cases[0][1], 1, push_rt, hold)
         for vals, keep in cases[1:]:
-            morph_dice(self, self.board.dice, vals, run_time=morph_rt)
+            morph_dice(self, self.board.dice, vals, run_time=0.5)
             self._keep(keep, 1, push_rt, hold)
 
     # ── zl) fill the 3-of-a-kind row (71%, EV 15) ────────────────────────────
     @subscene
     def threek_fill(self):
-        fill_rt = 0.8
         pt, et = self._table_row(R_3KIND, "71%", "15.0")
-        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=fill_rt)
+        self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=0.8)
         self._release_row()
         self.wait(0.5)
