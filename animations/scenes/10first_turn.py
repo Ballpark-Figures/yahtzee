@@ -70,57 +70,51 @@ class FirstTurn(YahtzeeScene):
     @subscene
     def bring_card(self):
         # a) bring back the empty scorecard (shared slide-in entrance)
-        rt = 1.0
-        self.card.slide_in(self, run_time=rt)
+        self.card.slide_in(self, run_time=1.0)
 
     @subscene
     def yahtzee_first(self):
         # b) fill+highlight Yahtzee; show ONLY the first list row + title
-        rt = 1.0
         self.wheel.set_focus(0)
         self.wheel.hide_all()
         self.add(self.wheel)
-        self.play(self.wheel.fade_in([0]), FadeIn(self.title), run_time=rt)
+        self.play(self.wheel.fade_in([0]), FadeIn(self.title), run_time=1.0)
         self._fill(11, 50, hold=0.6)
 
     @subscene
     def scroll_top(self):
         # c) fade in the rest, scroll through Sixes24 -> Threes12 one at a time
         self.play(self.wheel.fade_in(), run_time=0.8)
-        scroll_rt = 1.0
         for idx in [self._idx(SIXES, 24), self._idx(FIVES, 20),
                     self._idx(LARGE_STRAIGHT, 40), self._idx(FOURS, 16),
                     self._idx(THREES, 12)]:
             o = self.data[idx]
-            self.play(self.wheel.scroll_to(idx), run_time=scroll_rt)
+            self.play(self.wheel.scroll_to(idx), run_time=1.0)
             self._fill(o["sc_row"], o["points"], hold=0.4)
 
     @subscene
     def three_of_number(self):
         # d) scroll to the first "3 of a number" (three 6s -> Sixes 18)
-        rt = 1.2
         idx = self._idx(SIXES, 18)
         o = self.data[idx]
-        self.play(self.wheel.scroll_to(idx), run_time=rt)
+        self.play(self.wheel.scroll_to(idx), run_time=1.2)
         self._fill(o["sc_row"], o["points"], hold=0.5)
 
     @subscene
     def full_house(self):
         # e) scroll to full house
-        rt = 1.2
         idx = self._idx(FULL_HOUSE, 25)
         o = self.data[idx]
-        self.play(self.wheel.scroll_to(idx), run_time=rt)
+        self.play(self.wheel.scroll_to(idx), run_time=1.2)
         self._fill(o["sc_row"], o["points"], hold=0.5)
 
     @subscene
     def straights(self):
         # f) large straight, then small straight
-        rt = 1.2
         for cat, pts in [(LARGE_STRAIGHT, 40), (SMALL_STRAIGHT, 30)]:
             idx = self._idx(cat, pts)
             o = self.data[idx]
-            self.play(self.wheel.scroll_to(idx), run_time=rt)
+            self.play(self.wheel.scroll_to(idx), run_time=1.2)
             self._fill(o["sc_row"], o["points"], hold=0.5)
 
     @subscene
@@ -142,16 +136,14 @@ class FirstTurn(YahtzeeScene):
         # i) flag the 3kind box red, scroll to a 3kind example, then a NORMAL
         # (default gold) flash for the one we'd actually use
         self.card.flash_rows(self, [(6, None)], color=SCORE_RED, hold=0.6)
-        rt = 1.2
         idx = self._idx(THREE_KIND, 28)
-        self.play(self.wheel.scroll_to(idx), run_time=rt)
+        self.play(self.wheel.scroll_to(idx), run_time=1.2)
         self.card.flash_rows(self, [(6, 28)], hold=0.8)   # default (gold)
 
     @subscene
     def worst(self):
         # j) scroll all the way to the bottom (Chance 19 / 23446)
-        rt = 2.0
         idx = self._idx(CHANCE, 19)
         o = self.data[idx]
-        self.play(self.wheel.scroll_to(idx), run_time=rt)
+        self.play(self.wheel.scroll_to(idx), run_time=2.0)
         self._fill(o["sc_row"], o["points"], hold=0.6)
