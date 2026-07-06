@@ -166,14 +166,6 @@ class TwoPlayer(YahtzeeScene):
         self.play(*[FadeOut(r) for r in rects], run_time=fade)
         self.remove(*rects)
 
-    def _ungrey(self, card):
-        """Force a mid-game card's 3rd-column summary to full opacity (the asset
-        greys it to 0.5 when a section is incomplete)."""
-        for t in (card.bar_number, card.cap_label, card.bottom_total_text,
-                  card.total_text, card.bonus_label, card.yahtzee_bonus_text):
-            if t is not None:
-                t.set_opacity(1.0)
-
     # ════════════════════════════════════════════════════════════════════════
     # a) same 12 points, three very different expected totals
     # ════════════════════════════════════════════════════════════════════════
@@ -324,7 +316,6 @@ class TwoPlayer(YahtzeeScene):
     def _setup_remaining(self):
         self.cD = get_scorecard(scores=CARD_D, center=CENTER_SC,
                                 fourth_column=True, fourth_width=COL4_W)
-        self._ungrey(self.cD)      # mid-game card, but don't grey the 3rd column
         # faded, tier-coloured expectations for the OPEN boxes (col 4)
         self.d_yz0 = self._c4_faded(self.cD, R_YZ, "0", ACCENT_FILL)   # Yahtzee (big)
         self.d_ss1 = self._c4_faded(self.cD, R_SS, "1", ACCENT_GOLD)   # Sm Straight (small)
@@ -384,8 +375,6 @@ class TwoPlayer(YahtzeeScene):
                                 fourth_column=True, fourth_width=COL4_W)
         self.eR = get_scorecard(scores=CARD_R, center=TWO_R,
                                 fourth_column=True, fourth_width=COL4_W)
-        self._ungrey(self.eL)      # don't grey the 3rd columns
-        self._ungrey(self.eR)
         self.e4L = self._c4_group(self.eL, CARD_L)
         self.e4R = self._c4_group(self.eR, CARD_R)
 

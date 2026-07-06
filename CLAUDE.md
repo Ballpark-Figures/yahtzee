@@ -71,12 +71,11 @@ way.
   0 totals) — do NOT reach for `show_summary=False`. This has bitten more than
   once (scene 12 beat a): `show_summary=False` is only for when a beat genuinely
   has no use for the summary column (e.g. its own content fills col 3).
-- **A mid-game (incomplete) card GREYS its 3rd-column summary to 0.5 opacity**
-  (`bar_number`/`cap_label`/`bottom_total_text`/`total_text` + the bonus labels).
-  If a mid-game card should read full-strength, un-grey them (set opacity 1.0
-  after `get_scorecard` — scene 12's `_ungrey` helper). NB this greying looks
-  wrong in a lot of situations; we may just want to REMOVE it from the asset
-  (summary always full opacity) for consistency — ASK before that asset change.
+- **The 3rd-column summary always renders full-strength.** (Removed 2026-07-06:
+  the asset used to dim an incomplete section's totals to 0.5, but the scoring
+  animator never re-applied it, so any *animated* card was already full — the
+  dimming only ever showed on a freshly-built static mid-game card and read as
+  inconsistent. Don't reintroduce it.)
 - Columns: 1 = labels, 2 = value cells (`value_cells[0..12]`), 3 = summary. To
   place things in column 3, use the actual summary-cell center — NOT the midpoint
   to the card's panel edge (the rounded panel extends past the cells).

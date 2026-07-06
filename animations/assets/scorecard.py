@@ -282,7 +282,11 @@ class Scorecard(VGroup):
             self._top_sum       = c["top_sum"]
             self._bottom_sum    = c["bottom_sum"]
             self._yahtzee_bonus = c["yahtzee_bonus"] or 0
-            top_opacity = 1.0 if c["top_complete"] else 0.5
+            # Summary always renders full-strength. (We used to dim an incomplete
+            # section's totals to 0.5, but the animator never re-applied it, so any
+            # scored card was full anyway — the dimming only ever showed on a
+            # freshly-built static mid-game card and read as inconsistent.)
+            top_opacity = 1.0
 
             bar_top_y = total_height / 2 - 2 * cell_height
             bar_bot_y = total_height / 2 - 5 * cell_height
@@ -377,7 +381,7 @@ class Scorecard(VGroup):
         score_texts.add(tl)
 
         if c is not None and self.show_summary:
-            bottom_opacity = 1.0 if c["bottom_complete"] else 0.5
+            bottom_opacity = 1.0
 
             self.bottom_total_text = crisp_text(str(c["bottom_sum"]), font_size=font_size, color=stroke_color, font=FONT, weight="BOLD")
             self.bottom_total_text.set_fill(stroke_color, opacity=bottom_opacity)
@@ -392,10 +396,9 @@ class Scorecard(VGroup):
 
             # the grand total number (omitted entirely when scores=None)
             grand_total    = c["top_total"] + c["bottom_sum"] + (c["yahtzee_bonus"] or 0)
-            grand_complete = c["top_complete"] and c["bottom_complete"]
 
             self.total_text = crisp_text(str(grand_total), font_size=font_size, color=WHITE, font=FONT, weight="BOLD")
-            self.total_text.set_fill(WHITE, opacity=1.0 if grand_complete else 0.5)
+            self.total_text.set_fill(WHITE, opacity=1.0)
             self.total_text.move_to(np.array([summary_x, total_y, 0]))
             score_texts.add(self.total_text)
 
