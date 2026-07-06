@@ -20,18 +20,19 @@ EV_STEPS = [(2, 257.4), (7, 247.5), (5, 232.2)]   # (scorecard row, expected tot
 
 # ── example scorecards (row order = SCORE_ROWS; 13 = yahtzee bonus) ────────────
 #   0-5 Ones..Sixes | 6 3ofK | 7 4ofK | 8 FH | 9 SmS | 10 LgS | 11 Yz | 12 Ch | 13 yb
-# Beat c: A wins by 1 bonus pt AND on total (263/8 vs 252/7); each is missing a
-# bonus the other has (A: no LgS; B: no 4ofK, no Yz), yet the LOSER (B) leads in
-# raw top section, 3-kind and chance.
+# Beat c: A wins by 1 bonus pt AND on total (263/8 vs 252/7); each misses a bonus
+# the other has (A: no LgS; B: no 4ofK, no Yz), yet the LOSER (B) leads in raw top
+# section, 3-kind and chance.
 CARD_A = [3, 6, 9, 12, 15, 18, 18, 22, 25, 30,  0, 50, 20, 0]
 CARD_B = [3, 8, 12, 12, 15, 18, 26,  0, 25, 30, 40,  0, 28, 0]
 # Beat d: full except Fours(3)/Sixes(5)/SmS(9)/Yahtzee(11); top devs sum to +5.
 CARD_D = [1, 8, 9, None, 20, None, 20, 18, 25, None, 40, None, 22, 0]
 D_TOP_DEVS = {0: -2, 1: +2, 2: 0, 4: +5}      # filled top box -> (score − 3×face)
-# Beat e: two mid-game 4-col cards; LEFT clearly ahead (229/7 vs 148/5). RIGHT
-# keeps enough top open that zeroing the 1s does NOT immediately kill the bonus.
-CARD_L = [3, 6, 9, 12, 15, 18, 22, 24, 25, None, 40, None, 20, 0]           # open: SmS, Yz
-CARD_R = [None, 8, 12, None, None, None, 18, None, 25, 30, 40, None, 15, 0]  # open: Ones,Fours,Fives,Sixes,4ofK,Yz
+# Beats e/f: two mid-game 4-col cards with the SAME number of boxes filled (9
+# each). LEFT is ahead (191/6 vs 184/5). RIGHT keeps enough top open that zeroing
+# the 1s does NOT immediately kill the bonus (Sixes still open -> reachable).
+CARD_L = [3, 6, 9, 12, 15, 18, None, 28, 25, None, 40, None, None, 0]   # open: 3ofK,SmS,Yz,Ch
+CARD_R = [None, 8, 12, 16, 20, None, 18, None, 25, 30, 40, None, 15, 0]  # open: Ones,Sixes,4ofK,Yz
 
 # ── scorecard row indices (asset convention) ──────────────────────────────────
 R_3K, R_4K, R_FH, R_SS, R_LS, R_YZ, R_CH = 6, 7, 8, 9, 10, 11, 12
@@ -44,12 +45,13 @@ NUM_POS    = [3.1, 0.2, 0]                # beat a expected-score number
 LBL_POS    = [3.1, 1.4, 0]               # its caption
 NUM_FS     = 48
 LBL_FS     = 34
-TWO_L      = [-3.95, 0, 0]               # two-card centres (beats c, e)
+TWO_L      = [-3.95, 0, 0]               # two-card centres (beats c, e, f)
 TWO_R      = [3.95, 0, 0]
 COL4_W     = 0.8                         # narrow 4th "bonus" column
 
 # bonus-point tier colours — SAME as scene 07's summary panel
 BONUS_COLOR = {1: ACCENT_GOLD, 2: ACCENT_FILL, 4: ACCENT_RED}
+FADED_OP    = 0.45                        # faded 4th-column expectations
 
 
 def _sgn(d):
@@ -63,12 +65,45 @@ class TwoPlayer(YahtzeeScene):
       b simplified_score  — bring back the 4/2/1 bonus point system
       c compare_cards     — two full cards; +1 bonus pt beats a higher raw score
       d remaining_boxes   — judging open boxes: pace markers + faded 0/1/2
-      e ahead_behind      — ahead -> secure; behind -> go big
+      e ahead             — if you're ahead: secure sure points, zero the Yahtzee
+      f behind            — if you're behind: keep the Yahtzee, zero ones / 4-kind
     """
 
     def setup_scene(self):
         # Scene 12 follows a talking head (THI); nothing on screen at frame 0.
         pass
+
+    # ── play the card's box/bar changes IN ONE play with `extra` anims ────────
+    def _card_and(self, card, changes, extra, run_time, *, flash=True):
+        """Like Scorecard.transition, but the box/bar changes run together with
+        the `extra` animations in a single play (patterned on scene 09)."""
+        lead = list(extra)
+        new_top, new_bot = card._top_sum, card._bottom_sum
+        for row, val in changes.items():
+            old_val = card.value_nums.get(row, 0)
+            delta = (0 if val is None else val) - old_val
+            if row < 6:
+                new_top += delta
+            else:
+                new_bot += delta
+            num = card.value_texts.get(row)
+            if val is None:
+                if num is not None:
+                    lead.append(FadeOut(num))
+                card.value_texts.pop(row, None)
+                card.value_nums.pop(row, None)
+            else:
+                bt = crisp_text(str(val), font_size=card.font_size, color=BLACK,
+                                font=FONT).move_to(card.value_cells[row].get_center())
+                if num is not None:
+                    lead.append(Transform(num, bt))
+                else:
+                    lead.append(FadeIn(bt))
+                    card.value_texts[row] = bt
+                card.value_nums[row] = val
+        card._animate_to(self, top=new_top, bottom=new_bot,
+                         lead=AnimationGroup(*lead) if lead else None,
+                         run_time=run_time, flash=flash)
 
     # ── shared bonus-column helpers ──────────────────────────────────────────
     def _c4_text(self, s, x, y, color, *, fs=SCORECARD_FONT_SIZE * 0.9, op=1.0):
@@ -76,11 +111,11 @@ class TwoPlayer(YahtzeeScene):
                           weight="BOLD").move_to([x, y, 0]).set_opacity(op)
 
     def _c4_group(self, card, scores, *, show_total=True):
-        """Column-4 bonus-point numbers for a card: one per earned bonus (tier
-        coloured like scene 07), plus the running total in the footer (white, to
-        match the Total row text)."""
+        """Column-4 bonus-point numbers: one per earned bonus (tier coloured like
+        scene 07), plus the running total in the footer (white, matching the
+        Total row text)."""
         top_sum = sum(s for s in scores[0:6] if s is not None)
-        entries = []                                  # (key, points)
+        entries = []
         if top_sum >= 63:
             entries.append(("TOP", 2))
         for r, ok, pts in [(R_3K, scores[6], 1), (R_4K, scores[7], 1),
@@ -101,12 +136,27 @@ class TwoPlayer(YahtzeeScene):
             g.add(self._c4_text(str(total), x, card.total_text.get_center()[1], WHITE))
         return g
 
+    # ── full-column highlight regions (center, w, h) ─────────────────────────
+    def _col_region(self, card, xc, w):
+        top = card.value_cells[0].get_top()[1]
+        bot = card.total_text.get_center()[1] - card.cell_height * 0.6
+        return ([xc, (top + bot) / 2, 0], w, top - bot)
+
+    def _col4_region(self, card):
+        c = card.col4_cells[0]
+        return self._col_region(card, c.get_center()[0], c.width)
+
+    def _col3_region(self, card):
+        left = card.value_cells[0].get_right()[0]
+        right = card.col4_cells[0].get_left()[0]
+        return self._col_region(card, (left + right) / 2, right - left)
+
     # ════════════════════════════════════════════════════════════════════════
     # a) same 12 points, three very different expected totals
     # ════════════════════════════════════════════════════════════════════════
     def _setup_expected(self):
         # a "blank scorecard" = the start of the game: a NORMAL card (3rd column
-        # present, totals at 0), not a card with its summary column stripped.
+        # present, totals at 0).
         self.card = get_scorecard(scores=[None] * 14, center=CARD_L_POS)
         self.ev_label = crisp_text("Expected score:", font=FONT, font_size=LBL_FS,
                                    color=BLACK, weight="BOLD").move_to(LBL_POS)
@@ -124,7 +174,7 @@ class TwoPlayer(YahtzeeScene):
     @subscene
     def expected_score(self):
         self._setup_expected()
-        in_rt, count_rt, hold = 1.0, 0.8, 0.7
+        in_rt, step_rt, hold = 1.0, 1.1, 0.7
 
         ev_live = always_redraw(self._ev_number)
         self.play(FadeIn(self.card, shift=RIGHT * 0.5),
@@ -132,17 +182,16 @@ class TwoPlayer(YahtzeeScene):
                   FadeIn(ev_live), run_time=in_rt)
         self.wait(0.4)
 
-        # each example is INDEPENDENT (same 12 from the start): fill the box (the
-        # card's own total ticks too), then the expected-score number re-counts.
+        # each example is INDEPENDENT (same 12 from the start): the box fill, the
+        # card's bar/total, and the expected-score counter all move in ONE play.
         prev = None
         for row, ev in EV_STEPS:
             changes = {row: 12} if prev is None else {prev: None, row: 12}
-            self.card.transition(self, changes, run_time=0.7)
-            self.play(self.ev_tr.animate.set_value(ev), run_time=count_rt)
+            self._card_and(self.card, changes,
+                           [self.ev_tr.animate.set_value(ev)], run_time=step_rt)
             self.wait(hold)
             prev = row
 
-        # freeze the live number so the next beat can fade a static copy
         self.remove(ev_live)
         self.ev_num = self._ev_number()
         self.add(self.ev_num)
@@ -186,16 +235,17 @@ class TwoPlayer(YahtzeeScene):
 
     @subscene
     def simplified_score(self):
-        clear_rt, in_rt = 0.6, 1.0
-        # clear the score sheet (the 12 leaves) and the expected-score readout
-        self.play(FadeOut(self.ev_num, shift=UP * 0.2),
-                  FadeOut(self.ev_label, shift=UP * 0.2), run_time=clear_rt)
-        self.card.transition(self, {self._last_box: None}, run_time=clear_rt)
-        self.ev_num = self.ev_label = None
-
+        in_rt = 1.0
         self._setup_panel()
-        self.play(FadeIn(self.panel_card), FadeIn(self.panel, shift=RIGHT * 0.4),
-                  run_time=in_rt)
+        # clear the sheet, drop the readout, and bring the panel in — ALL together
+        # (don't wait for the bar to clear before the panel appears).
+        self._card_and(self.card, {self._last_box: None},
+                       [FadeOut(self.ev_num, shift=UP * 0.2),
+                        FadeOut(self.ev_label, shift=UP * 0.2),
+                        FadeIn(self.panel_card),
+                        FadeIn(self.panel, shift=RIGHT * 0.4)],
+                       run_time=in_rt)
+        self.ev_num = self.ev_label = None
 
     # ════════════════════════════════════════════════════════════════════════
     # c) two full cards: +1 bonus point ⇒ 97% they also won
@@ -221,8 +271,9 @@ class TwoPlayer(YahtzeeScene):
                   FadeIn(self.cB, shift=LEFT * 0.4), run_time=in_rt)
         self.play(FadeIn(self.c4A), FadeIn(self.c4B), run_time=num_rt)
 
-        highlight(self, [self.c4A, self.c4B], hold=hold)          # bonus columns
-        highlight(self, [self.cA.total_text, self.cB.total_text], hold=hold)  # totals
+        # highlight the WHOLE 4th column, then the WHOLE 3rd column, on both cards
+        highlight(self, [self._col4_region(self.cA), self._col4_region(self.cB)], hold=hold)
+        highlight(self, [self._col3_region(self.cA), self._col3_region(self.cB)], hold=hold)
 
     # ════════════════════════════════════════════════════════════════════════
     # d) judging the open boxes: pace markers + faded 0/1/2
@@ -230,14 +281,14 @@ class TwoPlayer(YahtzeeScene):
     def _gap_y(self, card):
         return (card.col4_cells[5].get_bottom()[1] + card.col4_cells[6].get_top()[1]) / 2
 
-    def _col4_text(self, card, row, s, *, opacity=1.0):
+    def _c4_faded(self, card, row, s, color):
         x = card.col4_cells[0].get_center()[0]
         y = card.col4_cells[row].get_center()[1]
-        return self._c4_text(s, x, y, BLACK, op=opacity)
+        return self._c4_text(s, x, y, color, op=FADED_OP)
 
     def _dev_text(self, card, row, dev):
-        # ±x pace marker in the roomy right side of the LABEL column, just to the
-        # LEFT of the value number (keeps clear of the 3rd-column (63) bar)
+        # ±x pace marker in the roomy right side of the LABEL column, just LEFT of
+        # the value number (clear of the 3rd-column (63) bar)
         x = card.value_cells[row].get_left()[0] - 0.15
         y = card.value_cells[row].get_center()[1]
         t = crisp_text(_sgn(dev), font=FONT, font_size=SCORECARD_FONT_SIZE * 0.62,
@@ -245,23 +296,26 @@ class TwoPlayer(YahtzeeScene):
         return t.move_to([x, y, 0], aligned_edge=RIGHT)
 
     def _setup_remaining(self):
-        # A blank card = mid-game, 3rd column present (the (63) bar). The pace
-        # markers sit in column 1, left of the value numbers.
         self.cD = get_scorecard(scores=CARD_D, center=CENTER_SC,
                                 fourth_column=True, fourth_width=COL4_W)
-        # faded expected bonus points for the OPEN boxes (col 4)
-        self.d_yz0 = self._col4_text(self.cD, R_YZ, "0", opacity=0.4)
-        self.d_ss1 = self._col4_text(self.cD, R_SS, "1", opacity=0.4)
-        # ±x pace markers (right of column 2) + their sum in the section gap
+        # this is a mid-game card, but we don't want the 3rd column greyed out
+        for t in (self.cD.bar_number, self.cD.cap_label,
+                  self.cD.bottom_total_text, self.cD.total_text):
+            if t is not None:
+                t.set_opacity(1.0)
+        # faded, tier-coloured expectations for the OPEN boxes (col 4)
+        self.d_yz0 = self._c4_faded(self.cD, R_YZ, "0", ACCENT_FILL)   # Yahtzee (big)
+        self.d_ss1 = self._c4_faded(self.cD, R_SS, "1", ACCENT_GOLD)   # Sm Straight (small)
+        # ±x pace markers (label column) + their sum in the section gap
         self.d_devs = VGroup(*[self._dev_text(self.cD, r, d) for r, d in D_TOP_DEVS.items()])
         gx = self.cD.value_cells[0].get_left()[0] - 0.15
         gy = self._gap_y(self.cD)
         self.d_sum = crisp_text(_sgn(sum(D_TOP_DEVS.values())), font=FONT,
                                 font_size=SCORECARD_FONT_SIZE * 0.7, color=BLACK,
                                 weight="BOLD").move_to([gx, gy, 0], aligned_edge=RIGHT)
-        # gray "2" in the MIDDLE of the col-4 top section (expected top bonus)
+        # faded blue "2" in the MIDDLE of the col-4 top section (expected top bonus)
         tc = self.cD.col4_region(range(6))[0]
-        self.d_top2 = self._c4_text("2", tc[0], tc[1], BLACK, op=0.4)
+        self.d_top2 = self._c4_text("2", tc[0], tc[1], ACCENT_FILL, op=FADED_OP)
 
     @subscene
     def remaining_boxes(self):
@@ -282,13 +336,27 @@ class TwoPlayer(YahtzeeScene):
         self.play(FadeIn(self.d_devs, lag_ratio=0.3), run_time=1.0)   # ±x per top box
         self.wait(0.2)
         self.play(FadeIn(self.d_sum), run_time=step)                  # their sum (+5)
-        self.play(FadeIn(self.d_top2), run_time=step)                 # -> gray 2
+        self.play(FadeIn(self.d_top2), run_time=step)                 # -> faded 2
         self.wait(hold)
 
     # ════════════════════════════════════════════════════════════════════════
-    # e) ahead -> secure sure points; behind -> go big
+    # e/f) ahead -> secure sure points ; behind -> go big
     # ════════════════════════════════════════════════════════════════════════
-    def _setup_ahead(self):
+    def _zero_flash(self, card, row, *, hold=0.9, fade=0.28):
+        """Zero a box for illustration: highlight the row, show the 0 ONLY while
+        it's highlighted, then clear both (the example card is left untouched)."""
+        fill, border, bold = card._row_highlight(row, ACCENT_GOLD, 0.45)
+        zero = crisp_text("0", font_size=card.font_size, color=BLACK,
+                          font=FONT).move_to(card.value_cells[row].get_center())
+        card.labels[row].save_state()
+        self.play(FadeIn(fill), FadeIn(border),
+                  Transform(card.labels[row], bold), FadeIn(zero), run_time=fade)
+        self.wait(hold)
+        self.play(FadeOut(fill), FadeOut(border),
+                  Restore(card.labels[row]), FadeOut(zero), run_time=fade)
+        self.remove(fill, border, zero)
+
+    def _setup_two(self):
         self.eL = get_scorecard(scores=CARD_L, center=TWO_L,
                                 fourth_column=True, fourth_width=COL4_W)
         self.eR = get_scorecard(scores=CARD_R, center=TWO_R,
@@ -297,9 +365,9 @@ class TwoPlayer(YahtzeeScene):
         self.e4R = self._c4_group(self.eR, CARD_R)
 
     @subscene
-    def ahead_behind(self):
-        self._setup_ahead()
-        out_rt, in_rt, num_rt, zero_rt = 0.6, 0.9, 0.5, 0.8
+    def ahead(self):
+        self._setup_two()
+        out_rt, in_rt, num_rt = 0.6, 0.9, 0.5
 
         clutter = [self.cD, self.d_yz0, self.d_ss1, self.d_devs, self.d_sum, self.d_top2]
         self.play(*[FadeOut(m) for m in clutter], run_time=out_rt)
@@ -308,14 +376,15 @@ class TwoPlayer(YahtzeeScene):
         self.play(FadeIn(self.eL, shift=RIGHT * 0.4),
                   FadeIn(self.eR, shift=LEFT * 0.4), run_time=in_rt)
         self.play(FadeIn(self.e4L), FadeIn(self.e4R), run_time=num_rt)
-        highlight(self, [self.e4L, self.e4R], hold=1.0)         # left is ahead on bonuses
 
         # LEFT (ahead): lock in easy points, then it's fine to zero the Yahtzee
         self.eL.highlight_rows(self, [R_SS], run_time=0.9)
         self.eL.highlight_rows(self, TOP_ROWS, run_time=1.0)
-        self.eL.transition(self, {R_YZ: 0}, run_time=zero_rt)
+        self._zero_flash(self.eL, R_YZ)
 
+    @subscene
+    def behind(self):
         # RIGHT (behind): keep the Yahtzee alive, sacrifice ones then 4 of a kind
         self.eR.highlight_rows(self, [R_YZ], run_time=0.9)
-        self.eR.transition(self, {0: 0}, run_time=zero_rt)
-        self.eR.transition(self, {R_4K: 0}, run_time=zero_rt)
+        self._zero_flash(self.eR, 0)
+        self._zero_flash(self.eR, R_4K)
