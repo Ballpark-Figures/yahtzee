@@ -16,7 +16,7 @@ THREE_KIND, FOUR_KIND, FULL_HOUSE = 6, 7, 8
 SMALL_STRAIGHT, LARGE_STRAIGHT, CHANCE, YAHTZEE = 9, 10, 11, 12
 
 # ── Wheel geometry (scorecard on the left at LEFT_SC, list on the right) ────────
-WHEEL_CX = 3.3                 # wheel centre x
+# wheel centre x is computed at runtime (centred between the card + frame edge)
 BOX_X, PTS_X, DICE_X, AVG_X = -4.4, -0.7, 1.9, 4.4   # column x's within a row
 FS = 30.0                      # wheel text size
 DIE = 0.34                     # mini-die size
@@ -41,31 +41,28 @@ class FirstTurn(YahtzeeScene):
     def setup_scene(self):
         self.data = first_turn_outcomes()["outcomes"]
         self.card = get_scorecard(center=LEFT_SC, scores=[None] * 14)
+        # Centre the wheel + title in the gap between the card and the frame edge.
+        wheel_cx = (self.card.get_right()[0] + config.frame_x_radius) / 2
         rows = [make_row(o) for o in self.data]
         self.wheel = ScrollList(rows, focus=0, radius=3, gap=GAP,
-                                center=[WHEEL_CX, 0, 0])
+                                center=[wheel_cx, 0, 0])
         # Build small + scale to width so the long caption stays ONE line
         # (crisp_text wraps a long string at font_size >= ~24; see CLAUDE.md).
         self.title = crisp_text("Average Points After First Turn", font_size=14,
                                 color=BLACK)
-        self.title.scale_to_fit_width(6.4).move_to([WHEEL_CX, 3.75, 0])
-        self._cur_num = None     # the currently-committed scorecard box number
+        self.title.scale_to_fit_width(6.4).move_to([wheel_cx, 3.75, 0])
 
     # ── helpers ────────────────────────────────────────────────────────────────
     def _idx(self, cat, points):
         return next(i for i, o in enumerate(self.data)
                     if o["cat"] == cat and o["points"] == points)
 
-    def _commit_box(self, sc_row, value, *, color=ACCENT_GOLD, hold=0.5):
-        """Fill the scorecard box with `value` and a synced highlight (number +
-        highlight appear together); the number PERSISTS and the previously
-        committed number clears in the same beat."""
-        lead = [FadeOut(self._cur_num)] if self._cur_num is not None else None
-        nums = self.card.flash_rows(self, [(sc_row, value)], color=color,
-                                    keep=True, lead=lead, hold=hold)
-        self._cur_num = nums[0] if nums else None
+    def _fill(self, sc_row, value, *, hold=0.5):
+        """A transient gold flash of the box + its number (number only exists
+        during the flash)."""
+        self.card.flash_rows(self, [(sc_row, value)], hold=hold)
 
-    # ── beats ──────────────────────────────────────────────────────────────────
+    # ── beats ────────────────────────────────────────────────────────────────
     @subscene
     def bring_card(self):
         # a) bring back the empty scorecard (shared slide-in entrance)
@@ -80,7 +77,7 @@ class FirstTurn(YahtzeeScene):
         self.wheel.hide_all()
         self.add(self.wheel)
         self.play(self.wheel.fade_in([0]), FadeIn(self.title), run_time=rt)
-        self._commit_box(11, 50, hold=0.6)
+        self._fill(11, 50, hold=0.6)
 
     @subscene
     def scroll_top(self):
@@ -92,7 +89,7 @@ class FirstTurn(YahtzeeScene):
                     self._idx(THREES, 12)]:
             o = self.data[idx]
             self.play(self.wheel.scroll_to(idx), run_time=scroll_rt)
-            self._commit_box(o["sc_row"], o["points"], hold=0.4)
+            self._fill(o["sc_row"], o["points"], hold=0.4)
 
     @subscene
     def three_of_number(self):
@@ -101,7 +98,7 @@ class FirstTurn(YahtzeeScene):
         idx = self._idx(SIXES, 18)
         o = self.data[idx]
         self.play(self.wheel.scroll_to(idx), run_time=rt)
-        self._commit_box(o["sc_row"], o["points"], hold=0.5)
+        self._fill(o["sc_row"], o["points"], hold=0.5)
 
     @subscene
     def full_house(self):
@@ -110,7 +107,7 @@ class FirstTurn(YahtzeeScene):
         idx = self._idx(FULL_HOUSE, 25)
         o = self.data[idx]
         self.play(self.wheel.scroll_to(idx), run_time=rt)
-        self._commit_box(o["sc_row"], o["points"], hold=0.5)
+        self._fill(o["sc_row"], o["points"], hold=0.5)
 
     @subscene
     def straights(self):
@@ -120,7 +117,7 @@ class FirstTurn(YahtzeeScene):
             idx = self._idx(cat, pts)
             o = self.data[idx]
             self.play(self.wheel.scroll_to(idx), run_time=rt)
-            self._commit_box(o["sc_row"], o["points"], hold=0.5)
+            self._fill(o["sc_row"], o["points"], hold=0.5)
 
     @subscene
     def two_or_fewer(self):
@@ -153,4 +150,4 @@ class FirstTurn(YahtzeeScene):
         idx = self._idx(CHANCE, 19)
         o = self.data[idx]
         self.play(self.wheel.scroll_to(idx), run_time=rt)
-        self._commit_box(o["sc_row"], o["points"], hold=0.6)
+        self._fill(o["sc_row"], o["points"], hold=0.6)

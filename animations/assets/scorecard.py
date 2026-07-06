@@ -492,18 +492,13 @@ class Scorecard(VGroup):
             scene.remove(fill, border)
 
     def flash_rows(self, scene, entries, *, color=ACCENT_GOLD, opacity=0.45,
-                   fade=0.25, hold=0.9, lag_ratio=0.0, keep=False, lead=None):
+                   fade=0.25, hold=0.9, lag_ratio=0.0):
         """Like highlight_rows, but each entry may carry a black number in its
-        value cell that fades IN SYNC with the highlight. `entries` =
-        [(row, value|None), …].
-
-        keep=False (default): the number is removed with the highlight — a
-        transient "here's a placement you could make" demo (bad boxes in red).
-        keep=True: the number PERSISTS after the highlight fades (a committed
-        fill); the number mobjects are returned so the caller can clear them later.
-        `lead` plays extra anims in the SAME play as the highlight fade-in (e.g.
-        FadeOut of a previously-committed number, so the swap is perfectly synced).
-        The highlight defaults to ACCENT_GOLD (our standard emphasis)."""
+        value cell that fades in/out IN SYNC with the highlight, then is removed —
+        the number only exists during the flash and the committed cell contents
+        are untouched. `entries` = [(row, value|None), …]. Highlight defaults to
+        ACCENT_GOLD (our standard emphasis); pass color=SCORE_RED for a "don't do
+        this" demo."""
         entries = list(entries)
         rows = [r for r, _ in entries]
         pieces = [self._row_highlight(r, color, opacity) for r in rows]
@@ -522,7 +517,6 @@ class Scorecard(VGroup):
                           for (fill, border, bold), r in zip(pieces, rows)],
                         lag_ratio=lag_ratio),
             *[FadeIn(n) for n in nums],
-            *(list(lead) if lead else []),
             run_time=fade,
         )
         scene.wait(hold)
@@ -530,15 +524,13 @@ class Scorecard(VGroup):
             *[FadeOut(fill) for fill, _b, _bold in pieces],
             *[FadeOut(border) for _f, border, _bold in pieces],
             *[Restore(self.labels[r]) for r in rows],
-            *([] if keep else [FadeOut(n) for n in nums]),
+            *[FadeOut(n) for n in nums],
             run_time=fade,
         )
         for fill, border, _bold in pieces:
             scene.remove(fill, border)
-        if not keep:
-            for n in nums:
-                scene.remove(n)
-        return nums
+        for n in nums:
+            scene.remove(n)
 
     def slide_in(self, scene, *, from_dir=LEFT, dist=None, run_time=1.0, lead=None,
                  play=True):
