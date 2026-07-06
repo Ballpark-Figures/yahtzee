@@ -7,6 +7,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 from config import *
 from bpkfigures.style import ACCENT_GOLD, ACCENT_FILL, ACCENT_RED
 from bpkfigures.card import get_card
+from bpkfigures.highlight import overlay_rect
 from assets.scorecard import get_scorecard
 
 
@@ -151,6 +152,26 @@ class TwoPlayer(YahtzeeScene):
         right = card.col4_cells[0].get_left()[0]
         return self._col_region(card, (left + right) / 2, right - left)
 
+    def _col_highlight(self, regions, *, hold=1.2, fade=0.25):
+        """Highlight full columns with the tint sitting ABOVE everything (the
+        scorecard's number texts are z=1, so a default-z overlay would tint the
+        bar fill but leave the numbers floating on top — uneven)."""
+        rects = [overlay_rect(r) for r in regions]
+        for r in rects:
+            r.set_z_index(10)
+        self.play(*[FadeIn(r) for r in rects], run_time=fade)
+        self.wait(hold)
+        self.play(*[FadeOut(r) for r in rects], run_time=fade)
+        self.remove(*rects)
+
+    def _ungrey(self, card):
+        """Force a mid-game card's 3rd-column summary to full opacity (the asset
+        greys it to 0.5 when a section is incomplete)."""
+        for t in (card.bar_number, card.cap_label, card.bottom_total_text,
+                  card.total_text, card.bonus_label, card.yahtzee_bonus_text):
+            if t is not None:
+                t.set_opacity(1.0)
+
     # ════════════════════════════════════════════════════════════════════════
     # a) same 12 points, three very different expected totals
     # ════════════════════════════════════════════════════════════════════════
@@ -158,6 +179,9 @@ class TwoPlayer(YahtzeeScene):
         # a "blank scorecard" = the start of the game: a NORMAL card (3rd column
         # present, totals at 0).
         self.card = get_scorecard(scores=[None] * 14, center=CARD_L_POS)
+        # counter + bar move TOGETHER (no lead/lag): the expected-score number
+        # and the top bar animate simultaneously.
+        self.card.COUNTER_LAG = 0.0
         self.ev_label = crisp_text("Expected score:", font=FONT, font_size=LBL_FS,
                                    color=BLACK, weight="BOLD").move_to(LBL_POS)
         self.ev_tr = ValueTracker(EV_START)
@@ -272,8 +296,8 @@ class TwoPlayer(YahtzeeScene):
         self.play(FadeIn(self.c4A), FadeIn(self.c4B), run_time=num_rt)
 
         # highlight the WHOLE 4th column, then the WHOLE 3rd column, on both cards
-        highlight(self, [self._col4_region(self.cA), self._col4_region(self.cB)], hold=hold)
-        highlight(self, [self._col3_region(self.cA), self._col3_region(self.cB)], hold=hold)
+        self._col_highlight([self._col4_region(self.cA), self._col4_region(self.cB)], hold=hold)
+        self._col_highlight([self._col3_region(self.cA), self._col3_region(self.cB)], hold=hold)
 
     # ════════════════════════════════════════════════════════════════════════
     # d) judging the open boxes: pace markers + faded 0/1/2
@@ -298,11 +322,7 @@ class TwoPlayer(YahtzeeScene):
     def _setup_remaining(self):
         self.cD = get_scorecard(scores=CARD_D, center=CENTER_SC,
                                 fourth_column=True, fourth_width=COL4_W)
-        # this is a mid-game card, but we don't want the 3rd column greyed out
-        for t in (self.cD.bar_number, self.cD.cap_label,
-                  self.cD.bottom_total_text, self.cD.total_text):
-            if t is not None:
-                t.set_opacity(1.0)
+        self._ungrey(self.cD)      # mid-game card, but don't grey the 3rd column
         # faded, tier-coloured expectations for the OPEN boxes (col 4)
         self.d_yz0 = self._c4_faded(self.cD, R_YZ, "0", ACCENT_FILL)   # Yahtzee (big)
         self.d_ss1 = self._c4_faded(self.cD, R_SS, "1", ACCENT_GOLD)   # Sm Straight (small)
@@ -323,7 +343,8 @@ class TwoPlayer(YahtzeeScene):
         out_rt, in_rt, step, hold = 0.6, 0.9, 0.5, 0.8
 
         self.play(FadeOut(self.cA, shift=LEFT * 0.4), FadeOut(self.cB, shift=RIGHT * 0.4),
-                  FadeOut(self.c4A), FadeOut(self.c4B), run_time=out_rt)
+                  FadeOut(self.c4A, shift=LEFT * 0.4), FadeOut(self.c4B, shift=RIGHT * 0.4),
+                  run_time=out_rt)
         self.cA = self.cB = self.c4A = self.c4B = None
 
         self.play(FadeIn(self.cD, shift=UP * 0.3), run_time=in_rt)
@@ -361,6 +382,8 @@ class TwoPlayer(YahtzeeScene):
                                 fourth_column=True, fourth_width=COL4_W)
         self.eR = get_scorecard(scores=CARD_R, center=TWO_R,
                                 fourth_column=True, fourth_width=COL4_W)
+        self._ungrey(self.eL)      # don't grey the 3rd columns
+        self._ungrey(self.eR)
         self.e4L = self._c4_group(self.eL, CARD_L)
         self.e4R = self._c4_group(self.eR, CARD_R)
 
