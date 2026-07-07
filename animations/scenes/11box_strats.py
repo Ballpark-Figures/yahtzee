@@ -37,28 +37,27 @@ class BoxStrats(YahtzeeScene):
 
     # ── helpers ────────────────────────────────────────────────────────────────
     def _swap_card(self, scores, run_time, *, hold=None):
-        """Cross-FADE the card's contents to a new pre-filled state (same position,
-        so it reads as the one persistent card updating — its values + (63) bar
-        FADE in at their final state, no counting, no pop). A `hold` matching the
-        current one stays solid across the fade (no dip); a fresh `hold` fades in
-        with the card."""
+        """Fade the card's contents to a new pre-filled state. The new card fades
+        IN over the OLD one (which stays fully solid underneath and is removed only
+        once the new one is opaque) — so the identical FRAME never dips or ghosts
+        ("the card crossfading into itself"); only the changed values + (63) bar
+        visibly fade to their new state. No counting, no pop. A `hold` matching the
+        current one stays solid across the fade; a fresh `hold` fades in."""
         old = self.card
         carry = hold is not None and set(hold) == set(old.held_rows())
         new = get_scorecard(center=LEFT_SC, scores=list(scores))
         new.COUNTER_LAG = 0.0
-        self.add(new)
-        anims = [FadeIn(new), FadeOut(old)]
+        self.add(new)                                  # ON TOP of the still-solid old card
+        anims = [FadeIn(new)]                           # only the new card fades in
         anims += [FadeOut(d) for d in self.board.dice if d in self.mobjects]
         if carry:
-            new.hold_rows_instant(self, hold)          # new highlight solid; old stays solid too
+            new.hold_rows_instant(self, hold)
         else:
-            for f, b in old.held_pieces():             # fresh: old highlight fades out,
-                anims += [FadeOut(f), FadeOut(b)]
             old._held = None
             if hold is not None:
-                anims += new.hold_rows_anims(hold)     # …new fades in with the card
+                anims += new.hold_rows_anims(hold)
         self.play(*anims, run_time=run_time)
-        keep = {new, self.board.lines}
+        keep = {new, self.board.lines}                 # drop the old card (now hidden) + orphans
         for f, b in new.held_pieces():
             keep.add(f); keep.add(b)
         for m in list(self.mobjects):
