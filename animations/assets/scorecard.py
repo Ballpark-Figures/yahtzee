@@ -532,6 +532,52 @@ class Scorecard(VGroup):
         for n in nums:
             scene.remove(n)
 
+    # ── PERSISTENT row highlight (raise it, hold across many plays, drop it) ────
+    # For "this box stays lit for the WHOLE beat": raise at the start, release at
+    # the end. Unlike highlight_rows (which fades itself out after a hold), the
+    # hold persists until release_rows(). Promoted from scene 06's private helper.
+    def hold_rows(self, scene, rows, *, color=ACCENT_GOLD, run_time=0.35):
+        """Raise a persistent highlight on `rows`, DROPPING any prior hold first."""
+        self.release_rows(scene, run_time=0.0)
+        self.extend_hold(scene, rows, color=color, run_time=run_time)
+
+    def extend_hold(self, scene, rows, *, color=ACCENT_GOLD, run_time=0.35):
+        """Add `rows` to the current hold without dropping what's already held."""
+        rows = [rows] if isinstance(rows, int) else list(rows)
+        held = list(getattr(self, "_held", None) or [])
+        existing = {r for _, _, r in held}
+        fades = []
+        for r in rows:
+            if r in existing:
+                continue
+            fill, border, bold = self._row_highlight(r, color, 0.45)
+            self.labels[r].save_state()
+            fades += [FadeIn(fill), FadeIn(border), Transform(self.labels[r], bold)]
+            held.append((fill, border, r))
+        if fades:
+            scene.play(*fades, run_time=run_time)
+        self._held = held
+
+    def release_rows(self, scene, rows=None, *, run_time=0.3):
+        """Release held rows — ALL by default, or just the given subset (leaving
+        the rest of the hold up). No-op if nothing is held."""
+        held = getattr(self, "_held", None)
+        if not held:
+            return
+        want = None if rows is None else ({rows} if isinstance(rows, int) else set(rows))
+        drop = [p for p in held if want is None or p[2] in want]
+        keep = [p for p in held if not (want is None or p[2] in want)]
+        if run_time > 0 and drop:
+            scene.play(*[a for fill, border, r in drop
+                         for a in (FadeOut(fill), FadeOut(border), Restore(self.labels[r]))],
+                       run_time=run_time)
+        else:
+            for _fill, _border, r in drop:
+                self.labels[r].restore()
+        for fill, border, _r in drop:
+            scene.remove(fill, border)
+        self._held = keep or None
+
     def slide_in(self, scene, *, from_dir=LEFT, dist=None, run_time=1.0, lead=None,
                  play=True):
         """The STANDARD scorecard entrance: slide it in from `from_dir` (DEFAULT:
@@ -781,7 +827,10 @@ class Scorecard(VGroup):
         else:
             self.animate_zero_score(scene, 8, dice)
 
-    def small_straight(self, scene, dice, *, y=None):
+    def small_straight(self, scene, dice, *, y=None, score=True):
+        """Score the small straight, OR (score=False) just PREVIEW it — rearrange
+        the run into the ascending staircase and flash the colors, with no box
+        fill / total change (used to say "you've got a small straight here")."""
         present = {d.value for d in dice}
         run = next((s for s in ({1, 2, 3, 4}, {2, 3, 4, 5}, {3, 4, 5, 6}) if s <= present), None)
         if run:
@@ -799,11 +848,13 @@ class Scorecard(VGroup):
             reindex_dice(dice, new)
             colors = [RED, YELLOW, GREEN, BLUE]
             ascend_and_flash(scene, order, colors, y=y)   # vertical staircase + flash
+            if not score:
+                return                                    # preview only — no box fill
             # colored boxes fly off while the dice settle back into a flat horizontal
             # line AND restore opacity (the unused die un-fades as it returns).
             self.fly_to_box(scene, order, colors, 9, 30,
                             hide_pips=True, return_dice=dice, return_y=y)
-        else:
+        elif score:
             self.animate_zero_score(scene, 9, dice)
 
     def large_straight(self, scene, dice, *, y=None):
