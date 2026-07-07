@@ -36,27 +36,36 @@ class BoxStrats(YahtzeeScene):
         self.board = DiceBoard()
 
     # ── helpers ────────────────────────────────────────────────────────────────
-    def _swap_card(self, scores, *, hold=None):
-        """Change the card's CONTENTS to a new pre-filled state INSTANTLY — same
-        position, no fade, no bar animation — so it reads as the one persistent
-        card at LEFT_SC just updating ("just show up in its new position"). A
-        `hold` that matches the current one is carried across with no blink; a
-        fresh `hold` fades in (so nothing animates before the highlight)."""
+    def _swap_card(self, scores, run_time, *, hold=None):
+        """Cross-FADE the card's contents to a new pre-filled state (same position,
+        so it reads as the one persistent card updating — its values + (63) bar
+        FADE in at their final state, no counting, no pop). A `hold` matching the
+        current one stays solid across the fade (no dip); a fresh `hold` fades in
+        with the card."""
         old = self.card
-        old_rows = old.held_rows()
+        carry = hold is not None and set(hold) == set(old.held_rows())
         new = get_scorecard(center=LEFT_SC, scores=list(scores))
-        old._held = None
-        for m in list(self.mobjects):
-            if m is not self.board.lines:
-                self.remove(m)
         new.COUNTER_LAG = 0.0
         self.add(new)
+        anims = [FadeIn(new), FadeOut(old)]
+        anims += [FadeOut(d) for d in self.board.dice if d in self.mobjects]
+        if carry:
+            new.hold_rows_instant(self, hold)          # new highlight solid; old stays solid too
+        else:
+            for f, b in old.held_pieces():             # fresh: old highlight fades out,
+                anims += [FadeOut(f), FadeOut(b)]
+            old._held = None
+            if hold is not None:
+                anims += new.hold_rows_anims(hold)     # …new fades in with the card
+        self.play(*anims, run_time=run_time)
+        keep = {new, self.board.lines}
+        for f, b in new.held_pieces():
+            keep.add(f); keep.add(b)
+        for m in list(self.mobjects):
+            if m not in keep:
+                self.remove(m)
+        old._held = None
         self.card = new
-        if hold is not None:
-            if set(hold) == set(old_rows):
-                new.hold_rows_instant(self, hold)                     # carried — no blink
-            else:
-                self.play(*new.hold_rows_anims(hold), run_time=0.35)  # fresh — fade in
 
     def _enter_dice(self, values, band):
         """Place the dice at `band` with `values` (opacity restored) and return the
@@ -79,9 +88,11 @@ class BoxStrats(YahtzeeScene):
         return [FadeIn(d) for d in self.board.dice]
 
     def _fade_dice(self, run_time):
-        dice = [d for d in self.board.dice if d in self.mobjects]
-        if dice:
-            self.play(*[FadeOut(d) for d in dice], run_time=run_time)
+        # Re-track every die first: some flourishes (FlashFill's `become`, used by
+        # the small-straight preview) drop dice from the scene's top-level list, so
+        # a plain `d in self.mobjects` filter would miss them and fade only one.
+        self.add(*self.board.dice)
+        self.play(*[FadeOut(d) for d in self.board.dice], run_time=run_time)
 
     def _end_beat(self, dice_rt, rel_rt):
         """Close a beat: fade the dice out, THEN drop the persistent highlight."""
@@ -96,7 +107,7 @@ class BoxStrats(YahtzeeScene):
     # ── b) Chance — the rescue box (22345: twos→undo, lg straight→undo, chance) ─
     @subscene
     def chance(self):
-        self._swap_card(CARD_B, hold=[R_CHANCE])   # highlight rises WITH swap
+        self._swap_card(CARD_B, run_time=0.6, hold=[R_CHANCE])   # highlight rises WITH swap
         self.play(*self._enter_dice([2, 2, 3, 4, 5], band=3), run_time=0.4)
 
         self.card.upper(self, self.board.dice, 2)              # twos = 4 (full fly-in)
@@ -112,7 +123,7 @@ class BoxStrats(YahtzeeScene):
     # ── c) Yahtzee — don't chase it without a fallback (11123 → keep 123) ───────
     @subscene
     def yahtzee(self):
-        self._swap_card(CARD_C, hold=[R_YAHT])   # Yahtzee lit WITH swap, whole beat
+        self._swap_card(CARD_C, run_time=0.6, hold=[R_YAHT])   # Yahtzee lit WITH swap, whole beat
         self.play(*self._first_roll_entrance([1, 1, 1, 2, 3]), run_time=0.4)
         self.play(*self.board.first_roll([1, 1, 1, 2, 3]), run_time=0.7)
         self.card.highlight_rows(self, [R_ONES], color=SCORE_RED, hold=1.0)  # don't dump 1s
@@ -122,7 +133,7 @@ class BoxStrats(YahtzeeScene):
     # ── d) Straights — 82% small straight on some first roll (montage of 5) ─────
     @subscene
     def straights(self):
-        self._swap_card(EMPTY, hold=[R_SMALL, R_LARGE])   # both straights, w/ swap
+        self._swap_card(EMPTY, run_time=0.6, hold=[R_SMALL, R_LARGE])   # both straights, w/ swap
         self.wait(0.4)
         self.card.release_rows(self, [R_LARGE], run_time=0.3)  # drop large, keep small
 
@@ -144,7 +155,7 @@ class BoxStrats(YahtzeeScene):
     def large_straight(self):
         # example 1: sm + lg open. Large lit from the start; show dice, then light
         # small, then push the keep forward (no rolling).
-        self._swap_card(CARD_EA, hold=[R_LARGE])
+        self._swap_card(CARD_EA, run_time=0.6, hold=[R_LARGE])
         self.play(*self._enter_dice([1, 2, 3, 4, 1], band=1), run_time=0.4)
         self.card.extend_hold(self, [R_SMALL], run_time=0.35)  # small lit through the push
         self.play(*self.board.show_keep([0, 1, 2, 3], base_band=1), run_time=0.7)
@@ -153,16 +164,18 @@ class BoxStrats(YahtzeeScene):
 
         # example 2: change card (sm filled, chance open). Large re-raised WITH the
         # swap; show dice, light chance, push forward.
-        self._swap_card(CARD_EB, hold=[R_LARGE])
+        self._swap_card(CARD_EB, run_time=0.6, hold=[R_LARGE])
         self.play(*self._enter_dice([2, 3, 4, 6, 6], band=1), run_time=0.4)
         self.card.extend_hold(self, [R_CHANCE], run_time=0.35) # chance lit through the push
         self.play(*self.board.show_keep([0, 1, 2, 3], base_band=1), run_time=0.7)
-        self._end_beat(0.3, 0.3)
+        self._fade_dice(0.3)
+        self.card.release_rows(self, [R_CHANCE], run_time=0.3)  # chance out FIRST
+        self.card.release_rows(self, [R_LARGE], run_time=0.3)   # then large straight
 
     # ── f) Full house — comes on its own (three sequences, top-row scored) ──────
     @subscene
     def full_house(self):
-        self._swap_card(CARD_F, hold=[R_FH])     # full house lit WITH swap
+        self._swap_card(CARD_F, run_time=0.6, hold=[R_FH])     # full house lit WITH swap
 
         # seq 1 (third roll): 3 threes saved at band 2 → push up, roll the rest → top
         self.play(*self._enter_dice([3, 3, 3, 1, 6], band=2), run_time=0.4)
@@ -192,7 +205,7 @@ class BoxStrats(YahtzeeScene):
     # ── g) 3 & 4 of a kind — usually a top box; when forced, pick 4-kind ────────
     @subscene
     def kinds(self):
-        self._swap_card(EMPTY, hold=[R_3KIND, R_4KIND])  # both lit WITH swap
+        self._swap_card(EMPTY, run_time=0.6, hold=[R_3KIND, R_4KIND])  # both lit WITH swap
 
         # 55551 in the TOP row → four 5's belong in Fives, not 4-of-a-kind
         self.play(*self._enter_dice([5, 5, 5, 5, 1], band=3), run_time=0.4)
@@ -207,13 +220,13 @@ class BoxStrats(YahtzeeScene):
 
         # new card (3k/4k stay lit across the swap); 44442 in top row → fill 4-kind
         self._fade_dice(0.3)
-        self._swap_card(CARD_G3, hold=[R_3KIND, R_4KIND])
+        self._swap_card(CARD_G3, run_time=0.6, hold=[R_3KIND, R_4KIND])
         self.play(*self._enter_dice([4, 4, 4, 4, 2], band=3), run_time=0.4)
         self.card.four_of_a_kind(self, self.board.dice)        # 4-of-a-Kind = 18
 
         # new card; 12445 in top row → ZERO OUT 4-kind (forced)
         self._fade_dice(0.3)
-        self._swap_card(CARD_G4, hold=[R_3KIND, R_4KIND])
+        self._swap_card(CARD_G4, run_time=0.6, hold=[R_3KIND, R_4KIND])
         self.play(*self._enter_dice([1, 2, 4, 4, 5], band=3), run_time=0.4)
         self.card.four_of_a_kind(self, self.board.dice)        # scratch → 0
         self._end_beat(0.3, 0.3)
