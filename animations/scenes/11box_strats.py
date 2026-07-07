@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
 from assets.scorecard import get_scorecard
-from assets.dice import DiceBoard, slot_point, BAND_YS, RollDie
+from assets.dice import DiceBoard, morph_dice, slot_point, BAND_YS
 
 # ── Scorecard ROW indices (card order — yahtzee=11 sits ABOVE chance=12) ───────
 R_ONES, R_TWOS, R_THREES, R_FOURS, R_FIVES, R_SIXES = range(6)
@@ -35,18 +35,29 @@ class BoxStrats(YahtzeeScene):
         self.board = DiceBoard()
 
     # ── helpers ────────────────────────────────────────────────────────────────
-    def _swap_card(self, scores, run_time):
-        """Fade a fresh PRE-FILLED card in over the current one (bar already at its
-        final state, so it never animates), then hard-clear the old card + any
-        top-level value-text orphans the scoring methods left behind. Keeps only
-        the new card and the guide lines. Dice are re-entered per beat."""
+    def _swap_card(self, scores, run_time, *, hold=None):
+        """Bring on a fresh PRE-FILLED card (bar already at final state — never
+        animates), fading the old card + its dice + its held highlight out and the
+        new card + its NEW highlight in, ALL in one play (so a persistent box
+        highlight rises in lockstep with the swap and stays continuous). Then
+        hard-clear stray orphans, keeping the new card, the lines, and the live
+        highlight."""
+        old = self.card
         new = get_scorecard(center=LEFT_SC, scores=list(scores))
         self.add(new)
-        self.play(FadeIn(new),
-                  *[FadeOut(d) for d in self.board.dice if d in self.mobjects],
-                  run_time=run_time)
+        anims = [FadeIn(new)]
+        anims += [FadeOut(d) for d in self.board.dice if d in self.mobjects]
+        for fill, border in old.held_pieces():           # old highlight leaves w/ old card
+            anims += [FadeOut(fill), FadeOut(border)]
+        old._held = None
+        if hold is not None:
+            anims += new.hold_rows_anims(hold)            # new highlight rises WITH the card
+        self.play(*anims, run_time=run_time)
+        keep = {new, self.board.lines}
+        for fill, border in new.held_pieces():
+            keep.add(fill); keep.add(border)
         for m in list(self.mobjects):
-            if m is not new and m is not self.board.lines:
+            if m not in keep:
                 self.remove(m)
         self.card = new
 
@@ -70,13 +81,15 @@ class BoxStrats(YahtzeeScene):
             d.set_opacity(1.0)
         return [FadeIn(d) for d in self.board.dice]
 
-    def _reroll(self, values):
-        """Roll every die in place at band 1 to new `values` (montage re-roll)."""
-        return [RollDie(d, slot_point(1, i), values[i])
-                for i, d in enumerate(self.board.dice)]
+    def _fade_dice(self, run_time):
+        dice = [d for d in self.board.dice if d in self.mobjects]
+        if dice:
+            self.play(*[FadeOut(d) for d in dice], run_time=run_time)
 
-    def _clear_dice(self, run_time):
-        self.play(*[FadeOut(d) for d in self.board.dice], run_time=run_time)
+    def _end_beat(self, dice_rt, rel_rt):
+        """Close a beat: fade the dice out, THEN drop the persistent highlight."""
+        self._fade_dice(dice_rt)
+        self.card.release_rows(self, run_time=rel_rt)
 
     # ── a) intro: blank card (carried in) + guide lines. No highlight. ─────────
     @subscene
@@ -86,8 +99,7 @@ class BoxStrats(YahtzeeScene):
     # ── b) Chance — the rescue box (22345: twos→undo, lg straight→undo, chance) ─
     @subscene
     def chance(self):
-        self._swap_card(CARD_B, run_time=0.8)
-        self.card.hold_rows(self, [R_CHANCE], run_time=0.35)   # lit FIRST, whole beat
+        self._swap_card(CARD_B, run_time=0.8, hold=[R_CHANCE])   # highlight rises WITH swap
         self.play(*self._enter_dice([2, 2, 3, 4, 5], band=3), run_time=0.4)
 
         self.card.upper(self, self.board.dice, 2)              # twos = 4 (full fly-in)
@@ -98,118 +110,113 @@ class BoxStrats(YahtzeeScene):
         self.card.transition(self, {R_LARGE: None}, run_time=0.6)  # …then remove it
         self.card.chance(self, self.board.dice)                # chance = 16 (stays)
 
-        self.card.release_rows(self, run_time=0.3)             # dropped LAST
+        self._end_beat(0.3, 0.3)                               # dice out, then drop highlight LAST
 
     # ── c) Yahtzee — don't chase it without a fallback (11123 → keep 123) ───────
     @subscene
     def yahtzee(self):
-        self._swap_card(CARD_C, run_time=0.8)
-        self.card.hold_rows(self, [R_YAHT], run_time=0.35)     # Yahtzee lit whole beat
+        self._swap_card(CARD_C, run_time=0.8, hold=[R_YAHT])   # Yahtzee lit WITH swap, whole beat
         self.play(*self._first_roll_entrance([1, 1, 1, 2, 3]), run_time=0.4)
         self.play(*self.board.first_roll([1, 1, 1, 2, 3]), run_time=0.7)
         self.card.highlight_rows(self, [R_ONES], color=SCORE_RED, hold=1.0)  # don't dump 1s
         self.play(*self.board.show_keep([0, 3, 4], base_band=1), run_time=0.7)  # keep 1-2-3
-        self.card.release_rows(self, run_time=0.3)
+        self._end_beat(0.3, 0.3)
 
     # ── d) Straights — 82% small straight on some first roll (montage of 5) ─────
     @subscene
     def straights(self):
-        self._swap_card(EMPTY, run_time=0.8)                   # start empty
-        self.card.hold_rows(self, [R_SMALL, R_LARGE], run_time=0.35)  # both straights
+        self._swap_card(EMPTY, run_time=0.8, hold=[R_SMALL, R_LARGE])   # both straights, w/ swap
         self.wait(0.4)
         self.card.release_rows(self, [R_LARGE], run_time=0.3)  # drop large, keep small
 
-        rolls = [[2, 5, 6, 2, 1], [6, 3, 6, 1, 4], [5, 2, 2, 6, 3],
-                 [1, 1, 5, 4, 6], [4, 2, 1, 3, 1]]             # #5 = small straight {1,2,3,4}
-        self.play(*self._first_roll_entrance(rolls[0]), run_time=0.4)
-        self.play(*self.board.first_roll(rolls[0]), run_time=0.7)
-        for vals in rolls[1:-1]:
-            self.play(*self._reroll(vals), run_time=0.5)
-            self.wait(0.1)
-        self.play(*self._reroll(rolls[-1]), run_time=0.5)      # 42131
-        # once we've got the 1234: rearrange + flash colors, NO scoring
+        # first roll ROLLS; the rest are quick MORPHS with a hold so each is readable
+        self.play(*self._first_roll_entrance([2, 5, 6, 2, 1]), run_time=0.4)
+        self.play(*self.board.first_roll([2, 5, 6, 2, 1]), run_time=0.7)
+        self.wait(0.5)
+        for vals in ([6, 3, 6, 1, 4], [5, 2, 2, 6, 3], [1, 1, 5, 4, 6]):
+            morph_dice(self, self.board.dice, vals, run_time=0.4)
+            self.wait(0.6)
+        morph_dice(self, self.board.dice, [4, 2, 1, 3, 1], run_time=0.4)   # #5 = small straight
+        self.wait(0.3)
+        # rearrange + flash colors, NO scoring
         self.card.small_straight(self, self.board.dice, y=BAND_YS[1], score=False)
-        self.card.release_rows(self, run_time=0.3)
+        self._end_beat(0.4, 0.3)                               # remove dice, THEN drop small
 
-    # ── e) Large straight — go for it when you have a fallback ──────────────────
+    # ── e) Large straight — go for it when you have a fallback (NO rerolls) ─────
     @subscene
     def large_straight(self):
-        # example 1: sm + lg open; roll a small straight → keep 1234, go big
-        self._swap_card(CARD_EA, run_time=0.8)
-        self.card.hold_rows(self, [R_LARGE], run_time=0.35)    # large lit WHOLE beat
-        self.card.extend_hold(self, [R_SMALL], run_time=0.35)  # + small during 12341
-        self.play(*self._first_roll_entrance([1, 2, 3, 4, 1]), run_time=0.4)
-        self.play(*self.board.first_roll([1, 2, 3, 4, 1]), run_time=0.7)
+        # example 1: sm + lg open. Large lit from the start; show dice, then light
+        # small, then push the keep forward (no rolling).
+        self._swap_card(CARD_EA, run_time=0.8, hold=[R_LARGE])
+        self.play(*self._enter_dice([1, 2, 3, 4, 1], band=1), run_time=0.4)
+        self.card.extend_hold(self, [R_SMALL], run_time=0.35)  # small lit through the push
         self.play(*self.board.show_keep([0, 1, 2, 3], base_band=1), run_time=0.7)
-        self.card.release_rows(self, [R_SMALL], run_time=0.3)  # drop small after ex 1
+        self._fade_dice(0.3)
+        self.card.release_rows(self, [R_SMALL], run_time=0.3)  # drop small (large stays)
 
-        # example 2: change card (sm filled, chance open); 4-of-5 → keep 2346
-        self.card.release_rows(self, run_time=0.0)             # drop large before swap
-        self._swap_card(CARD_EB, run_time=0.8)
-        self.card.hold_rows(self, [R_LARGE], run_time=0.35)    # re-raise large
-        self.card.extend_hold(self, [R_CHANCE], run_time=0.35) # + chance during 23466
-        self.play(*self._first_roll_entrance([2, 3, 4, 6, 6]), run_time=0.4)
-        self.play(*self.board.first_roll([2, 3, 4, 6, 6]), run_time=0.7)
+        # example 2: change card (sm filled, chance open). Large re-raised WITH the
+        # swap; show dice, light chance, push forward.
+        self._swap_card(CARD_EB, run_time=0.8, hold=[R_LARGE])
+        self.play(*self._enter_dice([2, 3, 4, 6, 6], band=1), run_time=0.4)
+        self.card.extend_hold(self, [R_CHANCE], run_time=0.35) # chance lit through the push
         self.play(*self.board.show_keep([0, 1, 2, 3], base_band=1), run_time=0.7)
-        self.card.release_rows(self, run_time=0.3)
+        self._end_beat(0.3, 0.3)
 
-    # ── f) Full house — comes on its own (three THIRD rolls, top-row scored) ────
+    # ── f) Full house — comes on its own (three sequences, top-row scored) ──────
     @subscene
     def full_house(self):
-        self._swap_card(CARD_F, run_time=0.8)
-        self.card.hold_rows(self, [R_FH], run_time=0.35)       # full house lit whole beat
+        self._swap_card(CARD_F, run_time=0.8, hold=[R_FH])     # full house lit WITH swap
 
-        # dice START at band 2 (second row from top); push the saved dice forward,
-        # roll the rest up to band 3 (TOP), then score from the top.
-        self.play(*self._enter_dice([3, 3, 3, 1, 6], band=2), run_time=0.4)  # 3 threes saved
+        # seq 1 (third roll): 3 threes saved at band 2 → push up, roll the rest → top
+        self.play(*self._enter_dice([3, 3, 3, 1, 6], band=2), run_time=0.4)
         self.play(*self.board.keep([0, 1, 2]), run_time=0.5)
         self.play(*self.board.roll_rest([4, 5]), run_time=0.7)               # → 33345
         self.card.upper(self, self.board.dice, 3)              # Threes = 9
 
-        self._clear_dice(0.3)
-        self.play(*self._enter_dice([2, 2, 2, 1, 4], band=2), run_time=0.4)  # 3 twos saved
+        # seq 2 (2s): BOTH rerolls — first roll 3 twos at band 1, reroll to band 2
+        # (22214), reroll again to band 3 (22224), fill from the top
+        self._fade_dice(0.3)
+        self.play(*self._enter_dice([2, 2, 2, 5, 6], band=1), run_time=0.4)
         self.play(*self.board.keep([0, 1, 2]), run_time=0.5)
-        self.play(*self.board.roll_rest([2, 4]), run_time=0.7)               # → 22224
+        self.play(*self.board.roll_rest([1, 4]), run_time=0.7)               # → 22214 (band 2)
+        self.play(*self.board.keep([0, 1, 2]), run_time=0.5)
+        self.play(*self.board.roll_rest([2, 4]), run_time=0.7)               # → 22224 (band 3)
         self.card.upper(self, self.board.dice, 2)              # Twos = 8
 
-        self._clear_dice(0.3)
-        self.play(*self._enter_dice([1, 1, 1, 3, 6], band=2), run_time=0.4)  # 3 ones saved
+        # seq 3 (third roll): 3 ones saved at band 2 → roll 5,5 → 11155 full house
+        self._fade_dice(0.3)
+        self.play(*self._enter_dice([1, 1, 1, 3, 6], band=2), run_time=0.4)
         self.play(*self.board.keep([0, 1, 2]), run_time=0.5)
         self.play(*self.board.roll_rest([5, 5]), run_time=0.7)               # → 11155
         self.card.full_house(self, self.board.dice)            # Full House = 25 (fell in)
 
-        self.card.release_rows(self, run_time=0.3)
+        self._end_beat(0.3, 0.3)
 
     # ── g) 3 & 4 of a kind — usually a top box; when forced, pick 4-kind ────────
     @subscene
     def kinds(self):
-        self._swap_card(EMPTY, run_time=0.8)
-        self.card.hold_rows(self, [R_3KIND, R_4KIND], run_time=0.35)  # both lit whole beat
+        self._swap_card(EMPTY, run_time=0.8, hold=[R_3KIND, R_4KIND])  # both lit WITH swap
 
         # 55551 in the TOP row → four 5's belong in Fives, not 4-of-a-kind
         self.play(*self._enter_dice([5, 5, 5, 5, 1], band=3), run_time=0.4)
         self.card.upper(self, self.board.dice, 5)              # Fives = 20
 
         # 55552 SECOND roll (band 2) → keep 5's, roll a 3 → 55553 → 4-kind (top)
-        self._clear_dice(0.3)
+        self._fade_dice(0.3)
         self.play(*self._enter_dice([5, 5, 5, 5, 2], band=2), run_time=0.4)
         self.play(*self.board.keep([0, 1, 2, 3]), run_time=0.5)
-        self.play(*self.board.roll_rest([3]), run_time=0.7)                  # → 55553
+        self.play(*self.board.roll_rest([3]), run_time=0.7)                 # → 55553
         self.card.four_of_a_kind(self, self.board.dice)        # 4-of-a-Kind = 23
 
-        # new card: 3k + 4k open; 44442 in top row → fill 4-of-a-kind
-        self._clear_dice(0.3)
-        self.card.release_rows(self, run_time=0.0)
-        self._swap_card(CARD_G3, run_time=0.8)
-        self.card.hold_rows(self, [R_3KIND, R_4KIND], run_time=0.35)
+        # new card (3k/4k stay lit across the swap); 44442 in top row → fill 4-kind
+        self._fade_dice(0.3)
+        self._swap_card(CARD_G3, run_time=0.8, hold=[R_3KIND, R_4KIND])
         self.play(*self._enter_dice([4, 4, 4, 4, 2], band=3), run_time=0.4)
         self.card.four_of_a_kind(self, self.board.dice)        # 4-of-a-Kind = 18
 
-        # new card: only 3s/3k/4k open, 57 top; 12445 in top row → ZERO OUT 4-kind
-        self._clear_dice(0.3)
-        self.card.release_rows(self, run_time=0.0)
-        self._swap_card(CARD_G4, run_time=0.8)
-        self.card.hold_rows(self, [R_3KIND, R_4KIND], run_time=0.35)
+        # new card; 12445 in top row → ZERO OUT 4-kind (forced)
+        self._fade_dice(0.3)
+        self._swap_card(CARD_G4, run_time=0.8, hold=[R_3KIND, R_4KIND])
         self.play(*self._enter_dice([1, 2, 4, 4, 5], band=3), run_time=0.4)
         self.card.four_of_a_kind(self, self.board.dice)        # scratch → 0
-        self.card.release_rows(self, run_time=0.3)
+        self._end_beat(0.3, 0.3)

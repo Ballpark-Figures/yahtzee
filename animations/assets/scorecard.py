@@ -543,20 +543,32 @@ class Scorecard(VGroup):
 
     def extend_hold(self, scene, rows, *, color=ACCENT_GOLD, run_time=0.35):
         """Add `rows` to the current hold without dropping what's already held."""
+        anims = self.hold_rows_anims(rows, color=color)
+        if anims:
+            scene.play(*anims, run_time=run_time)
+
+    def hold_rows_anims(self, rows, *, color=ACCENT_GOLD):
+        """Build + register a hold on `rows` and RETURN the raise anims (instead of
+        playing them), so a caller can fold the highlight into another play — e.g.
+        raise it in lockstep with a card swap. Does not drop existing holds."""
         rows = [rows] if isinstance(rows, int) else list(rows)
         held = list(getattr(self, "_held", None) or [])
         existing = {r for _, _, r in held}
-        fades = []
+        anims = []
         for r in rows:
             if r in existing:
                 continue
             fill, border, bold = self._row_highlight(r, color, 0.45)
             self.labels[r].save_state()
-            fades += [FadeIn(fill), FadeIn(border), Transform(self.labels[r], bold)]
+            anims += [FadeIn(fill), FadeIn(border), Transform(self.labels[r], bold)]
             held.append((fill, border, r))
-        if fades:
-            scene.play(*fades, run_time=run_time)
         self._held = held
+        return anims
+
+    def held_pieces(self):
+        """The (fill, border) mobjects currently held — for a caller that hard-
+        clears the scene and must KEEP the live highlight."""
+        return [(f, b) for f, b, _r in (getattr(self, "_held", None) or [])]
 
     def release_rows(self, scene, rows=None, *, run_time=0.3):
         """Release held rows — ALL by default, or just the given subset (leaving
