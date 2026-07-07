@@ -570,6 +570,26 @@ class Scorecard(VGroup):
         clears the scene and must KEEP the live highlight."""
         return [(f, b) for f, b, _r in (getattr(self, "_held", None) or [])]
 
+    def held_rows(self):
+        return [r for _f, _b, r in (getattr(self, "_held", None) or [])]
+
+    def hold_rows_instant(self, scene, rows, *, color=ACCENT_GOLD):
+        """Raise a hold with NO animation — pieces added and labels bolded
+        immediately. For an instant card swap where a carried highlight must stay
+        put without a one-frame blink."""
+        rows = [rows] if isinstance(rows, int) else list(rows)
+        held = list(getattr(self, "_held", None) or [])
+        existing = {r for _, _, r in held}
+        for r in rows:
+            if r in existing:
+                continue
+            fill, border, bold = self._row_highlight(r, color, 0.45)
+            self.labels[r].save_state()
+            self.labels[r].become(bold)
+            scene.add(fill, border)
+            held.append((fill, border, r))
+        self._held = held
+
     def release_rows(self, scene, rows=None, *, run_time=0.3):
         """Release held rows — ALL by default, or just the given subset (leaving
         the rest of the hold up). No-op if nothing is held."""
