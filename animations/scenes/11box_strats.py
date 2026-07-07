@@ -25,7 +25,7 @@ CARD_C  = [ 2,  8,  6, 12, None, 18, 20, 24, 25, None, 40, None, 22, None]    # 
 CARD_EA = [ 2,  8,  6, 12, None, 18, 20, 24, 25, None, None, 50, 22, None]    # 46 top, blue; open 5s/sm/lg
 CARD_EB = [ 2,  8,  6, 12, None, 18, 20, 24, 25, 30, None, 50, None, None]    # 46 top, blue; open 5s/lg/chance
 CARD_F  = [None]*6 + [20, 24, None, 30, 40, 50, 22, None]                     # whole top open + full house
-CARD_G3 = [ 5,  6,  9, 12, 15, 18, None, None, 25, 30, 40, 50, 22, None]      # open 3k + 4k
+CARD_G3 = [ 2,  8,  6, 12, None, 18, None, None, 25, 30, 40, 50, 22, None]    # top unfinished (Fives open→blue, no bonus); Fours FULL (used→44442 goes to 4-kind); open 3k+4k
 CARD_G4 = [ 4,  8, None, 12, 15, 18, None, None, 25, 30, 40, 50, 22, None]    # 57 top; open 3s/3k/4k
 EMPTY   = [None] * 14
 
