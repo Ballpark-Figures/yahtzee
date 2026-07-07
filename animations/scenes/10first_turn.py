@@ -147,3 +147,9 @@ class FirstTurn(YahtzeeScene):
         o = self.data[idx]
         self.play(self.wheel.scroll_to(idx), run_time=2.0)
         self._fill(o["sc_row"], o["points"], hold=0.6)
+
+    @subscene
+    def clear_to_card(self):
+        # k) Fade the list + title, leaving the (already-empty) scorecard at
+        # LEFT_SC so scene 11 opens on the same card — seamless hard cut.
+        self.play(FadeOut(self.wheel), FadeOut(self.title), run_time=1.0)
