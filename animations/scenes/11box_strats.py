@@ -17,11 +17,12 @@ R_3KIND, R_4KIND, R_FH, R_SMALL, R_LARGE, R_YAHT, R_CHANCE = 6, 7, 8, 9, 10, 11,
 # sourced numbers). "57 top" states sum the top section to 57.
 #          1s   2s   3s   4s   5s   6s   3k   4k   fh   ss   ls   yz   ch    yb
 CARD_B  = [ 3, None,  9, 12, 15, 18, 17, None, 25, 30, None,  0, None, None]  # 57 top; open 2s/4k/lg/chance
-# Ones left OPEN so the top section is INCOMPLETE → neutral blue bar (a complete
-# top under 63 renders RED "missed-bonus", which is as distracting as the bonus).
-CARD_C  = [None, 8,  6, 12, 10, 18, 20, 24, 25, None, 40, None, 22, None]      # 54 top, blue; open 1s/sm/yahtzee
-CARD_EA = [None, 8,  6, 12, 10, 18, 20, 24, 25, None, None, 50, 22, None]      # 54 top, blue; open 1s/sm/lg
-CARD_EB = [None, 8,  6, 12, 10, 18, 20, 24, 25, 30, None, 50, None, None]      # 54 top, blue; open 1s/lg/chance
+# Top fully filled (per the script — "everything filled except yahtzee and small
+# straight"), summing to 56 with varied counts so there's no +35 bonus. Ones is
+# FULL: highlighting the used Ones box red is the beat's point.
+CARD_C  = [ 2,  8,  6, 12, 10, 18, 20, 24, 25, None, 40, None, 22, None]      # 56 top (no bonus); open sm/yahtzee
+CARD_EA = [ 2,  8,  6, 12, 10, 18, 20, 24, 25, None, None, 50, 22, None]      # 56 top; open sm + lg straight
+CARD_EB = [ 2,  8,  6, 12, 10, 18, 20, 24, 25, 30, None, 50, None, None]      # 56 top; sm filled; open lg + chance
 CARD_F  = [None]*6 + [20, 24, None, 30, 40, 50, 22, None]                     # whole top open + full house
 CARD_G3 = [ 5,  6,  9, 12, 15, 18, None, None, 25, 30, 40, 50, 22, None]      # open 3k + 4k
 CARD_G4 = [ 4,  8, None, 12, 15, 18, None, None, 25, 30, 40, 50, 22, None]    # 57 top; open 3s/3k/4k
