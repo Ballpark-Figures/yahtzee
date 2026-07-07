@@ -26,6 +26,12 @@ CARD_G4 = [ 4,  8, None, 12, 15, 18, None, None, 25, 30, 40, 50, 22, None]    # 
 EMPTY   = [None] * 14
 
 
+def _out_fast(t):
+    """Rate func that completes a fade-out by ~40% of the play — so a card's OLD
+    values/bar clear quickly and are gone well before the new ones fade in."""
+    return min(1.0, t * 2.5)
+
+
 class BoxStrats(YahtzeeScene):
     def setup_scene(self):
         # Opens on the SAME empty card scene 10 ended on (LEFT_SC), present at
@@ -37,22 +43,30 @@ class BoxStrats(YahtzeeScene):
 
     # ── helpers ────────────────────────────────────────────────────────────────
     def _swap_card(self, scores, run_time, *, hold=None):
-        """Fade the card's contents to a new pre-filled state. The new card fades
-        IN over the OLD one (which stays fully solid underneath and is removed only
-        once the new one is opaque) — so the identical FRAME never dips or ghosts
-        ("the card crossfading into itself"); only the changed values + (63) bar
-        visibly fade to their new state. No counting, no pop. A `hold` matching the
-        current one stays solid across the fade; a fresh `hold` fades in."""
+        """Fade the card's contents to a new pre-filled state without ghosting OR
+        lingering. The old card's FRAME (grid / panel / row labels / Total bar)
+        stays fully solid while the new card fades in over it, so the structure
+        never dips ("crossfading into itself"). Its DYNAMIC content — values, the
+        (63) bar fill + number, the totals, and (for a fresh highlight) the old
+        regular label under the new bold one — is faded OUT as the new fades in, so
+        nothing lingers at full opacity (no doubled bar number, no bold+regular
+        overlap). A carried hold stays solid; a fresh hold fades in."""
         old = self.card
         carry = hold is not None and set(hold) == set(old.held_rows())
         new = get_scorecard(center=LEFT_SC, scores=list(scores))
         new.COUNTER_LAG = 0.0
-        self.add(new)                                  # ON TOP of the still-solid old card
-        anims = [FadeIn(new)]                           # only the new card fades in
+        self.add(new)                                  # ON TOP of the still-solid old FRAME
+        anims = [FadeIn(new),                                          # new content fades in…
+                 FadeOut(old.score_texts, rate_func=_out_fast),        # …old values/bar#/totals
+                 FadeOut(old.bar_fill, rate_func=_out_fast)]           #    clear FAST (gone by ~40%)
         anims += [FadeOut(d) for d in self.board.dice if d in self.mobjects]
         if carry:
             new.hold_rows_instant(self, hold)
         else:
+            for f, b in old.held_pieces():
+                anims += [FadeOut(f), FadeOut(b)]
+            for r in (hold or []):
+                anims.append(FadeOut(old.labels[r], rate_func=_out_fast))  # clear old regular label fast
             old._held = None
             if hold is not None:
                 anims += new.hold_rows_anims(hold)
