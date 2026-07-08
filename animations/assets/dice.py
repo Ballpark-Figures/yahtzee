@@ -210,9 +210,14 @@ class FlashFill(Animation):
     """Pulse a die's body fill to `color` and bump its size, keeping the black
     pips and border intact (only the face color flashes, not the whole die)."""
 
-    def __init__(self, die, color, *, scale_factor=1.18, run_time=0.6, **kwargs):
+    def __init__(self, die, color, *, scale_factor=1.18, hold=False, run_time=0.6, **kwargs):
         self.flash_color  = ManimColor(color)   # accept hex strings or ManimColor
         self.scale_factor = scale_factor
+        # hold=True: the FILL ramps to `color` and STAYS (the scale bump still
+        # returns). For a flash that leads straight into a colored fly, so the
+        # colour doesn't blink back to beige in between — the caller resets the
+        # fill (set_body_color) once the fly is done.
+        self.hold         = hold
         self.base_fill    = die.body.get_fill_color()
         super().__init__(die, run_time=run_time, **kwargs)
 
@@ -222,10 +227,11 @@ class FlashFill(Animation):
 
     def interpolate_mobject(self, alpha):
         d = self.mobject
-        pulse = np.sin(np.pi * alpha)           # 0 -> 1 -> 0, so it returns to base
+        pulse  = np.sin(np.pi * alpha)          # 0 -> 1 -> 0 (scale bump always returns)
+        fill_t = alpha if self.hold else pulse   # hold: ramp to colour and STAY there
         d.become(self.base)
         d.scale(1 + (self.scale_factor - 1) * pulse)
-        d.body.set_fill(interpolate_color(self.base_fill, self.flash_color, pulse), opacity=1.0)
+        d.body.set_fill(interpolate_color(self.base_fill, self.flash_color, fill_t), opacity=1.0)
 
 
 def jump_and_spin(scene, dice, *, rainbow=False, bump=0.4, turns=1, run_time=1.0):
@@ -253,7 +259,7 @@ def reindex_dice(dice, new_order):
     return dice
 
 
-def ascend_and_flash(scene, dice_in_order, colors, *, band=3, y=None, step=0.2, run_time=0.9):
+def ascend_and_flash(scene, dice_in_order, colors, *, band=3, y=None, step=0.2, run_time=0.9, hold=False):
     """Stagger dice into an ascending staircase (left/low → right/high), then
     flash them left-to-right in `colors`. `y` overrides the band's base height
     (used by the centered-dice presentation)."""
@@ -264,7 +270,7 @@ def ascend_and_flash(scene, dice_in_order, colors, *, band=3, y=None, step=0.2, 
         moves.append(d.animate.move_to([slot_x(i), yy + (i - (k - 1) / 2) * step, 0]))
     scene.play(*moves, run_time=run_time * 0.55)
     scene.play(
-        LaggedStart(*[FlashFill(d, c, scale_factor=1.2)
+        LaggedStart(*[FlashFill(d, c, scale_factor=1.2, hold=hold)
                       for d, c in zip(dice_in_order, colors)], lag_ratio=0.25),
         run_time=run_time,
     )

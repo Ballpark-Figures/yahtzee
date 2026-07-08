@@ -654,9 +654,10 @@ class Scorecard(VGroup):
         old      = self._top_sum
         new      = old + add
 
-        # 1. flash the matching dice
+        # 1. flash the matching dice (hold the colour so it doesn't blink back to
+        #    beige before the pips fly; reset at the end)
         if matching:
-            scene.play(*[FlashFill(d, YELLOW, scale_factor=1.18) for d in matching],
+            scene.play(*[FlashFill(d, YELLOW, scale_factor=1.18, hold=True) for d in matching],
                        run_time=0.6)
 
         # 2. copies of the pips fly into the value box and become the number
@@ -682,6 +683,8 @@ class Scorecard(VGroup):
         #    `lead`; flashes green when crossing 63)
         self._animate_top_total(scene, old, new, run_time, lead=lead)
         self._top_sum = new
+        for d in matching:                       # clear the held flash colour
+            d.set_body_color(d.body_color)
 
     def animate_bottom_score(self, scene, row, dice, *, flash=None, flash_color=YELLOW,
                              pip_dice=None, score=None, run_time=1.1):
@@ -693,9 +696,9 @@ class Scorecard(VGroup):
         if score is None:
             score = sum(d.value for d in pip_dice)
 
-        # 1. optional flash
+        # 1. optional flash (hold the colour through to the pip-fly; reset below)
         if flash:
-            scene.play(*[FlashFill(d, flash_color, scale_factor=1.18) for d in flash],
+            scene.play(*[FlashFill(d, flash_color, scale_factor=1.18, hold=True) for d in flash],
                        run_time=0.6)
 
         # 2. pips fly into the box and become the number
@@ -721,6 +724,8 @@ class Scorecard(VGroup):
         old_b, new_b = self._bottom_sum, self._bottom_sum + score
         self._animate_bottom_total(scene, old_b, new_b, run_time, lead=lead)
         self._bottom_sum = new_b
+        for d in (flash or []):                  # clear the held flash colour
+            d.set_body_color(d.body_color)
 
     def animate_fixed_score(self, scene, row, score, *, flash_color=YELLOW, run_time=1.1):
         """Score a fixed-value bottom box (Full House, straights, Yahtzee): the
@@ -849,13 +854,16 @@ class Scorecard(VGroup):
             triple = [d for d in dice if d.value == triple_val]
             pair   = [d for d in dice if d.value == pair_val]
             scene.play(
-                *[FlashFill(d, ACCENT_FILL, scale_factor=1.18) for d in triple],
-                *[FlashFill(d, RED, scale_factor=1.18) for d in pair],
+                *[FlashFill(d, ACCENT_FILL, scale_factor=1.18, hold=True) for d in triple],
+                *[FlashFill(d, RED, scale_factor=1.18, hold=True) for d in pair],
                 run_time=0.7,
             )
             colors = [ACCENT_FILL if d.value == triple_val else RED for d in dice]
-            # only the colored boxes fly into the Full House box — not the pips
+            # only the colored boxes fly into the Full House box — not the pips. The
+            # flash HELD its colour (hold=True) so the dice fly with no beige blink.
             self.fly_to_box(scene, dice, colors, 8, 25, hide_pips=True)
+            for d in dice:                       # clear the held flash colour
+                d.set_body_color(d.body_color)
         else:
             self.animate_zero_score(scene, 8, dice)
 
@@ -879,13 +887,17 @@ class Scorecard(VGroup):
             reorder_dice(scene, new, y=y)
             reindex_dice(dice, new)
             colors = [RED, YELLOW, GREEN, BLUE]
-            ascend_and_flash(scene, order, colors, y=y)   # vertical staircase + flash
+            # hold the flash colour only when scoring (a fly follows); the preview
+            # keeps the there-and-back pulse.
+            ascend_and_flash(scene, order, colors, y=y, hold=score)
             if not score:
                 return                                    # preview only — no box fill
             # colored boxes fly off while the dice settle back into a flat horizontal
             # line AND restore opacity (the unused die un-fades as it returns).
             self.fly_to_box(scene, order, colors, 9, 30,
                             hide_pips=True, return_dice=dice, return_y=y)
+            for d in order:                               # clear the held flash colour
+                d.set_body_color(d.body_color)
         elif score:
             self.animate_zero_score(scene, 9, dice)
 
@@ -896,9 +908,11 @@ class Scorecard(VGroup):
             reorder_dice(scene, order, y=y)
             reindex_dice(dice, order)
             colors = [RED, ORANGE, YELLOW, GREEN, BLUE]
-            ascend_and_flash(scene, order, colors, y=y)   # vertical staircase + flash
+            ascend_and_flash(scene, order, colors, y=y, hold=True)  # hold colour into the fly
             self.fly_to_box(scene, order, colors, 10, 40,
                             hide_pips=True, return_dice=dice, return_y=y)
+            for d in order:                               # clear the held flash colour
+                d.set_body_color(d.body_color)
         else:
             self.animate_zero_score(scene, 10, dice)
 
