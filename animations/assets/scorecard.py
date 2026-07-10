@@ -643,7 +643,7 @@ class Scorecard(VGroup):
         return self
 
     # ── Animation ────────────────────────────────────────────────────────────
-    def animate_top_score(self, scene, row, dice, *, run_time=1.1):
+    def animate_top_score(self, scene, row, dice, *, run_time=1.1, flash_run_time=0.6):
         """Score top-section `row` (0=Ones..5=Sixes) from the dice that match
         its face: flash them, fly copies of their pips into the value box as
         the number, then raise the bar and totals (flashing green at 63)."""
@@ -658,7 +658,7 @@ class Scorecard(VGroup):
         #    beige before the pips fly; reset at the end)
         if matching:
             scene.play(*[FlashFill(d, YELLOW, scale_factor=1.18, hold=True) for d in matching],
-                       run_time=0.6)
+                       run_time=flash_run_time)
 
         # 2. copies of the pips fly into the value box and become the number
         cell   = self.value_cells[row]
@@ -747,21 +747,23 @@ class Scorecard(VGroup):
         self._bottom_sum = new_b
         scene.remove(hl)
 
-    def animate_zero_score(self, scene, row, dice, *, run_time=1.0):
+    def animate_zero_score(self, scene, row, dice, *, run_time=1.6):
         """Score a 0 in `row`: bold red X's stamp over the dice all at once
         (battleship-style), merge into a single X in the value box, then become
-        a 0. Totals are unchanged (it adds nothing)."""
+        a 0. Totals are unchanged (it adds nothing). The three sub-steps
+        (0.4/0.7/0.5s) scale proportionally with `run_time` (default 1.6s = normal)."""
+        r = run_time / 1.6                       # 1.6 = normal total (0.4 + 0.7 + 0.5)
         xs = VGroup(*[Cross(d, stroke_color=RED, stroke_width=8) for d in dice])
-        scene.play(*[GrowFromCenter(x) for x in xs], run_time=0.4)
+        scene.play(*[GrowFromCenter(x) for x in xs], run_time=0.4 * r)
 
         cell  = self.value_cells[row]
         box_x = Cross(dice[0], stroke_color=RED, stroke_width=8)
         box_x.scale_to_fit_height(cell.height * 0.75).move_to(cell.get_center())
-        scene.play(ReplacementTransform(xs, box_x), run_time=0.7)
+        scene.play(ReplacementTransform(xs, box_x), run_time=0.7 * r)
 
         zero = crisp_text("0", font_size=self.font_size, color=BLACK, font=FONT)
         zero.move_to(cell.get_center())
-        scene.play(ReplacementTransform(box_x, zero), run_time=0.5)
+        scene.play(ReplacementTransform(box_x, zero), run_time=0.5 * r)
         self.value_texts[row] = zero
         self.value_nums[row]  = 0
 
@@ -820,16 +822,19 @@ class Scorecard(VGroup):
             counts[d.value] = counts.get(d.value, 0) + 1
         return counts
 
-    def upper(self, scene, dice, face, *, run_time=1.1):
+    def upper(self, scene, dice, face, *, run_time=1.7):
         """Ones..Sixes (face 1..6): sum of the matching dice, or 0 (X) if none.
-        `run_time` is the bar-count / pip fly-in duration (default 1.1s); a
-        scoring cell is preceded by a fixed 0.6s dice flash, so the whole thing
-        runs ~1.7s. (The zero/scratch path has its own fixed ~1.6s timing.)"""
+        `run_time` is the WHOLE animation's duration — default 1.7s = a 0.6s dice
+        flash + 1.1s bar-count/fly-in — and BOTH parts scale proportionally, so
+        e.g. run_time=1.5 runs everything at 15/17 speed. The zero/scratch path
+        scales by the same ratio (from its own 1.6s normal)."""
         row = face - 1
+        r = run_time / 1.7                       # 1.7 = normal; scale everything by this
         if any(d.value == face for d in dice):
-            self.animate_top_score(scene, row, dice, run_time=run_time)
+            self.animate_top_score(scene, row, dice,
+                                   run_time=1.1 * r, flash_run_time=0.6 * r)
         else:
-            self.animate_zero_score(scene, row, dice)
+            self.animate_zero_score(scene, row, dice, run_time=1.6 * r)
 
     def three_of_a_kind(self, scene, dice):
         counts = self._counts(dice)
