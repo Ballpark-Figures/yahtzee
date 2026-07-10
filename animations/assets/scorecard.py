@@ -206,7 +206,7 @@ class Scorecard(VGroup):
 
         header = Rectangle(
             width=full_width, height=header_h,
-            fill_color=ACCENT_FILL, fill_opacity=1.0,
+            fill_color=CARD_ACCENT, fill_opacity=1.0,
             stroke_color=grid_color, stroke_width=grid_width,
         ).move_to(np.array([0, header_cy, 0]))
         cells.add(header)
@@ -369,7 +369,7 @@ class Scorecard(VGroup):
         # ── Total footer (always shown; the number is omitted when scores=None)
         footer = Rectangle(
             width=full_width, height=cell_height * 1.18,
-            fill_color=ACCENT_FILL, fill_opacity=1.0,
+            fill_color=CARD_ACCENT, fill_opacity=1.0,
             stroke_color=grid_color, stroke_width=grid_width,
         ).move_to(np.array([0, total_y, 0]))
         cells.add(footer)
