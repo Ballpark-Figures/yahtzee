@@ -182,7 +182,7 @@ class Dice(YahtzeeScene):
 
     # one knob for the whole build-up: every n→n+1 grow transition in `a` runs for
     # this many seconds (uniform). Tune this single value to retime all of them.
-    GROW_RT = 1.8
+    GROW_RT = 0.8
     GRID_CY = -0.35
     LABEL_Y = 3.7
 
@@ -293,8 +293,8 @@ class Dice(YahtzeeScene):
         self.lv1 = _build_level(1)              # owns lv1, lv1_sq
         self.lv1_sq = _build_square_level(1)
         self.play(LaggedStart(*[FadeIn(g) for g in self.lv1], lag_ratio=0.08),
-                  run_time=1.0)
-        self.wait(0.4)
+                  run_time=2.0)
+        self.wait(3.0)
         # only 6 dice on screen — smoothest moment to switch to colored squares
         self.play(*[ReplacementTransform(d, s)
                     for d, s in zip(self.lv1, self.lv1_sq)], run_time=0.8)
@@ -323,12 +323,15 @@ class Dice(YahtzeeScene):
         self.lv5_sq = _build_square_level(5)   # 38,880 squares
         self._grow(self.lv4_sq, self.lv5_sq, 4, run_time=self.GROW_RT)
         self.wait(0.6)
-        # keep only the 252 ascending (distinct) quints; drop the other 7524
-        # instantly so the snapshot stays light and to_252 animates just the 252.
+        # keep only the 252 ascending (distinct) quints; FADE the other 7524 out
+        # (FadeOut removes them, so the snapshot stays light and to_252 animates
+        # just the 252).
         asc = [pi for pi, t in enumerate(product(range(1, 7), repeat=5))
                if all(t[i] <= t[i + 1] for i in range(4))]
         asc_set = set(asc)
-        self.remove(*[g for i, g in enumerate(self.lv5_sq) if i not in asc_set])
+        self.wait(5)
+        self.play(*[FadeOut(g) for i, g in enumerate(self.lv5_sq) if i not in asc_set],
+                  run_time=1.0)
         self.power_asc = [self.lv5_sq[i] for i in asc]   # 252, multiset order
         self.lv4_sq = self.lv5_sq = None        # consumed / culled
 
