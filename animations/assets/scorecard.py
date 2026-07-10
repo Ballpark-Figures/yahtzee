@@ -687,7 +687,7 @@ class Scorecard(VGroup):
             d.set_body_color(d.body_color)
 
     def animate_bottom_score(self, scene, row, dice, *, flash=None, flash_color=YELLOW,
-                             pip_dice=None, score=None, run_time=1.1):
+                             pip_dice=None, score=None, run_time=1.1, flash_run_time=0.6):
         """Score a bottom-section `row` (6=3 of a Kind .. 12=Chance). Optionally
         flash a subset of dice first, then fly copies of `pip_dice`'s pips into
         the box as the number, and tick the bottom-section total + grand total.
@@ -699,7 +699,7 @@ class Scorecard(VGroup):
         # 1. optional flash (hold the colour through to the pip-fly; reset below)
         if flash:
             scene.play(*[FlashFill(d, flash_color, scale_factor=1.18, hold=True) for d in flash],
-                       run_time=0.6)
+                       run_time=flash_run_time)
 
         # 2. pips fly into the box and become the number
         cell   = self.value_cells[row]
@@ -836,25 +836,36 @@ class Scorecard(VGroup):
         else:
             self.animate_zero_score(scene, row, dice, run_time=1.6 * r)
 
-    def three_of_a_kind(self, scene, dice):
+    def three_of_a_kind(self, scene, dice, *, run_time=1.7):
+        """`run_time` is the whole duration (default 1.7s = 0.6 flash + 1.1
+        count/fly-in); both parts scale proportionally, as does the scratch path."""
+        r = run_time / 1.7
         counts = self._counts(dice)
         kind = max(counts, key=counts.get)
         if counts[kind] >= 3:
             flash = [d for d in dice if d.value == kind]
-            self.animate_bottom_score(scene, 6, dice, flash=flash, flash_color=ACCENT_FILL)
+            self.animate_bottom_score(scene, 6, dice, flash=flash, flash_color=ACCENT_FILL,
+                                      run_time=1.1 * r, flash_run_time=0.6 * r)
         else:
-            self.animate_zero_score(scene, 6, dice)
+            self.animate_zero_score(scene, 6, dice, run_time=1.6 * r)
 
-    def four_of_a_kind(self, scene, dice):
+    def four_of_a_kind(self, scene, dice, *, run_time=1.7):
+        """`run_time` is the whole duration (default 1.7s = 0.6 flash + 1.1
+        count/fly-in); both parts scale proportionally, as does the scratch path."""
+        r = run_time / 1.7
         counts = self._counts(dice)
         kind = max(counts, key=counts.get)
         if counts[kind] >= 4:
             flash = [d for d in dice if d.value == kind]
-            self.animate_bottom_score(scene, 7, dice, flash=flash, flash_color=SCORE_GREEN)
+            self.animate_bottom_score(scene, 7, dice, flash=flash, flash_color=SCORE_GREEN,
+                                      run_time=1.1 * r, flash_run_time=0.6 * r)
         else:
-            self.animate_zero_score(scene, 7, dice)
+            self.animate_zero_score(scene, 7, dice, run_time=1.6 * r)
 
-    def full_house(self, scene, dice):
+    def full_house(self, scene, dice, *, run_time=1.7):
+        """`run_time` is the whole duration (default 1.7s = 0.7 flash + 1.0 fly);
+        both parts scale proportionally, as does the scratch path."""
+        r = run_time / 1.7
         counts = self._counts(dice)
         if sorted(counts.values()) == [2, 3]:
             triple_val = next(v for v, c in counts.items() if c == 3)
@@ -864,16 +875,16 @@ class Scorecard(VGroup):
             scene.play(
                 *[FlashFill(d, ACCENT_FILL, scale_factor=1.18, hold=True) for d in triple],
                 *[FlashFill(d, RED, scale_factor=1.18, hold=True) for d in pair],
-                run_time=0.7,
+                run_time=0.7 * r,
             )
             colors = [ACCENT_FILL if d.value == triple_val else RED for d in dice]
             # only the colored boxes fly into the Full House box — not the pips. The
             # flash HELD its colour (hold=True) so the dice fly with no beige blink.
-            self.fly_to_box(scene, dice, colors, 8, 25, hide_pips=True)
+            self.fly_to_box(scene, dice, colors, 8, 25, hide_pips=True, run_time=1.0 * r)
             for d in dice:                       # clear the held flash colour
                 d.set_body_color(d.body_color)
         else:
-            self.animate_zero_score(scene, 8, dice)
+            self.animate_zero_score(scene, 8, dice, run_time=1.6 * r)
 
     def small_straight(self, scene, dice, *, y=None, score=True, run_time=3.5):
         """Score the small straight, OR (score=False) just PREVIEW it — rearrange
@@ -932,22 +943,26 @@ class Scorecard(VGroup):
         else:
             self.animate_zero_score(scene, 10, dice, run_time=1.6 * r)
 
-    def yahtzee(self, scene, dice, *, y=None):
+    def yahtzee(self, scene, dice, *, y=None, run_time=2.8):
         """Score the still-open Yahtzee box: five-of-a-kind → 50 with a jump-spin
         into the box (and the box becomes bonus-eligible); otherwise scratch it to
         0. Later bonus Yahtzees are handled by `joker_fill`, which reads
-        `_yahtzee_is_50` to decide on the rainbow flourish + the +100."""
+        `_yahtzee_is_50` to decide on the rainbow flourish + the +100. `run_time`
+        is the whole duration (default 2.8s = 0.7 reorder + 1.0 jump-spin + 1.1
+        fill); every step scales proportionally, as does the scratch path."""
+        r = run_time / 2.8
         if len({d.value for d in dice}) == 1:
-            reorder_dice(scene, dice, y=y)
-            jump_and_spin(scene, dice)
-            self._fill_via_spin(scene, dice, 11, 50, self.yahtzee_box_point())
+            reorder_dice(scene, dice, y=y, run_time=0.7 * r)
+            jump_and_spin(scene, dice, run_time=1.0 * r)
+            self._fill_via_spin(scene, dice, 11, 50, self.yahtzee_box_point(), run_time=1.1 * r)
             self._yahtzee_is_50 = True
         else:
-            self.animate_zero_score(scene, 11, dice)
+            self.animate_zero_score(scene, 11, dice, run_time=1.6 * r)
 
-    def chance(self, scene, dice):
-        """Always the sum of all dice; pips fly in, no flash."""
-        self.animate_bottom_score(scene, 12, dice)
+    def chance(self, scene, dice, *, run_time=1.1):
+        """Always the sum of all dice; pips fly in, no flash. `run_time` is the
+        count / pip fly-in duration (default 1.1s)."""
+        self.animate_bottom_score(scene, 12, dice, run_time=run_time)
 
     # ── Un-scoring + joker / endgame edits ─────────────────────────────────────
     def reset(self, scene, *, run_time=0.8):
@@ -988,21 +1003,24 @@ class Scorecard(VGroup):
         self._bottom_sum = new_b
         scene.remove(hl, *copies)
 
-    def joker_fill(self, scene, dice, row, score, *, y=None, run_time=1.1):
+    def joker_fill(self, scene, dice, row, score, *, y=None, run_time=2.8):
         """Fill `row` with `score` via a Joker Yahtzee. The card chooses everything
         from its OWN state (`_yahtzee_is_50`): a real-50 Yahtzee (bonus-eligible)
         gets the full rainbow JUMP-spin AND a +100 bonus; a scratched-0 Yahtzee
         gets a plain spin-in-place → glide and no bonus. Works for an upper box
         (raises the bar) or a lower box (raises the bottom total), chosen by `row`.
-        The score pops in at the tail of the flight; the counters overlap it."""
+        The score pops in at the tail of the flight; the counters overlap it.
+        `run_time` is the whole duration (default 2.8s = 0.7 reorder + 1.0
+        jump-spin + 1.1 fill/counter); every step scales proportionally."""
+        r = run_time / 2.8
         bonus  = self._yahtzee_is_50
         target = self.value_cells[row].get_center()
-        reorder_dice(scene, dice, y=y)
+        reorder_dice(scene, dice, y=y, run_time=0.7 * r)
         if bonus:
-            jump_and_spin(scene, dice, rainbow=True)            # jump + spin + rainbow
+            jump_and_spin(scene, dice, rainbow=True, run_time=1.0 * r)   # jump + spin + rainbow
             copies, fly = spin_into_anim(scene, dice, target, rainbow=True, turns=2)
         else:
-            jump_and_spin(scene, dice, bump=0.0)                # spin in place, no jump
+            jump_and_spin(scene, dice, bump=0.0, run_time=1.0 * r)       # spin in place, no jump
             copies, fly = spin_into_anim(scene, dice, target, turns=0)   # glide, no spin
 
         number = crisp_text(str(score), font_size=self.font_size, color=BLACK, font=FONT)
@@ -1018,7 +1036,7 @@ class Scorecard(VGroup):
         self.value_texts[row] = number
         self.value_nums[row]  = score
         self._animate_to(
-            scene, lead=lead, run_time=run_time,
+            scene, lead=lead, run_time=1.1 * r,
             top=(self._top_sum + score) if row < BOTTOM_START else None,
             bottom=(self._bottom_sum + score) if row >= BOTTOM_START else None,
             ybonus=(self._yahtzee_bonus + 100) if bonus else None,
