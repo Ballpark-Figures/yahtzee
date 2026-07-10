@@ -24,6 +24,25 @@ FILL_LIST = [2, 6, 9, 12, 10, 24,          # top = 63 → bonus
 
 GRAY = "#9A9483"          # gray placeholder "0" in an empty candidate box
 
+# ── beat a: the theoretical MAXIMUM scorecard ─────────────────────────────────
+# Each box at its rule-maximum (all sixes wherever a box takes any dice): Ones..
+# Sixes = 5/10/15/20/25/30 (top 105 → +35 bonus), 3-Kind/4-Kind/Chance = 30 (five
+# 6s), Full House 25, Sm Straight 30, Lg Straight 40, Yahtzee 50, plus a +1200
+# Yahtzee bonus (12 extra Yahtzees). The scorecard asset sums these to grand
+# total 1575 — the theoretical max, which we then red-X out (we can't hit it every
+# time; the dice decide). User-confirmed values (2026-07-10).
+MAX_FILL = [5, 10, 15, 20, 25, 30,          # Ones..Sixes = 105 → +35 bonus
+            30, 30, 25, 30, 40, 50, 30,     # 3K/4K/FH/SmS/LgS/Yahtzee/Chance
+            1200]                           # +1200 Yahtzee bonus → grand total 1575
+
+# ── beat b: a mid-game card with 5 OPEN boxes (Fives, Sixes, 3-Kind, Lg Straight,
+# Yahtzee), scorecard order. The 8 filled boxes match assets/dp_data._AVG_BASE_
+# FILLED (Chance is solver-11 → scorecard-12). We fill the 5 open boxes one at a
+# time and tick the solver "avg points remaining" (dp.avg_remaining) DOWN to 0.
+AVG_START = [3, 6, 9, 12, None, None,       # Ones..Fours filled; Fives/Sixes open
+             None, 24, 25, 30, None, None,  # 3K open; 4K/FH/SmS filled; LgS/Yahtzee open
+             19, None]                       # Chance filled; no Yahtzee bonus
+
 # solver category (dp_data) → scorecard box index (they differ only at 11/12).
 _SC_BOX = {11: 12, 12: 11}
 
@@ -40,6 +59,11 @@ class DynamicProgramming(YahtzeeScene):
     each reroll decision the KEPT dice push forward one band (the DiceBoard.keep
     convention) while the reroll odds sit to their right.
 
+      perfect_max_card    — the "perfect play" caveat: fill a card with the MAX
+                       possible score (1575), then red-X it out.
+      avg_points_remaining — two cards (you + opponent), drop the opponent; then a
+                       5-open mid-game card with an "avg points remaining" counter
+                       (solver V) ticking DOWN as the boxes fill one at a time.
       intro_card     — card fills to "all but Lg Straight"; a real turn rolls up
                        the rows to 12345 and scores it.
       second_reroll  — 12346 at band 2; keep 1234 pushes up to band 3 (1 reroll
@@ -166,7 +190,81 @@ class DynamicProgramming(YahtzeeScene):
         return idxs
 
     # ══════════════════════════════════════════════════════════════════════════
-    # a : card fills to "all but Lg Straight"; a real turn rolls UP to 12345
+    # a : the "perfect play" caveat — fill a card with the MAX possible score
+    #     (grand total 1575), then red-X it out. We can't hit the max every time;
+    #     the dice still decide.
+    # ══════════════════════════════════════════════════════════════════════════
+    @subscene
+    def perfect_max_card(self):
+        run_time = 1.0
+        empty = get_scorecard(center=CENTER_SC, scores=[None] * 14)
+        max_card = get_scorecard(center=CENTER_SC, scores=list(MAX_FILL))
+
+        self.play(FadeIn(empty, shift=RIGHT * 1.5), run_time=run_time)   # empty card in
+        self.wait(0.6)
+        self.add(max_card)                                              # fill to the max
+        self.play(FadeIn(max_card), run_time=1.0)
+        self.remove(empty)
+        self.wait(0.8)
+
+        redx = Cross(max_card, stroke_color=SCORE_RED, stroke_width=16)  # big red X
+        self.play(GrowFromCenter(redx), run_time=0.6)
+        self.wait(0.8)
+        self.play(FadeOut(max_card), FadeOut(redx), run_time=0.7)        # clear it out
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # b : not "beat an opponent" — maximize AVERAGE points. Two cards (you + an
+    #     opponent) come on; drop the opponent's. Then a mid-game card with 5 open
+    #     boxes + an "avg points remaining" counter (solver V) ticking DOWN as the
+    #     boxes fill one at a time.
+    # ══════════════════════════════════════════════════════════════════════════
+    @subscene
+    def avg_points_remaining(self):
+        run_time = 0.8
+        # 1. two scorecards side by side (you vs an opponent), then drop the 2nd —
+        # we're NOT optimizing to beat an opponent (that's a later topic).
+        you = get_scorecard(center=CENTER_SC, scores=[None] * 14).scale(0.5)
+        opp = get_scorecard(center=CENTER_SC, scores=[None] * 14).scale(0.5)
+        you.move_to([-3.1, 0, 0])
+        opp.move_to([3.1, 0, 0])
+        self.play(FadeIn(you, shift=RIGHT * 0.8), FadeIn(opp, shift=LEFT * 0.8),
+                  run_time=run_time)
+        self.wait(0.6)
+        self.play(FadeOut(opp, shift=RIGHT * 3.0), run_time=0.6)         # drop opponent
+        self.wait(0.3)
+        self.play(FadeOut(you), run_time=0.4)
+
+        # 2. a mid-game card with 5 OPEN boxes at LEFT_SC + an "avg points remaining"
+        # counter on the right (solver V from dp_data — sourced, not invented).
+        card = get_scorecard(center=LEFT_SC, scores=list(AVG_START))
+        seq = dp.scene04_numbers()["avg_remaining"]
+        lbl_x, num_x, cy, fs = 5.0, 5.15, 0.6, 32
+        ev_lbl, line2_dy = self._remaining_label(lbl_x, cy, fs)
+        num_y = cy + line2_dy
+        ev_num = self._numlabel(self._onedp(seq[0]["remaining"]), num_x, num_y,
+                                color=AVG_GREEN, fs=fs)
+        card.slide_in(self, lead=[FadeIn(ev_lbl), FadeIn(ev_num)], run_time=1.0)
+
+        # 3. fill the 5 open boxes one at a time; the counter ticks DOWN toward 0.
+        prev = seq[0]["remaining"]
+        for step in seq[1:]:
+            card.transition(self, {_sc_box(step["filled"]): step["score"]},
+                            run_time=0.55)
+            self._count([{"mob": ev_num, "fmt": self._onedp, "x": num_x, "y": num_y,
+                          "start": prev, "target": step["remaining"],
+                          "color": AVG_GREEN, "fs": fs}], 0.55)
+            prev = step["remaining"]
+            self.wait(0.25)
+
+        # 4. clear EVERYTHING so beat c opens on a blank frame. Fade ALL top-level
+        # mobjects, not just the card VGroup: transition() adds new cell texts at
+        # scene top level (the scene-05 orphan trap), so a plain FadeOut(card) would
+        # leave the filled numbers behind.
+        self.wait(0.4)
+        self.play(*[FadeOut(m) for m in list(self.mobjects)], run_time=0.7)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # c : card fills to "all but Lg Straight"; a real turn rolls UP to 12345
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def intro_card(self):
@@ -184,7 +282,7 @@ class DynamicProgramming(YahtzeeScene):
             d.move_to(slot_point(3, i))
 
         self.play(FadeIn(empty, shift=RIGHT * 1.5), run_time=run_time)     # 1. empty card
-        self.wait(0.7)
+        self.wait(20)
         self.play(FadeIn(self.board.lines),                               # 2. dice from top
                   *[FadeIn(d, shift=DOWN * 0.7) for d in self.board.dice], run_time=0.8)
         self.wait(0.7)
@@ -200,7 +298,7 @@ class DynamicProgramming(YahtzeeScene):
     _KEEP_IDX = {"1234": [0, 1, 2, 3], "34": [2, 3], "234": [1, 2, 3], "246": [1, 3, 4]}
 
     # ══════════════════════════════════════════════════════════════════════════
-    # b : 12346 at band 2; keep 1234 pushes up to band 3; odds to the right
+    # d : 12346 at band 2; keep 1234 pushes up to band 3; odds to the right
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def second_reroll(self):
@@ -233,8 +331,8 @@ class DynamicProgramming(YahtzeeScene):
                       fmt=None):
         """Move `dice` down to the bottom row (band 0) and, AT THE SAME TIME, the
         avg-points (lbl+num) down to the 3rd row (band 1); then count the number to
-        the whole-turn EV `turn`. Defaults land it BIG and central (beat f); h passes
-        beat i's smaller layout so the value doesn't jump size/position at the hand-off."""
+        the whole-turn EV `turn`. Defaults land it BIG and central (beat h); j passes
+        beat k's smaller layout so the value doesn't jump size/position at the hand-off."""
         fs = self.TURN_FS if fs is None else fs
         lbl_x = self.TURN_CX if lbl_x is None else lbl_x
         num_x = self.TURN_NX if num_x is None else num_x
@@ -278,7 +376,7 @@ class DynamicProgramming(YahtzeeScene):
         self.n_p40_val, self.n_p0_val, self.n_ev_val = d["p40"] * 100, d["p0"] * 100, d["ev"]
 
     # ══════════════════════════════════════════════════════════════════════════
-    # c : cycle the kept set (dice re-rise each time), back to 1234 (best → green)
+    # e : cycle the kept set (dice re-rise each time), back to 1234 (best → green)
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def reroll_cycle(self):
@@ -292,7 +390,7 @@ class DynamicProgramming(YahtzeeScene):
         self.play(self.n_ev.animate.set_color(AVG_GREEN), run_time=0.5)  # number only
 
     # ══════════════════════════════════════════════════════════════════════════
-    # d : a couple more rolls with their best keep + numbers already in place
+    # f : a couple more rolls with their best keep + numbers already in place
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def other_rolls(self):
@@ -323,7 +421,7 @@ class DynamicProgramming(YahtzeeScene):
             self.wait(0.5)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # e : step back to the FIRST reroll — 12446 at band 1, keep 24 (avg only)
+    # g : step back to the FIRST reroll — 12446 at band 1, keep 24 (avg only)
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def first_reroll(self):
@@ -358,7 +456,7 @@ class DynamicProgramming(YahtzeeScene):
         self.play(self.n_ev.animate.set_color(AVG_GREEN), run_time=0.5)  # number only
 
     # ══════════════════════════════════════════════════════════════════════════
-    # f : a few first rolls (EV above), then dice to band 0 → one whole-turn EV
+    # h : a few first rolls (EV above), then dice to band 0 → one whole-turn EV
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def turn_ev(self):
@@ -388,7 +486,7 @@ class DynamicProgramming(YahtzeeScene):
         self.turn_lbl, self.turn_num = self.lbl_ev, self.n_ev
 
     # ══════════════════════════════════════════════════════════════════════════
-    # g : box choice — 11134 with 4-Kind & Lg Straight open; compare "avg after"
+    # i : box choice — 11134 with 4-Kind & Lg Straight open; compare "avg after"
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def box_choice(self):
@@ -445,7 +543,7 @@ class DynamicProgramming(YahtzeeScene):
         self.dice = None
 
     # ══════════════════════════════════════════════════════════════════════════
-    # h : the backward-induction montage — like d/e, repeated GOING DOWN the rows
+    # j : the backward-induction montage — like f/g, repeated GOING DOWN the rows
     #     (rows count from the top). Full-size dice; the optimal keep is SET FORWARD
     #     (rises a band); the EV sits above-right (in the row above the base dice).
     #     Row 2 dice → EV row 1; then row 3 dice → EV row 2; then the whole-turn EV
@@ -457,11 +555,11 @@ class DynamicProgramming(YahtzeeScene):
         self.card.transition(self, {7: None}, run_time=0.6)       # 4-Kind unfilled again
         dice = [get_die(1) for _ in range(5)]                     # same size as always
         montage = self.nums["montage"]                            # solver, 2-open-box state
-        start = self.nums["turn_ev"]                              # continue from beat f's value
+        start = self.nums["turn_ev"]                              # continue from beat h's value
 
         # "Avg points remaining:" is too wide for the right column here, so stack it
         # on 2 lines with the green number on the "remaining:" line. The counter
-        # PICKS UP from beat f's turn value (not 0).
+        # PICKS UP from beat h's turn value (not 0).
         ev_lbl, line2_dy = self._remaining_label(self.ODDS_CX, BAND_YS[3], self.ODDS_FS)
         ev_num = self._numlabel(self._ev(start), self.ODDS_NX, BAND_YS[3] + line2_dy,
                                 color=AVG_GREEN, fs=self.ODDS_FS)
@@ -505,23 +603,23 @@ class DynamicProgramming(YahtzeeScene):
             prev_band = base_band
 
         # dice to the bottom row + the value to the 3rd row, single line — landing
-        # DIRECTLY in beat i's layout (its size/position, one decimal) so nothing
+        # DIRECTLY in beat k's layout (its size/position, one decimal) so nothing
         # jumps size or shifts left at the h→i hand-off.
         self._land_turn_ev(dice, ev_lbl, ev_num, prev[0],
                            self.nums["montage_turn_ev"], run_time=run_time,
                            label="Avg points remaining:", fs=32,
                            lbl_x=slot_x(2) - 0.6, num_x=slot_x(2) + 2.7,
                            anchor_lbl=ORIGIN, anchor_num=ORIGIN, fmt=self._onedp)
-        # leave the dice + value ON SCREEN — the sweep (beat i) continues from them.
+        # leave the dice + value ON SCREEN — the sweep (beat k) continues from them.
         self.h_dice, self.h_ev_lbl, self.h_ev_num = dice, ev_lbl, ev_num
 
     # ══════════════════════════════════════════════════════════════════════════
-    # i : empty the card box-by-box; REAL "avg points remaining" (solver V) → 254.6
+    # k : empty the card box-by-box; REAL "avg points remaining" (solver V) → 254.6
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def backward_sweep(self):
         run_time = 0.8
-        # Continue STRAIGHT from the montage: beat h already landed the value in THIS
+        # Continue STRAIGHT from the montage: beat j already landed the value in THIS
         # layout ("Avg points remaining: 21.2", V ≈ 21.2) with the dice below, on the
         # SAME running-example card (4-Kind + Large Straight open). Just keep emptying.
         by = BAND_YS[1]                          # the EV lives in the 3rd row (top-down)

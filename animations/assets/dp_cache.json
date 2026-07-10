@@ -273,5 +273,37 @@
       "emptied": 9,
       "remaining": 254.5877227783203
     }
+  ],
+  "avg_remaining": [
+    {
+      "filled": null,
+      "score": null,
+      "remaining": 91.7649917602539
+    },
+    {
+      "filled": 6,
+      "score": 22,
+      "remaining": 67.66703796386719
+    },
+    {
+      "filled": 10,
+      "score": 40,
+      "remaining": 46.25422286987305
+    },
+    {
+      "filled": 4,
+      "score": 20,
+      "remaining": 36.89630126953125
+    },
+    {
+      "filled": 5,
+      "score": 24,
+      "remaining": 2.3014321327209473
+    },
+    {
+      "filled": 12,
+      "score": 50,
+      "remaining": 0.0
+    }
   ]
 }

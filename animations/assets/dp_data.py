@@ -58,28 +58,28 @@ def values_to_vec(values):
 
 # ── solver-backed cache generation (only runs when the cache is missing) ──────
 # The named keeps the scene cycles through, as value-tuples.
-_SECOND_REROLL_ROLL = [1, 2, 3, 4, 6]          # beat b/c
+_SECOND_REROLL_ROLL = [1, 2, 3, 4, 6]          # beat d/e
 _SECOND_REROLL_KEEPS = {"1234": (1, 2, 3, 4), "34": (3, 4),
                         "234": (2, 3, 4), "246": (2, 4, 6)}
-_FIRST_REROLL_ROLL = [1, 2, 4, 4, 6]           # beat e
+_FIRST_REROLL_ROLL = [1, 2, 4, 4, 6]           # beat g
 _FIRST_REROLL_KEEPS = {"124": (1, 2, 4), "24": (2, 4), "246": (2, 4, 6)}
 
-# beat d (stage B). First roll is NOT [1,2,4,4,5] (whose EV 6.67 equals beat c's
+# beat f (stage B). First roll is NOT [1,2,4,4,5] (whose EV 6.67 equals beat e's
 # ending 1234 keep) — lead with a different EV so the counter changes on the first
 # new set. Keeps are varied sizes (3 / 4 / 2 dice).
 _OTHER_ROLLS = [[3, 3, 4, 5, 5], [1, 2, 4, 4, 5], [1, 1, 1, 2, 3]]
-# beat f (stage A). Beat e already settled on [1,2,4,4,6] keep 24, so DON'T repeat it
+# beat h (stage A). Beat g already settled on [1,2,4,4,6] keep 24, so DON'T repeat it
 # here (that caused the "24 dips down then back up" bounce); start from the next roll.
 _TURN_EV_ROLLS = [[1, 2, 3, 4, 6], [2, 3, 4, 5, 5]]
 
-# beat h montage: (roll, stage). Stage B rolls (2nd reroll, 1 left) are shown in the
+# beat j montage: (roll, stage). Stage B rolls (2nd reroll, 1 left) are shown in the
 # upper row; stage A rolls (1st reroll, 2 left) in the lower row. Chosen so the
 # rest-of-game EV climbs toward the turn value (21.2) as the montage walks backward.
 _MONTAGE = [([1, 2, 4, 4, 6], "B"), ([2, 3, 5, 5, 6], "B"),
             ([1, 1, 4, 5, 6], "A"), ([3, 3, 3, 4, 5], "A")]
 
-# beat i backward sweep: continues the montage's turn on the SAME running-example
-# card (beats a-h, i.e. the scene's FILL_LIST) — which already has 4-Kind and Large
+# beat k backward sweep: continues the montage's turn on the SAME running-example
+# card (beats c-j, i.e. the scene's FILL_LIST) — which already has 4-Kind and Large
 # Straight open — then empties the remaining boxes one at a time until the card is
 # bare. So it opens at the montage's turn value (V ≈ 21.2) and climbs to 254.6.
 # The 11 boxes filled at the start (solver order; the FILL_LIST values minus the two
@@ -93,6 +93,23 @@ _SWEEP_FILLED = {ONES: 2, TWOS: 6, THREES: 9, FOURS: 12, FIVES: 10, SIXES: 24,
 # the lower-section boxes first, then the top section, so the number only ever rises.
 _SWEEP_ORDER = [YAHTZEE, FULL_HOUSE, THREE_KIND, SIXES, TWOS, ONES, THREES,
                 FOURS, FIVES, CHANCE, SMALL_STRAIGHT]
+
+# beat b intro: a plausible MID-GAME card with 5 open boxes (a MIX of top + bottom,
+# so filling a top box moves the reduced state's upper_total). We fill the 5 open
+# boxes one at a time and watch the solver's "avg points remaining" (state V) tick
+# DOWN toward 0. Every `remaining` is state_value of the reduced state after that
+# fill — SOURCED from the solver, not invented. The per-box `score`s are illustrative
+# example fills (like the example dice elsewhere in the scene); only the top-box
+# scores actually move V (via the upper total), which the solver then reflects.
+# 8 boxes filled at the start (upper = 3+6+9+12 = 30, under 63; Yahtzee still OPEN so
+# NOT yet bonus-eligible). Open: Fives, Sixes, 3-Kind, Large Straight, Yahtzee.
+_AVG_BASE_FILLED = {ONES: 3, TWOS: 6, THREES: 9, FOURS: 12,
+                    FOUR_KIND: 24, FULL_HOUSE: 25, SMALL_STRAIGHT: 30, CHANCE: 19}
+# (box, score) fill steps in order — bottom boxes first, then the two top boxes
+# (crossing the 63 top-bonus), Yahtzee last → terminal state (remaining 0). Order
+# picked so the counter descends monotonically (verified against the solver).
+_AVG_FILL_SEQ = [(THREE_KIND, 22), (LARGE_STRAIGHT, 40),
+                 (FIVES, 20), (SIXES, 24), (YAHTZEE, 50)]
 
 
 def _keep_ev_by_values(df, value_tuple):
@@ -127,7 +144,7 @@ def _compute_scene04():
         state_1box = open_state({"LgStraight"})
         state_2box = open_state({"4Kind", "LgStraight"})
 
-        # beat b/c: roll 12346, second reroll (stage B, 1 left), named keeps.
+        # beat d/e: roll 12346, second reroll (stage B, 1 left), named keeps.
         dfB = se.keep_alternatives(state_1box, _SECOND_REROLL_ROLL, "B")
         second_reroll = {}
         for name, kv in _SECOND_REROLL_KEEPS.items():
@@ -135,12 +152,12 @@ def _compute_scene04():
             p40 = ev / 40.0
             second_reroll[name] = {"p40": p40, "p0": 1.0 - p40, "ev": ev}
 
-        # beat e: roll 12446, first reroll (stage A, 2 left), named keeps (EV only).
+        # beat g: roll 12446, first reroll (stage A, 2 left), named keeps (EV only).
         dfA = se.keep_alternatives(state_1box, _FIRST_REROLL_ROLL, "A")
         first_reroll = {name: {"ev": _keep_ev_by_values(dfA, kv)}
                         for name, kv in _FIRST_REROLL_KEEPS.items()}
 
-        # beat d: other rolls, best stage-B keep set forward + its 40/0/avg.
+        # beat f: other rolls, best stage-B keep set forward + its 40/0/avg.
         other_rolls = []
         for values in _OTHER_ROLLS:
             top = se.keep_alternatives(state_1box, values, "B").iloc[0]
@@ -152,7 +169,7 @@ def _compute_scene04():
                 "p40": p40, "p0": 1.0 - p40, "ev": ev,
             })
 
-        # beat f: first rolls, best stage-A keep set forward + avg; then the turn EV.
+        # beat h: first rolls, best stage-A keep set forward + avg; then the turn EV.
         turn_ev_rolls = []
         for values in _TURN_EV_ROLLS:
             top = se.keep_alternatives(state_1box, values, "A").iloc[0]
@@ -163,7 +180,7 @@ def _compute_scene04():
             })
         turn_ev = se.state_value(state_1box)
 
-        # beat g: box choice on roll 11134 — fill 4-Kind vs Large Straight. Each
+        # beat i: box choice on roll 11134 — fill 4-Kind vs Large Straight. Each
         # "avg after" is 0 (the roll scores 0 in both) + the continuation value of
         # keeping the OTHER box open (rest-of-game).
         ca = se.category_alternatives(state_2box, [1, 1, 1, 3, 4])
@@ -177,7 +194,7 @@ def _compute_scene04():
         box_choice = {"fill_4kind": cat_row("4Kind"),
                       "fill_lgstraight": cat_row("LgStraight")}
 
-        # beat h: montage — per roll, the optimal keep at its stage + rest-of-game EV.
+        # beat j: montage — per roll, the optimal keep at its stage + rest-of-game EV.
         montage = []
         for values, stage in _MONTAGE:
             ir = se.inspect_roll(state_2box, values)
@@ -189,7 +206,7 @@ def _compute_scene04():
             })
         montage_turn_ev = se.state_value(state_2box)
 
-        # beat i: backward sweep — real solver V as the card empties box by box.
+        # beat k: backward sweep — real solver V as the card empties box by box.
         def V_of(filled):
             mask = upper = 0
             elig = False
@@ -210,6 +227,15 @@ def _compute_scene04():
             del filled[cat]
             sweep.append({"emptied": cat, "remaining": V_of(filled)})
 
+        # beat b: avg points remaining as a 5-open MID-GAME card fills box by box.
+        # remaining[0] = V of the 5-open state; each step adds one fill → V drops.
+        avg_filled = dict(_AVG_BASE_FILLED)
+        avg_remaining = [{"filled": None, "score": None, "remaining": V_of(avg_filled)}]
+        for cat, pts in _AVG_FILL_SEQ:
+            avg_filled[cat] = pts
+            avg_remaining.append({"filled": cat, "score": pts,
+                                  "remaining": V_of(avg_filled)})
+
         return {
             "second_reroll": second_reroll,     # keep-name → {p40, p0, ev}
             "first_reroll": first_reroll,       # keep-name → {ev}
@@ -220,6 +246,7 @@ def _compute_scene04():
             "montage": montage,                 # [{values, stage, keep_vec, ev}]
             "montage_turn_ev": montage_turn_ev, # state_value(state_2box) ≈ 21.22
             "sweep": sweep,                     # [{emptied, remaining}] → empty card
+            "avg_remaining": avg_remaining,     # beat b: [{filled, score, remaining}]
         }
     finally:
         os.chdir(prev_cwd)
