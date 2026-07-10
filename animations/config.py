@@ -7,7 +7,7 @@ SCORE_GREEN = "#1A7A1A"
 AVG_GREEN   = "#146014"   # slightly darker green for the scene-04 "avg points" readouts
 SCORE_RED   = "#A60E00"
 CARD_FILL   = "#F7F2E7"   # cream scorecard surface
-CARD_ACCENT = "#BE2716"   # scorecard header + Total bars (red, midway SCORE_RED↔ACCENT_RED)
+CARD_ACCENT = "#B01E43"   # scorecard header + Total bars (cooler crimson — clashes less w/ cyan bg)
 STRIPE_FILL = "#ECE3CE"   # zebra row shading
 GRID_LINE   = "#A89C82"   # light interior grid lines
 
