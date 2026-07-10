@@ -875,10 +875,14 @@ class Scorecard(VGroup):
         else:
             self.animate_zero_score(scene, 8, dice)
 
-    def small_straight(self, scene, dice, *, y=None, score=True):
+    def small_straight(self, scene, dice, *, y=None, score=True, run_time=3.5):
         """Score the small straight, OR (score=False) just PREVIEW it — rearrange
         the run into the ascending staircase and flash the colors, with no box
-        fill / total change (used to say "you've got a small straight here")."""
+        fill / total change (used to say "you've got a small straight here").
+        `run_time` is the whole animation's duration (default 3.5s: ~0.4 gray +
+        0.7 reorder + ~1.4 ascend/flash + 1.0 fly); every step scales
+        proportionally. (A preview omits the fly, so it runs shorter.)"""
+        r = run_time / 3.5                        # 3.5 = normal; scale every step by this
         present = {d.value for d in dice}
         run = next((s for s in ({1, 2, 3, 4}, {2, 3, 4, 5}, {3, 4, 5, 6}) if s <= present), None)
         if run:
@@ -889,40 +893,44 @@ class Scorecard(VGroup):
             # animation itself (set_opacity(0.25), same fade as always). They un-fade
             # automatically during the dice return inside fly_to_box.
             if extra:
-                scene.play(*[d.animate.set_opacity(0.25) for d in extra], run_time=0.4)
+                scene.play(*[d.animate.set_opacity(0.25) for d in extra], run_time=0.4 * r)
             # rearrange ONCE into the run order, then reindex (die in slot 0 becomes
             # die 0, …) so the dice stay where they are — nothing moves back.
-            reorder_dice(scene, new, y=y)
+            reorder_dice(scene, new, y=y, run_time=0.7 * r)
             reindex_dice(dice, new)
             colors = [RED, YELLOW, GREEN, BLUE]
             # hold the flash colour only when scoring (a fly follows); the preview
             # keeps the there-and-back pulse.
-            ascend_and_flash(scene, order, colors, y=y, hold=score)
+            ascend_and_flash(scene, order, colors, y=y, hold=score, run_time=0.9 * r)
             if not score:
                 return                                    # preview only — no box fill
             # colored boxes fly off while the dice settle back into a flat horizontal
             # line AND restore opacity (the unused die un-fades as it returns).
             self.fly_to_box(scene, order, colors, 9, 30,
-                            hide_pips=True, return_dice=dice, return_y=y)
+                            hide_pips=True, return_dice=dice, return_y=y, run_time=1.0 * r)
             for d in order:                               # clear the held flash colour
                 d.set_body_color(d.body_color)
         elif score:
-            self.animate_zero_score(scene, 9, dice)
+            self.animate_zero_score(scene, 9, dice, run_time=1.6 * r)
 
-    def large_straight(self, scene, dice, *, y=None):
+    def large_straight(self, scene, dice, *, y=None, run_time=3.1):
+        """`run_time` is the whole animation's duration (default 3.1s: 0.7 reorder
+        + ~1.4 ascend/flash + 1.0 fly — no gray step, all five dice are in the
+        run); every step scales proportionally."""
+        r = run_time / 3.1                        # 3.1 = normal; scale every step by this
         present = {d.value for d in dice}
         if present in ({1, 2, 3, 4, 5}, {2, 3, 4, 5, 6}):
             order = [next(d for d in dice if d.value == v) for v in sorted(present)]
-            reorder_dice(scene, order, y=y)
+            reorder_dice(scene, order, y=y, run_time=0.7 * r)
             reindex_dice(dice, order)
             colors = [RED, ORANGE, YELLOW, GREEN, BLUE]
-            ascend_and_flash(scene, order, colors, y=y, hold=True)  # hold colour into the fly
+            ascend_and_flash(scene, order, colors, y=y, hold=True, run_time=0.9 * r)  # hold colour into the fly
             self.fly_to_box(scene, order, colors, 10, 40,
-                            hide_pips=True, return_dice=dice, return_y=y)
+                            hide_pips=True, return_dice=dice, return_y=y, run_time=1.0 * r)
             for d in order:                               # clear the held flash colour
                 d.set_body_color(d.body_color)
         else:
-            self.animate_zero_score(scene, 10, dice)
+            self.animate_zero_score(scene, 10, dice, run_time=1.6 * r)
 
     def yahtzee(self, scene, dice, *, y=None):
         """Score the still-open Yahtzee box: five-of-a-kind → 50 with a jump-spin
