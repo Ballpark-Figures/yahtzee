@@ -820,11 +820,14 @@ class Scorecard(VGroup):
             counts[d.value] = counts.get(d.value, 0) + 1
         return counts
 
-    def upper(self, scene, dice, face):
-        """Ones..Sixes (face 1..6): sum of the matching dice, or 0 (X) if none."""
+    def upper(self, scene, dice, face, *, run_time=1.1):
+        """Ones..Sixes (face 1..6): sum of the matching dice, or 0 (X) if none.
+        `run_time` is the bar-count / pip fly-in duration (default 1.1s); a
+        scoring cell is preceded by a fixed 0.6s dice flash, so the whole thing
+        runs ~1.7s. (The zero/scratch path has its own fixed ~1.6s timing.)"""
         row = face - 1
         if any(d.value == face for d in dice):
-            self.animate_top_score(scene, row, dice)
+            self.animate_top_score(scene, row, dice, run_time=run_time)
         else:
             self.animate_zero_score(scene, row, dice)
 
