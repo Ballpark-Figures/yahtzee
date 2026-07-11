@@ -265,42 +265,44 @@ class DynamicProgramming(YahtzeeScene):
             prev = step["remaining"]
             self.wait(1.0)
 
-        # 5. clear EVERYTHING so beat c opens on a blank frame. Fade ALL top-level
-        # mobjects, not just the card VGroup: transition() adds new cell texts at
-        # scene top level (the scene-05 orphan trap), so a plain FadeOut(card) would
-        # leave the filled numbers behind.
+        # 5. hand the "you" card off to beat c, which MORPHS it into the running-
+        # example card (no fade-to-blank). Fade out ONLY the counter + label; the card
+        # stays on screen at LEFT_SC. Its 5 sequence-filled cells are transition()
+        # orphans, but nothing downstream moves/fades the whole card, so they're safe.
         self.wait(9.0)
-        self.play(*[FadeOut(m) for m in list(self.mobjects)], run_time=0.7)
+        self.play(FadeOut(ev_lbl), FadeOut(ev_num), run_time=0.7)
+        self.card = card
 
     # ══════════════════════════════════════════════════════════════════════════
     # c : card fills to "all but Lg Straight"; a real turn rolls UP to 12345
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def intro_card(self):
-        run_time = 1.0
-        # Three separate script beats, in order, with delays between (matching the
-        # script's paragraph breaks): 1. empty scorecard comes on, 2. dice come on
-        # (from the TOP), 3. the card fills out. The fill is a full filled card
-        # FADED IN over the empty one, so the values + bar appear at their FINAL
-        # state — the bar never grows.
-        empty = get_scorecard(center=LEFT_SC, scores=[None] * 14)
-        self.card = get_scorecard(center=LEFT_SC, scores=list(FILL_LIST))
+        # Continue STRAIGHT from beat b: its "you" card is already on screen at LEFT_SC
+        # (self.card). Instead of bringing a fresh empty card in from nothing, MORPH
+        # that card into the running-example card (FILL_LIST — everything filled EXCEPT
+        # Large Straight, which the final roll then scores). Dice still appear from the
+        # TOP and the last roll scores Large Straight, as before.
         self.board = DiceBoard()
         for i, d in enumerate(self.board.dice):
             d.set_value([1, 2, 3, 4, 5][i])
             d.move_to(slot_point(3, i))
 
-        self.play(FadeIn(empty, shift=RIGHT * 1.5), run_time=run_time)     # 1. empty card
-        self.wait(20)
-        self.play(FadeIn(self.board.lines),                               # 2. dice from top
+        # 1. morph b's card → the running example: retarget every box that differs to
+        # its FILL_LIST value. beat_b_final is derived from AVG_START + the dp fill
+        # scores (so it can't desync). Large Straight 40 → open for the final roll.
+        beat_b_final = list(AVG_START)
+        for step in dp.scene04_numbers()["avg_remaining"][1:]:
+            beat_b_final[_sc_box(step["filled"])] = step["score"]
+        changes = {i: FILL_LIST[i] for i in range(13) if FILL_LIST[i] != beat_b_final[i]}
+        self.card.transition(self, changes, run_time=1.1)
+        self.wait(0.5)
+
+        self.play(FadeIn(self.board.lines),                               # 2. dice from the top
                   *[FadeIn(d, shift=DOWN * 0.7) for d in self.board.dice], run_time=0.8)
         self.wait(0.7)
-        self.add(self.card)                                               # 3. fill (no bar grow)
-        self.play(FadeIn(self.card), run_time=1.0)
-        self.remove(empty)
-        self.wait(0.3)
 
-        self.card.large_straight(self, self.board.dice, y=BAND_YS[3])     # score the final dice
+        self.card.large_straight(self, self.board.dice, y=BAND_YS[3])     # 3. score the final dice
         self.dice = self.board.dice
 
     # keep-name → dice indices (dice read 1,2,3,4,6 left→right after the regroup)
