@@ -61,6 +61,16 @@ way.
 - `get_scorecard(scores=None)` → empty card. `scores=[s0..s13]` → filled
   (`0..5` = Ones–Sixes, `6..12` = 3oak/4oak/full house/sm straight/lg straight/
   yahtzee/chance, `13` = yahtzee bonus).
+- **TWO scorecards side-by-side → `get_two_scorecards(scores_l, scores_r,
+  **kwargs)` + `slide_two_in(scene, left, right)`** (both in `scorecard.py`). This
+  is the ONE two-card convention: FULL size at the canonical centres `TWO_L/TWO_R`
+  (±3.95), entering by sliding UP from below together. Do NOT `.scale()` or
+  hand-place two cards (scene 04b did and it read tiny). `**kwargs` pass through to
+  each card (e.g. `fourth_column=True, fourth_width=COL4_W` for the two-player
+  comparison). Reference users: scene 05 `two_cards`, 12 `compare_cards`, 04
+  `avg_points_remaining`. The big right-side number + caption that often sits
+  beside a left-settled card follows scene 05 `perfect_average` (one-line caption
+  ABOVE a big number at NUM_POS/LBL_POS — not the cramped 2-line dice-panel label).
 - The Total footer bar + "Total" label ALWAYS render; the grand-total number
   only with scores.
 - `show_summary=False` removes ONLY the 3rd-column CONTENTS ((63) bar, running

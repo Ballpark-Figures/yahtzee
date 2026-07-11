@@ -1288,3 +1288,35 @@ class Scorecard(VGroup):
 
 def get_scorecard(scores=None, center=CENTER_SC, **kwargs):
     return Scorecard(scores=scores, center=center, **kwargs)
+
+
+# ── two-card layout convention ────────────────────────────────────────────────
+# The canonical "two scorecards side by side" treatment — use it WHENEVER a scene
+# shows two cards (compare two positions, or two players). Both cards at FULL size
+# at these centres, entering by sliding UP from below together in one play. Do NOT
+# hand-scale (.scale(0.5)) or hand-place two cards — call these so the size,
+# position, and entrance stay consistent across the whole video. Reference users:
+# scene 05 two_cards, scene 12 compare_cards, scene 04 avg_points_remaining.
+# ONE position serves plain AND 4th-column cards: ±3.95 is the value proven with
+# the wider 4th-column cards (scene 12); plain cards just gain a hair of centre gap.
+TWO_L = [-3.95, 0, 0]
+TWO_R = [3.95, 0, 0]
+
+
+def get_two_scorecards(scores_l, scores_r, **kwargs):
+    """Build the two side-by-side cards at the canonical TWO_L / TWO_R centres,
+    full size. Returns (left, right). Any extra kwargs (fourth_column=…,
+    fourth_width=…, show_summary=…) pass through to get_scorecard for BOTH cards."""
+    return (get_scorecard(scores=scores_l, center=TWO_L, **kwargs),
+            get_scorecard(scores=scores_r, center=TWO_R, **kwargs))
+
+
+def slide_two_in(scene, left, right, *, run_time=0.9, lead=None):
+    """The standard two-card ENTRANCE: slide both cards UP from below together in
+    ONE play (never a scale/opacity fade — an opacity fade corrupts the (63) bar).
+    `lead` plays extra anims alongside (a single anim or a list)."""
+    anims = [left.slide_in(scene, from_dir=DOWN, play=False),
+             right.slide_in(scene, from_dir=DOWN, play=False)]
+    if lead is not None:
+        anims += list(lead) if isinstance(lead, (list, tuple)) else [lead]
+    scene.play(*anims, run_time=run_time)

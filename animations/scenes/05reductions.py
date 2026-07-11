@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
-from assets.scorecard import get_scorecard
+from assets.scorecard import get_scorecard, get_two_scorecards, slide_two_in
 from assets import reductions_data as rd
 
 
@@ -50,8 +50,8 @@ def _sc_box(solver_cat):
 # ── layout ────────────────────────────────────────────────────────────────────
 CARD_C = CENTER_SC                          # [0, 0, 0]
 CARD_L = LEFT_SC                            # [-4.74, 0, 0]
-TWO_L  = [-3.9, 0, 0]
-TWO_R  = [3.9, 0, 0]
+# TWO_L/TWO_R (the two-card centres) now live in assets.scorecard and are applied
+# by get_two_scorecards — the shared two-card convention.
 NUM_POS = [2.85, -0.15, 0]                  # big number, right of a left-sat card
 LBL_POS = [2.85, 1.2, 0]                    # caption above the number
 NUM_FS  = 46
@@ -100,8 +100,7 @@ class Reductions(YahtzeeScene):
 
     # ══ construction helpers (each owned by a subscene, called at its start) ═══
     def _setup_cards(self):
-        self.card1 = get_scorecard(center=TWO_L, scores=SCORES1)
-        self.card2 = get_scorecard(center=TWO_R, scores=SCORES2)
+        self.card1, self.card2 = get_two_scorecards(SCORES1, SCORES2)
         self.num = None         # the big right-side number (carried between beats)
         self.num_label = None   # its caption
         self.strike = None      # the bottom-total cross-out (built + cleared in g)
@@ -224,9 +223,8 @@ class Reductions(YahtzeeScene):
         hold = 1.0
         c1, c2 = self.card1, self.card2
 
-        # entrance: both cards slide up from below (shared slide_in)
-        self.play(c1.slide_in(self, from_dir=DOWN, play=False),
-                  c2.slide_in(self, from_dir=DOWN, play=False), run_time=0.9)
+        # entrance: both cards slide up from below (shared two-card convention)
+        slide_two_in(self, c1, c2, run_time=0.9)
 
         # all filled boxes on BOTH at once, then Total row both, then top 3rd col both
         highlight(self, [self._box_target(c1, r) for r in FILLED_BOXES]

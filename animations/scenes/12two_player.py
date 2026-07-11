@@ -8,7 +8,7 @@ from config import *
 from bpkfigures.style import ACCENT_GOLD, ACCENT_FILL, ACCENT_RED
 from bpkfigures.card import get_card
 from bpkfigures.highlight import overlay_rect
-from assets.scorecard import get_scorecard
+from assets.scorecard import get_scorecard, get_two_scorecards, slide_two_in
 
 
 # ══ numbers (all SOURCED — see math/scene12_numbers.py) ═══════════════════════
@@ -48,8 +48,8 @@ NUM_POS    = [3.1, 0.2, 0]                # beat a expected-score number
 LBL_POS    = [3.1, 1.4, 0]               # its caption
 NUM_FS     = 48
 LBL_FS     = 34
-TWO_L      = [-3.95, 0, 0]               # two-card centres (beats c, e, f)
-TWO_R      = [3.95, 0, 0]
+# TWO_L/TWO_R (the two-card centres) now come from assets.scorecard via
+# get_two_scorecards — the shared two-card convention.
 COL4_W     = 0.8                         # narrow 4th "bonus" column
 
 # bonus-point tier colours — SAME as scene 07's summary panel
@@ -267,10 +267,8 @@ class TwoPlayer(YahtzeeScene):
     # c) two full cards: +1 bonus point ⇒ 97% they also won
     # ════════════════════════════════════════════════════════════════════════
     def _setup_compare(self):
-        self.cA = get_scorecard(scores=CARD_A, center=TWO_L,
-                                fourth_column=True, fourth_width=COL4_W)
-        self.cB = get_scorecard(scores=CARD_B, center=TWO_R,
-                                fourth_column=True, fourth_width=COL4_W)
+        self.cA, self.cB = get_two_scorecards(CARD_A, CARD_B,
+                                              fourth_column=True, fourth_width=COL4_W)
         self.c4A = self._c4_group(self.cA, CARD_A)
         self.c4B = self._c4_group(self.cB, CARD_B)
 
@@ -283,8 +281,7 @@ class TwoPlayer(YahtzeeScene):
                   FadeOut(self.panel), FadeOut(self.panel_card), run_time=0.6)
         self.card = self.panel = self.panel_card = None
 
-        self.play(self.cA.slide_in(self, from_dir=DOWN, play=False),
-                  self.cB.slide_in(self, from_dir=DOWN, play=False), run_time=0.9)
+        slide_two_in(self, self.cA, self.cB, run_time=0.9)
         self.play(FadeIn(self.c4A), FadeIn(self.c4B), run_time=0.6)
 
         # highlight the WHOLE 4th column, then the WHOLE 3rd column, on both cards
@@ -369,10 +366,8 @@ class TwoPlayer(YahtzeeScene):
         self.remove(fill, border, zero)
 
     def _setup_two(self):
-        self.eL = get_scorecard(scores=CARD_L, center=TWO_L,
-                                fourth_column=True, fourth_width=COL4_W)
-        self.eR = get_scorecard(scores=CARD_R, center=TWO_R,
-                                fourth_column=True, fourth_width=COL4_W)
+        self.eL, self.eR = get_two_scorecards(CARD_L, CARD_R,
+                                              fourth_column=True, fourth_width=COL4_W)
         self.e4L = self._c4_group(self.eL, CARD_L)
         self.e4R = self._c4_group(self.eR, CARD_R)
 
@@ -384,8 +379,7 @@ class TwoPlayer(YahtzeeScene):
         self.play(*[FadeOut(m) for m in clutter], run_time=0.6)
         self.cD = None
 
-        self.play(self.eL.slide_in(self, from_dir=DOWN, play=False),
-                  self.eR.slide_in(self, from_dir=DOWN, play=False), run_time=0.9)
+        slide_two_in(self, self.eL, self.eR, run_time=0.9)
         self.play(FadeIn(self.e4L), FadeIn(self.e4R), run_time=0.5)
 
         # LEFT (ahead): lock in easy points, then it's fine to zero the Yahtzee

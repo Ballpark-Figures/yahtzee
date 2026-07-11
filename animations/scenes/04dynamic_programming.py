@@ -7,7 +7,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
-from assets.scorecard import get_scorecard
+from assets.scorecard import get_scorecard, get_two_scorecards, slide_two_in
 from assets.dice import (DiceBoard, get_die, morph_dice, slot_point, slot_x, BAND_YS,
                          show_keep_anims, regroup_anims)
 from assets import dp_data as dp
@@ -42,12 +42,6 @@ MAX_FILL = [5, 10, 15, 20, 25, 30,          # Ones..Sixes = 105 → +35 bonus
 AVG_START = [3, 6, 9, 12, None, None,       # Ones..Fours filled; Fives/Sixes open
              None, 24, 25, 30, None, None,  # 3K open; 4K/FH/SmS filled; LgS/Yahtzee open
              19, None]                       # Chance filled; no Yahtzee bonus
-
-# beat b two-card centres — the shared full-size two-card convention (scene 05
-# two_cards, scene 12 compare_cards): both cards at FULL size, sliding up from
-# below. The opponent card reuses the running-example FILL_LIST.
-TWO_L = [-3.9, 0, 0]
-TWO_R = [3.9, 0, 0]
 
 # solver category (dp_data) → scorecard box index (they differ only at 11/12).
 _SC_BOX = {11: 12, 12: 11}
@@ -230,24 +224,26 @@ class DynamicProgramming(YahtzeeScene):
     def avg_points_remaining(self):
         seq = dp.scene04_numbers()["avg_remaining"]
         # 1. two FULL-SIZE cards (you + an opponent) slide up from below — the shared
-        # two-card convention (scene 05 two_cards / scene 12 compare_cards): full size
-        # at TWO_L/TWO_R, entering from DOWN. We're NOT optimizing to beat an opponent.
-        card = get_scorecard(center=TWO_L, scores=list(AVG_START))   # "you" (5 open)
-        opp  = get_scorecard(center=TWO_R, scores=list(FILL_LIST))   # an opponent
-        self.play(card.slide_in(self, from_dir=DOWN, play=False),
-                  opp.slide_in(self, from_dir=DOWN, play=False), run_time=0.9)
+        # two-card convention (get_two_scorecards + slide_two_in; see scene 05 / 12).
+        # We're NOT optimizing to beat an opponent. Opponent reuses FILL_LIST.
+        card, opp = get_two_scorecards(list(AVG_START), list(FILL_LIST))  # you (5 open) + opp
+        slide_two_in(self, card, opp, run_time=0.9)
         self.wait(4.0)
         # 2. drop the opponent; our card settles on the LEFT (scene 05's one_card move).
         self.play(FadeOut(opp, shift=RIGHT * 0.6),
                   card.animate.move_to(LEFT_SC), run_time=0.9)
 
-        # 3. an "avg points remaining" counter on the right (solver V from dp_data —
-        # sourced, not invented).
-        lbl_x, num_x, cy, fs = 5.0, 5.15, 0.6, 32
-        ev_lbl, line2_dy = self._remaining_label(lbl_x, cy, fs)
-        num_y = cy + line2_dy
-        ev_num = self._numlabel(self._onedp(seq[0]["remaining"]), num_x, num_y,
-                                color=AVG_GREEN, fs=fs)
+        # 3. the "Avg points remaining:" readout on the right — a ONE-LINE caption
+        # ABOVE a big number: the shared right-of-a-left-card treatment (scene 05
+        # perfect_average, same positions/sizes). Number in AVG_GREEN (scene 04's
+        # avg-points colour), counting DOWN as the boxes fill. (The 2-line
+        # _remaining_label is the cramped variant for beats j/k, where the readout
+        # sits in the narrow column BESIDE the dice — not the case here.)
+        lbl_pos, num_pos, lbl_fs, num_fs = [2.85, 1.2, 0], [2.85, -0.15, 0], 38, 46
+        ev_lbl = crisp_text("Avg points remaining:", font_size=lbl_fs, color=BLACK,
+                            font=FONT, weight="BOLD").move_to(lbl_pos)
+        ev_num = self._numlabel(self._onedp(seq[0]["remaining"]), num_pos[0], num_pos[1],
+                                fs=num_fs, color=AVG_GREEN, anchor=ORIGIN)
         self.play(FadeIn(ev_lbl), FadeIn(ev_num), run_time=0.5)
 
         # 4. fill the 5 open boxes one at a time; the counter ticks DOWN toward 0.
@@ -255,9 +251,9 @@ class DynamicProgramming(YahtzeeScene):
         for step in seq[1:]:
             card.transition(self, {_sc_box(step["filled"]): step["score"]},
                             run_time=0.55)
-            self._count([{"mob": ev_num, "fmt": self._onedp, "x": num_x, "y": num_y,
-                          "start": prev, "target": step["remaining"],
-                          "color": AVG_GREEN, "fs": fs}], 0.55)
+            self._count([{"mob": ev_num, "fmt": self._onedp, "x": num_pos[0],
+                          "y": num_pos[1], "start": prev, "target": step["remaining"],
+                          "color": AVG_GREEN, "anchor": ORIGIN, "fs": num_fs}], 0.55)
             prev = step["remaining"]
             self.wait(1.0)
 
