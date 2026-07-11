@@ -43,6 +43,12 @@ AVG_START = [3, 6, 9, 12, None, None,       # Ones..Fours filled; Fives/Sixes op
              None, 24, 25, 30, None, None,  # 3K open; 4K/FH/SmS filled; LgS/Yahtzee open
              19, None]                       # Chance filled; no Yahtzee bonus
 
+# beat b two-card centres — the shared full-size two-card convention (scene 05
+# two_cards, scene 12 compare_cards): both cards at FULL size, sliding up from
+# below. The opponent card reuses the running-example FILL_LIST.
+TWO_L = [-3.9, 0, 0]
+TWO_R = [3.9, 0, 0]
+
 # solver category (dp_data) → scorecard box index (they differ only at 11/12).
 _SC_BOX = {11: 12, 12: 11}
 
@@ -201,7 +207,7 @@ class DynamicProgramming(YahtzeeScene):
         max_card = get_scorecard(center=CENTER_SC, scores=list(MAX_FILL))
 
         self.play(FadeIn(empty, shift=RIGHT * 1.5), run_time=run_time)   # empty card in
-        self.wait(0.6)
+        self.wait(3.0)
         self.add(max_card)                                              # fill to the max
         self.play(FadeIn(max_card), run_time=1.0)
         self.remove(empty)
@@ -209,7 +215,7 @@ class DynamicProgramming(YahtzeeScene):
 
         redx = Cross(max_card, stroke_color=SCORE_RED, stroke_width=16)  # big red X
         self.play(GrowFromCenter(redx), run_time=0.6)
-        self.wait(0.8)
+        self.wait(1.3)
         self.play(FadeOut(max_card), FadeOut(redx), run_time=0.7)        # clear it out
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -220,32 +226,30 @@ class DynamicProgramming(YahtzeeScene):
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def avg_points_remaining(self):
-        run_time = 0.8
-        # 1. two scorecards side by side (you vs an opponent), then drop the 2nd —
-        # we're NOT optimizing to beat an opponent (that's a later topic).
-        you = get_scorecard(center=CENTER_SC, scores=[None] * 14).scale(0.5)
-        opp = get_scorecard(center=CENTER_SC, scores=[None] * 14).scale(0.5)
-        you.move_to([-3.1, 0, 0])
-        opp.move_to([3.1, 0, 0])
-        self.play(FadeIn(you, shift=RIGHT * 0.8), FadeIn(opp, shift=LEFT * 0.8),
-                  run_time=run_time)
-        self.wait(0.6)
-        self.play(FadeOut(opp, shift=RIGHT * 3.0), run_time=0.6)         # drop opponent
-        self.wait(0.3)
-        self.play(FadeOut(you), run_time=0.4)
-
-        # 2. a mid-game card with 5 OPEN boxes at LEFT_SC + an "avg points remaining"
-        # counter on the right (solver V from dp_data — sourced, not invented).
-        card = get_scorecard(center=LEFT_SC, scores=list(AVG_START))
+        run_time = 0.9
         seq = dp.scene04_numbers()["avg_remaining"]
+        # 1. two FULL-SIZE cards (you + an opponent) slide up from below — the shared
+        # two-card convention (scene 05 two_cards / scene 12 compare_cards): full size
+        # at TWO_L/TWO_R, entering from DOWN. We're NOT optimizing to beat an opponent.
+        card = get_scorecard(center=TWO_L, scores=list(AVG_START))   # "you" (5 open)
+        opp  = get_scorecard(center=TWO_R, scores=list(FILL_LIST))   # an opponent
+        self.play(card.slide_in(self, from_dir=DOWN, play=False),
+                  opp.slide_in(self, from_dir=DOWN, play=False), run_time=run_time)
+        self.wait(0.6)
+        # 2. drop the opponent; our card settles on the LEFT (scene 05's one_card move).
+        self.play(FadeOut(opp, shift=RIGHT * 0.6),
+                  card.animate.move_to(LEFT_SC), run_time=run_time)
+
+        # 3. an "avg points remaining" counter on the right (solver V from dp_data —
+        # sourced, not invented).
         lbl_x, num_x, cy, fs = 5.0, 5.15, 0.6, 32
         ev_lbl, line2_dy = self._remaining_label(lbl_x, cy, fs)
         num_y = cy + line2_dy
         ev_num = self._numlabel(self._onedp(seq[0]["remaining"]), num_x, num_y,
                                 color=AVG_GREEN, fs=fs)
-        card.slide_in(self, lead=[FadeIn(ev_lbl), FadeIn(ev_num)], run_time=1.0)
+        self.play(FadeIn(ev_lbl), FadeIn(ev_num), run_time=0.5)
 
-        # 3. fill the 5 open boxes one at a time; the counter ticks DOWN toward 0.
+        # 4. fill the 5 open boxes one at a time; the counter ticks DOWN toward 0.
         prev = seq[0]["remaining"]
         for step in seq[1:]:
             card.transition(self, {_sc_box(step["filled"]): step["score"]},
@@ -256,7 +260,7 @@ class DynamicProgramming(YahtzeeScene):
             prev = step["remaining"]
             self.wait(0.25)
 
-        # 4. clear EVERYTHING so beat c opens on a blank frame. Fade ALL top-level
+        # 5. clear EVERYTHING so beat c opens on a blank frame. Fade ALL top-level
         # mobjects, not just the card VGroup: transition() adds new cell texts at
         # scene top level (the scene-05 orphan trap), so a plain FadeOut(card) would
         # leave the filled numbers behind.
