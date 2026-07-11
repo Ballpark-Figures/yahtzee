@@ -245,8 +245,8 @@ class DynamicProgramming(YahtzeeScene):
         # ABOVE a big number: the shared right-of-a-left-card treatment (scene 05
         # perfect_average, same positions/sizes). Number in AVG_GREEN (scene 04's
         # avg-points colour), counting DOWN as the boxes fill. (The 2-line
-        # _remaining_label is the cramped variant for beats j/k, where the readout
-        # sits in the narrow column BESIDE the dice — not the case here.)
+        # _remaining_label is the cramped variant for beat j's montage, where the
+        # readout sits in the narrow column BESIDE the dice — not the case here.)
         lbl_pos, num_pos, lbl_fs, num_fs = [2.85, 1.2, 0], [2.85, -0.15, 0], 38, 46
         ev_lbl = crisp_text("Avg points remaining:", font_size=lbl_fs, color=BLACK,
                             font=FONT, weight="BOLD").move_to(lbl_pos)
@@ -270,7 +270,7 @@ class DynamicProgramming(YahtzeeScene):
         # fade, the house style) rather than just cutting it; the card stays on screen
         # at LEFT_SC. Its 5 sequence-filled cells are transition() orphans, but nothing
         # downstream moves/fades the whole card, so they're safe.
-        self.wait(9.0)
+        self.wait(4.0)
         self.play(FadeOut(ev_lbl, shift=UP * 0.5),
                   FadeOut(ev_num, shift=UP * 0.5), run_time=0.7)
         self.card = card
@@ -302,7 +302,7 @@ class DynamicProgramming(YahtzeeScene):
 
         self.play(FadeIn(self.board.lines),                               # 2. dice from the top
                   *[FadeIn(d, shift=DOWN * 0.7) for d in self.board.dice], run_time=0.8)
-        self.wait(0.7)
+        self.wait(4.0)
 
         self.card.large_straight(self, self.board.dice, y=BAND_YS[3])     # 3. score the final dice
         self.dice = self.board.dice
@@ -321,10 +321,11 @@ class DynamicProgramming(YahtzeeScene):
 
         self._regroup(self.dice, 2, run_time=run_time)            # drop to band 2
         morph_dice(self, self.dice, [1, 2, 3, 4, 6], run_time=0.5)
-        self.wait(0.2)
+        self.wait(2.0)
 
         self._build_probs_panel(base_band=2)
         self._show_keep(self.dice, [0, 1, 2, 3], base_band=2, run_time=0.6)  # keep 1234
+        self.wait(2.0)
         self.play(FadeIn(VGroup(self.lbl_p40, self.lbl_p0, self.lbl_ev,
                                 self.n_p40, self.n_p0, self.n_ev)), run_time=0.4)
         self._retarget("1234", run_time=0.9, start=0.0)
@@ -407,7 +408,6 @@ class DynamicProgramming(YahtzeeScene):
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def other_rolls(self):
-        run_time = 0.6
         # the Avg number stays GREEN for these (best-keep) examples (number only)
         # script: "3 other dice configurations with their best dice combos forward"
         # — varied, and NOT all four-dice keeps (4 / 3 / 2 kept respectively).
@@ -415,10 +415,10 @@ class DynamicProgramming(YahtzeeScene):
         for entry in self.nums["other_rolls"]:
             values, keep_vec = entry["values"], entry["keep_vec"]
             ev = entry["ev"]
-            self._regroup(self.dice, 2, run_time=0.5)
-            morph_dice(self, self.dice, values, run_time=0.5)
+            self._regroup(self.dice, 2, run_time=0.3)
+            morph_dice(self, self.dice, values, run_time=0.3)
             self._show_keep(self.dice, self._keep_indices(values, keep_vec),
-                            base_band=2, run_time=run_time)
+                            base_band=2, run_time=0.3)
             p40, p0 = entry["p40"] * 100, entry["p0"] * 100
             (x40, y40), (x0, y0), (xev, yev) = (self._num_pos["p40"],
                                                 self._num_pos["p0"], self._num_pos["ev"])
@@ -429,9 +429,9 @@ class DynamicProgramming(YahtzeeScene):
                  "start": self.n_p0_val, "target": p0},
                 {"mob": self.n_ev,  "fmt": self._ev,  "x": xev, "y": yev, "fs": self.ODDS_FS,
                  "color": AVG_GREEN, "start": self.n_ev_val, "target": ev},
-            ], run_time=0.8)
+            ], run_time=0.3)
             self.n_p40_val, self.n_p0_val, self.n_ev_val = p40, p0, ev
-            self.wait(0.5)
+            self.wait(0.2)
 
     # ══════════════════════════════════════════════════════════════════════════
     # g : step back to the FIRST reroll — 12446 at band 1, keep 24 (avg only)
@@ -465,6 +465,7 @@ class DynamicProgramming(YahtzeeScene):
                           "y": by, "start": prev, "target": ev, "fs": self.ODDS_FS}], 0.8)
             prev = ev
             self.wait(0.3)
+        self.wait(2.0)
         self.n_ev_val = prev
         self.play(self.n_ev.animate.set_color(AVG_GREEN), run_time=0.5)  # number only
 
@@ -473,7 +474,7 @@ class DynamicProgramming(YahtzeeScene):
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def turn_ev(self):
-        run_time = 0.6
+        run_time = 0.4
         # FIRST PART like d: each first roll's best keep is SET FORWARD, with its
         # Avg pts (green number) — reusing the same panel label/number from e.
         by = BAND_YS[2]
@@ -483,7 +484,7 @@ class DynamicProgramming(YahtzeeScene):
         for entry in self.nums["turn_ev_rolls"]:
             values, keep_vec, ev = entry["values"], entry["keep_vec"], entry["ev"]
             self._regroup(self.dice, 1, run_time=0.4)
-            morph_dice(self, self.dice, values, run_time=0.5)
+            morph_dice(self, self.dice, values, run_time=0.4)
             self._show_keep(self.dice, self._keep_indices(values, keep_vec),
                             base_band=1, run_time=run_time)
             self._count([{"mob": self.n_ev, "fmt": self._ev, "x": self.ODDS_NX, "y": by,
@@ -512,7 +513,7 @@ class DynamicProgramming(YahtzeeScene):
 
         morph_dice(self, self.dice, [1, 1, 1, 3, 4], run_time=0.4)
         self._regroup(self.dice, 3, run_time=run_time)            # up to the top row
-        self.wait(0.2)
+        self.wait(4.0)
 
         c4 = self.card.value_cells[7].get_center()                # 4-of-a-Kind
         cls = self.card.value_cells[10].get_center()              # Lg Straight
@@ -541,17 +542,17 @@ class DynamicProgramming(YahtzeeScene):
         numls = self._numlabel(f"{evls:.1f}", labls.get_right()[0] + 0.15, cls[1], fs=24)
 
         self.play(FadeIn(z4), FadeIn(zls), run_time=0.5)          # the 0s appear in the boxes
-        self.wait(0.4)
+        self.wait(3.0)
         # the arrows grow in AT THE SAME TIME as the "Avg points remaining" text
         self.play(GrowArrow(ar4), GrowArrow(arls),
                   FadeIn(lab4), FadeIn(num4), FadeIn(labls), FadeIn(numls), run_time=0.6)
-        self.wait(0.6)
+        self.wait(6.0)
 
         # zero out the LOWER-EV box (keep the higher-value one open) → the 4-Kind
         self.play(FadeOut(VGroup(ar4, arls, z4, zls, lab4, num4, labls, numls)), run_time=0.4)
         zero_row = 7 if ev4 >= evls else 10
         self.card.animate_zero_score(self, zero_row, self.dice)
-        self.wait(0.4)
+        #self.wait(0.5)
         self.play(FadeOut(VGroup(*self.dice)), run_time=0.4)
         self.dice = None
 
@@ -565,7 +566,7 @@ class DynamicProgramming(YahtzeeScene):
     @subscene
     def keep_montage(self):
         run_time = 0.6
-        self.card.transition(self, {7: None}, run_time=0.6)       # 4-Kind unfilled again
+        self.card.transition(self, {7: None}, run_time=0.3)       # 4-Kind unfilled again
         dice = [get_die(1) for _ in range(5)]                     # same size as always
         montage = self.nums["montage"]                            # solver, 2-open-box state
         start = self.nums["turn_ev"]                              # continue from beat h's value
@@ -579,7 +580,7 @@ class DynamicProgramming(YahtzeeScene):
         for s, d in enumerate(dice):                              # reveal in row 2 (band 2)
             d.set_value(montage[0]["values"][s])
             d.move_to(slot_point(2, s))
-        self.play(*[FadeIn(d) for d in dice], FadeIn(ev_lbl), FadeIn(ev_num), run_time=0.5)
+        self.play(*[FadeIn(d) for d in dice], FadeIn(ev_lbl), FadeIn(ev_num), run_time=0.3)
 
         prev = [start]
 
@@ -596,15 +597,15 @@ class DynamicProgramming(YahtzeeScene):
             if move_avg:
                 anims += [ev_lbl.animate.move_to([self.ODDS_CX, BAND_YS[ev_band], 0], aligned_edge=RIGHT),
                           ev_num.animate.move_to([self.ODDS_NX, self._ny(num_y, self.ODDS_FS), 0], aligned_edge=LEFT)]
-            self.play(*anims, run_time=0.4)
-            morph_dice(self, dice, values, run_time=0.4)
+            self.play(*anims, run_time=0.3)
+            morph_dice(self, dice, values, run_time=0.3)
             self._show_keep(dice, self._keep_indices(values, keep_vec),
-                            base_band=base_band, run_time=run_time)          # SET FORWARD
+                            base_band=base_band, run_time=0.3)          # SET FORWARD
             self._count([{"mob": ev_num, "fmt": self._ev, "x": self.ODDS_NX,
                           "y": num_y, "start": prev[0], "target": ev,
-                          "color": AVG_GREEN, "fs": self.ODDS_FS}], 0.5)
+                          "color": AVG_GREEN, "fs": self.ODDS_FS}], 0.3)
             prev[0] = ev
-            self.wait(0.25)
+            #self.wait(0.3)
 
         # walk the montage backward: the two 2nd-reroll rolls (row 2), then the two
         # 1st-reroll rolls (row 3) — dropping a row (and moving the avg down with
@@ -615,11 +616,11 @@ class DynamicProgramming(YahtzeeScene):
             _roll(entry, move_avg=(base_band != prev_band))
             prev_band = base_band
 
-        # dice to the bottom row + the value to the 3rd row, single line — landing
-        # DIRECTLY in beat k's layout (its size/position, one decimal) so nothing
-        # jumps size or shifts left at the h→i hand-off.
+        # dice to the bottom row + the value to the 3rd row, single line (one decimal).
+        # beat k then clears the dice/lines and re-lays this readout into the centred
+        # scene-05 layout, so the exact landing size/position here isn't critical.
         self._land_turn_ev(dice, ev_lbl, ev_num, prev[0],
-                           self.nums["montage_turn_ev"], run_time=run_time,
+                           self.nums["montage_turn_ev"], run_time=0.3,
                            label="Avg points remaining:", fs=32,
                            lbl_x=slot_x(2) - 0.6, num_x=slot_x(2) + 2.7,
                            anchor_lbl=ORIGIN, anchor_num=ORIGIN, fmt=self._onedp)
@@ -631,20 +632,29 @@ class DynamicProgramming(YahtzeeScene):
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def backward_sweep(self):
-        run_time = 0.8
-        # Continue STRAIGHT from the montage: beat j already landed the value in THIS
-        # layout ("Avg points remaining: 21.2", V ≈ 21.2) with the dice below, on the
-        # SAME running-example card (4-Kind + Large Straight open). Just keep emptying.
-        by = BAND_YS[1]                          # the EV lives in the 3rd row (top-down)
-        xn = slot_x(2) + 2.7
+        # Continue from the montage: the value is on screen (V ≈ 21.2) with the dice
+        # below it and the guide lines behind. FIRST clear the dice + guide lines and
+        # re-lay the "avg points remaining" readout the way the OTHER scenes do it — a
+        # one-line caption ABOVE a big number, vertically centred on the right (same
+        # positions/sizes as beat b / scene 05). Then keep emptying the card while the
+        # value climbs to 254.6.
         seq = self.nums["sweep"]                 # seq[0] ≈ 21.2 = the montage turn value
+        num_pos, num_fs = [2.85, -0.15, 0], 46
+        new_lbl = crisp_text("Avg points remaining:", font_size=38, color=BLACK,
+                             font=FONT, weight="BOLD").move_to([2.85, 1.2, 0])
+        new_num = self._numlabel(self._onedp(seq[0]["remaining"]), num_pos[0], num_pos[1],
+                                 fs=num_fs, color=AVG_GREEN, anchor=ORIGIN)
+        self.play(FadeOut(VGroup(*self.h_dice)), FadeOut(self.board.lines),
+                  Transform(self.h_ev_lbl, new_lbl), Transform(self.h_ev_num, new_num),
+                  run_time=0.6)
+        self.h_dice = None
         num = self.h_ev_num                      # count on the carried-over mob
 
         prev = seq[0]["remaining"]
         for step in seq[1:]:
             self.card.transition(self, {_sc_box(step["emptied"]): None}, run_time=0.45)
-            self._count([{"mob": num, "fmt": self._onedp, "x": xn, "y": by,
+            self._count([{"mob": num, "fmt": self._onedp, "x": num_pos[0], "y": num_pos[1],
                           "start": prev, "target": step["remaining"],
-                          "color": AVG_GREEN, "anchor": ORIGIN, "fs": 32}], 0.4)
+                          "color": AVG_GREEN, "anchor": ORIGIN, "fs": num_fs}], 0.4)
             prev = step["remaining"]
             self.wait(0.15)
