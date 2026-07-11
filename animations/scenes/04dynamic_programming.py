@@ -39,9 +39,16 @@ MAX_FILL = [5, 10, 15, 20, 25, 30,          # Ones..Sixes = 105 → +35 bonus
 # Yahtzee), scorecard order. The 8 filled boxes match assets/dp_data._AVG_BASE_
 # FILLED (Chance is solver-11 → scorecard-12). We fill the 5 open boxes one at a
 # time and tick the solver "avg points remaining" (dp.avg_remaining) DOWN to 0.
-AVG_START = [3, 6, 9, 12, None, None,       # Ones..Fours filled; Fives/Sixes open
-             None, 24, 25, 30, None, None,  # 3K open; 4K/FH/SmS filled; LgS/Yahtzee open
+# Top counts are VARIED (not 3-of-each); 4-of-a-Kind already MISSED (0).
+AVG_START = [4, 6, 12, 8, None, None,        # Ones..Fours filled (varied); Fives/Sixes open
+             None, 0, 25, 30, None, None,    # 3K open; 4K MISSED(0)/FH/SmS filled; LgS/Yah open
              19, None]                       # Chance filled; no Yahtzee bonus
+# The OPPONENT card shown beside it (beat b's two-card entrance) — a DIFFERENT
+# player's game at the SAME stage: also 8 filled / 5 open (same box COUNT, so the
+# two cards read as the same point in the game). Dropped before the fill sequence.
+OPP_FILL = [3, 8, None, 16, 15, None,        # Ones/Twos/Fours/Fives filled; Threes/Sixes open
+            20, None, 25, None, 40, None,    # 3K/FH/LgS filled; 4K/SmS/Yah open
+            24, None]                        # Chance filled; no Yahtzee bonus
 
 # solver category (dp_data) → scorecard box index (they differ only at 11/12).
 _SC_BOX = {11: 12, 12: 11}
@@ -225,8 +232,9 @@ class DynamicProgramming(YahtzeeScene):
         seq = dp.scene04_numbers()["avg_remaining"]
         # 1. two FULL-SIZE cards (you + an opponent) slide up from below — the shared
         # two-card convention (get_two_scorecards + slide_two_in; see scene 05 / 12).
-        # We're NOT optimizing to beat an opponent. Opponent reuses FILL_LIST.
-        card, opp = get_two_scorecards(list(AVG_START), list(FILL_LIST))  # you (5 open) + opp
+        # Both are the SAME stage of a game in progress (8 filled / 5 open); we're NOT
+        # optimizing to beat an opponent, so the opponent is dropped next.
+        card, opp = get_two_scorecards(list(AVG_START), list(OPP_FILL))  # you + opponent
         slide_two_in(self, card, opp, run_time=0.9)
         self.wait(4.0)
         # 2. drop the opponent; our card settles on the LEFT (scene 05's one_card move).

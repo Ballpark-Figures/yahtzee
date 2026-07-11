@@ -101,21 +101,23 @@ _SWEEP_ORDER = [YAHTZEE, FULL_HOUSE, THREE_KIND, SIXES, TWOS, ONES, THREES,
 # fill — SOURCED from the solver, not invented. The per-box `score`s are illustrative
 # example fills (like the example dice elsewhere in the scene); only the top-box
 # scores actually move V (via the upper total), which the solver then reflects.
-# 8 boxes filled at the start (upper = 3+6+9+12 = 30, under 63; Yahtzee still OPEN so
-# NOT yet bonus-eligible). Open: Fives, Sixes, 3-Kind, Large Straight, Yahtzee.
-_AVG_BASE_FILLED = {ONES: 3, TWOS: 6, THREES: 9, FOURS: 12,
-                    FOUR_KIND: 24, FULL_HOUSE: 25, SMALL_STRAIGHT: 30, CHANCE: 19}
-# (box, score) fill steps in order — a DECENT (not perfect) finish: we land ONE of
-# the two big successes (the top bonus) but miss the flashier ones. A modest 3-Kind,
-# a MISSED Large Straight (scratched 0), then three-of-each Fives/Sixes that push the
-# top section to exactly 63 → the +35 top bonus, and a MISSED Yahtzee (scratched 0)
-# last → terminal (remaining 0). (Swap: for the LARGE STRAIGHT instead of the bonus,
-# use LARGE_STRAIGHT 40 + lighter Fives/Sixes, e.g. 10/12, so the top stays < 63.)
+# 8 boxes filled at the start (upper = 4+6+12+8 = 30, under 63; Yahtzee still OPEN so
+# NOT yet bonus-eligible; 4-of-a-Kind already MISSED = 0). Top boxes use VARIED counts
+# (NOT three-of-each). Open: Fives, Sixes, 3-Kind, Large Straight, Yahtzee. Keep in
+# sync with the scene's AVG_START (same 8 filled / 5 open, scorecard order).
+_AVG_BASE_FILLED = {ONES: 4, TWOS: 6, THREES: 12, FOURS: 8,
+                    FOUR_KIND: 0, FULL_HOUSE: 25, SMALL_STRAIGHT: 30, CHANCE: 19}
+# (box, score) fill steps in order — a GOOD (not perfect) finish: we MAKE the Large
+# Straight (40) and land the top bonus (Fives 10 + Sixes 24 push the top to 64 —
+# slightly over 63 → +35), having already missed 4-of-a-Kind and missing the Yahtzee
+# (scratched 0) last → terminal (remaining 0). NB the scores are illustrative fills;
+# only the top-box (Fives/Sixes) scores move the solver V (via the upper total).
+# Order picked so the counter descends monotonically (verified against the solver).
 # NB the scores are illustrative fills; only the top-box (Fives/Sixes) scores move
 # the solver V (via the upper total) — the bottom-box scores don't. Order picked so
 # the counter descends monotonically (verified against the solver).
-_AVG_FILL_SEQ = [(THREE_KIND, 15), (LARGE_STRAIGHT, 0),
-                 (FIVES, 15), (SIXES, 18), (YAHTZEE, 0)]
+_AVG_FILL_SEQ = [(THREE_KIND, 15), (LARGE_STRAIGHT, 40),
+                 (FIVES, 10), (SIXES, 24), (YAHTZEE, 0)]
 
 
 def _keep_ev_by_values(df, value_tuple):
