@@ -202,18 +202,20 @@ class DynamicProgramming(YahtzeeScene):
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def perfect_max_card(self):
-        run_time = 1.0
         empty = get_scorecard(center=CENTER_SC, scores=[None] * 14)
         max_card = get_scorecard(center=CENTER_SC, scores=list(MAX_FILL))
 
-        self.play(FadeIn(empty, shift=RIGHT * 1.5), run_time=run_time)   # empty card in
+        self.play(FadeIn(empty, shift=RIGHT * 1.5), run_time=1.0)        # empty card in
         self.wait(3.0)
         self.add(max_card)                                              # fill to the max
         self.play(FadeIn(max_card), run_time=1.0)
         self.remove(empty)
         self.wait(0.8)
 
+        # the card sets z_index=1 on its labels/score texts, so the X (default 0)
+        # would render UNDER them — lift it above everything on the card.
         redx = Cross(max_card, stroke_color=SCORE_RED, stroke_width=16)  # big red X
+        redx.set_z_index(5)
         self.play(GrowFromCenter(redx), run_time=0.6)
         self.wait(1.3)
         self.play(FadeOut(max_card), FadeOut(redx), run_time=0.7)        # clear it out
@@ -226,7 +228,6 @@ class DynamicProgramming(YahtzeeScene):
     # ══════════════════════════════════════════════════════════════════════════
     @subscene
     def avg_points_remaining(self):
-        run_time = 0.9
         seq = dp.scene04_numbers()["avg_remaining"]
         # 1. two FULL-SIZE cards (you + an opponent) slide up from below — the shared
         # two-card convention (scene 05 two_cards / scene 12 compare_cards): full size
@@ -234,11 +235,11 @@ class DynamicProgramming(YahtzeeScene):
         card = get_scorecard(center=TWO_L, scores=list(AVG_START))   # "you" (5 open)
         opp  = get_scorecard(center=TWO_R, scores=list(FILL_LIST))   # an opponent
         self.play(card.slide_in(self, from_dir=DOWN, play=False),
-                  opp.slide_in(self, from_dir=DOWN, play=False), run_time=run_time)
-        self.wait(0.6)
+                  opp.slide_in(self, from_dir=DOWN, play=False), run_time=0.9)
+        self.wait(4.0)
         # 2. drop the opponent; our card settles on the LEFT (scene 05's one_card move).
         self.play(FadeOut(opp, shift=RIGHT * 0.6),
-                  card.animate.move_to(LEFT_SC), run_time=run_time)
+                  card.animate.move_to(LEFT_SC), run_time=0.9)
 
         # 3. an "avg points remaining" counter on the right (solver V from dp_data —
         # sourced, not invented).
@@ -258,13 +259,13 @@ class DynamicProgramming(YahtzeeScene):
                           "start": prev, "target": step["remaining"],
                           "color": AVG_GREEN, "fs": fs}], 0.55)
             prev = step["remaining"]
-            self.wait(0.25)
+            self.wait(1.0)
 
         # 5. clear EVERYTHING so beat c opens on a blank frame. Fade ALL top-level
         # mobjects, not just the card VGroup: transition() adds new cell texts at
         # scene top level (the scene-05 orphan trap), so a plain FadeOut(card) would
         # leave the filled numbers behind.
-        self.wait(0.4)
+        self.wait(9.0)
         self.play(*[FadeOut(m) for m in list(self.mobjects)], run_time=0.7)
 
     # ══════════════════════════════════════════════════════════════════════════
