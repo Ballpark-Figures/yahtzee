@@ -220,45 +220,48 @@ class Reductions(YahtzeeScene):
     @subscene
     def two_cards(self):
         self._setup_cards()
-        hold = 1.0
         c1, c2 = self.card1, self.card2
 
         # entrance: both cards slide up from below (shared two-card convention)
         slide_two_in(self, c1, c2, run_time=0.9)
+        self.wait(2.5)
 
         # all filled boxes on BOTH at once, then Total row both, then top 3rd col both
         highlight(self, [self._box_target(c1, r) for r in FILLED_BOXES]
-                        + [self._box_target(c2, r) for r in FILLED_BOXES], hold=hold)
-        highlight(self, [self._total_target(c1), self._total_target(c2)], hold=hold)
+                        + [self._box_target(c2, r) for r in FILLED_BOXES], hold=1.0)
+        highlight(self, [self._total_target(c1), self._total_target(c2)], hold=1.0)
         highlight(self, [self._summary_target(c1, "top"),
-                         self._summary_target(c2, "top")], hold=hold)
+                         self._summary_target(c2, "top")], hold=1.0)
 
     # b) collapse to the sufficient statistic; card settles on the LEFT (and stays
     #    there for the rest of the scene — the number/caption live on the right).
     @subscene
     def one_card(self):
-        hold = 1.0
         c1 = self.card1
         self.play(FadeOut(self.card2, shift=RIGHT * 0.6),
                   c1.animate.move_to(CARD_L), run_time=0.9)
         self.card2 = None
+        self.wait(5)
 
-        highlight(self, [self._box_target(c1, r) for r in FILLED_BOXES], hold=hold)
-        highlight(self, [self._summary_target(c1, "top")], hold=hold)
-        highlight(self, [self._summary_target(c1, "bot")], hold=hold)
-        highlight(self, [self._fullrow_target(c1, YAHTZEE_ROW)], hold=hold)
+        highlight(self, [self._box_target(c1, r) for r in FILLED_BOXES], hold=0.5)
+        self.wait(0.5)
+        highlight(self, [self._summary_target(c1, "top")], hold=1.5)
+        self.wait(0.5)
+        highlight(self, [self._summary_target(c1, "bot")], hold=0.5)
+        self.wait(0.5)
+        highlight(self, [self._fullrow_target(c1, YAHTZEE_ROW)], hold=2.0)
 
     # c) first reduction: introduce the number (258.5T) on the right, count to A.
     #    The number + caption STAY on screen from here through h.
     @subscene
     def reduce_first(self):
         self._setup_reduce_first()
-        count, label_rt = 2.4, 0.6
+        label_rt = 0.6
         self.play(FadeIn(self._rf_start, shift=UP * 0.2),
                   FadeIn(self._rf_from, shift=UP * 0.2), run_time=0.6)
-        self.wait(0.6)
+        self.wait(0.3)
         self._count_to(self._rf_start, SCENE1_POSITIONS, BLANK_A,
-                       self._rf_from, self._rf_to, count=count, label_rt=label_rt)
+                       self._rf_from, self._rf_to, count=2.0, label_rt=label_rt)
 
     # (the "maximize average points" beat has no animation now — the card stays put
     #  on the left and the number stays on the right — so it gets no subscene.)
@@ -266,9 +269,11 @@ class Reductions(YahtzeeScene):
     # d) yahtzee count -> eligibility bit; crossfade empty/0/50 a few times
     @subscene
     def drop_yahtzee_count(self):
+        self.wait(10.5)
         self._setup_yahtzee_cycle()
         hold, cyc = 1.0, 0.22
-        highlight(self, [self._fullrow_target(self.card1, YAHTZEE_ROW)], hold=hold)
+        highlight(self, [self._fullrow_target(self.card1, YAHTZEE_ROW)], hold=0.5)
+        self.wait(1.5)
         for zero, fifty in self.cyc_pairs:
             self.play(FadeIn(zero), run_time=cyc)
             self.play(FadeOut(zero), FadeIn(fifty), run_time=cyc)   # crossfade 0 -> 50
@@ -278,12 +283,17 @@ class Reductions(YahtzeeScene):
     @subscene
     def cap_top_at_63(self):
         hold = 1.0
-        for changes in EX_TOPS:
-            self.card1.transition(self, changes, run_time=0.8)
-            self.wait(0.35)
+        # the three top-section edits, unrolled so each has its own run_time + wait.
+        self.card1.transition(self, EX_TOPS[0], run_time=0.8)   # top -> 53
+        self.wait(0.35)
+        self.card1.transition(self, EX_TOPS[1], run_time=0.8)   # top -> 63
+        self.wait(0.35)
+        self.card1.transition(self, EX_TOPS[2], run_time=0.8)   # top -> 93
+        self.wait(0.35)
         # …only which boxes are still open matters (the 1's) —
         highlight(self, [self._box_target(self.card1, 0)], hold=hold)
         # — then restore the top section to its earlier state.
+        self.wait(3)
         self.card1.transition(self, RESTORE_TOP, run_time=0.8)
         # transition() adds new-value cell texts at SCENE level (orphaned from the
         # card group). Hard-swap the whole thing for a FRESH clean SCORES1 card
