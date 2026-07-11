@@ -105,11 +105,17 @@ _SWEEP_ORDER = [YAHTZEE, FULL_HOUSE, THREE_KIND, SIXES, TWOS, ONES, THREES,
 # NOT yet bonus-eligible). Open: Fives, Sixes, 3-Kind, Large Straight, Yahtzee.
 _AVG_BASE_FILLED = {ONES: 3, TWOS: 6, THREES: 9, FOURS: 12,
                     FOUR_KIND: 24, FULL_HOUSE: 25, SMALL_STRAIGHT: 30, CHANCE: 19}
-# (box, score) fill steps in order — bottom boxes first, then the two top boxes
-# (crossing the 63 top-bonus), Yahtzee last → terminal state (remaining 0). Order
-# picked so the counter descends monotonically (verified against the solver).
-_AVG_FILL_SEQ = [(THREE_KIND, 22), (LARGE_STRAIGHT, 40),
-                 (FIVES, 20), (SIXES, 24), (YAHTZEE, 50)]
+# (box, score) fill steps in order — a DECENT (not perfect) finish: we land ONE of
+# the two big successes (the top bonus) but miss the flashier ones. A modest 3-Kind,
+# a MISSED Large Straight (scratched 0), then three-of-each Fives/Sixes that push the
+# top section to exactly 63 → the +35 top bonus, and a MISSED Yahtzee (scratched 0)
+# last → terminal (remaining 0). (Swap: for the LARGE STRAIGHT instead of the bonus,
+# use LARGE_STRAIGHT 40 + lighter Fives/Sixes, e.g. 10/12, so the top stays < 63.)
+# NB the scores are illustrative fills; only the top-box (Fives/Sixes) scores move
+# the solver V (via the upper total) — the bottom-box scores don't. Order picked so
+# the counter descends monotonically (verified against the solver).
+_AVG_FILL_SEQ = [(THREE_KIND, 15), (LARGE_STRAIGHT, 0),
+                 (FIVES, 15), (SIXES, 18), (YAHTZEE, 0)]
 
 
 def _keep_ev_by_values(df, value_tuple):
