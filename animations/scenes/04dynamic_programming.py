@@ -266,11 +266,13 @@ class DynamicProgramming(YahtzeeScene):
             self.wait(1.0)
 
         # 5. hand the "you" card off to beat c, which MORPHS it into the running-
-        # example card (no fade-to-blank). Fade out ONLY the counter + label; the card
-        # stays on screen at LEFT_SC. Its 5 sequence-filled cells are transition()
-        # orphans, but nothing downstream moves/fades the whole card, so they're safe.
+        # example card (no fade-to-blank). ANIMATE the counter + label OUT (drift up +
+        # fade, the house style) rather than just cutting it; the card stays on screen
+        # at LEFT_SC. Its 5 sequence-filled cells are transition() orphans, but nothing
+        # downstream moves/fades the whole card, so they're safe.
         self.wait(9.0)
-        self.play(FadeOut(ev_lbl), FadeOut(ev_num), run_time=0.7)
+        self.play(FadeOut(ev_lbl, shift=UP * 0.5),
+                  FadeOut(ev_num, shift=UP * 0.5), run_time=0.7)
         self.card = card
 
     # ══════════════════════════════════════════════════════════════════════════
