@@ -120,14 +120,16 @@ class LineGraph(YahtzeeScene):
         self.card = get_card(CARD_W, CARD_H, center=CARD_C)
         self.card.set_z_index(-1)
         self.play(FadeIn(self.card), run_time=0.6)
-        # title → axes → axis labels, back to back, all with Create (the "draw it in"
-        # animation this video already uses — b/c draw the data lines the same way) —
-        # nicer than a plain fade.
-        self.play(Create(self.plot.title_text), run_time=1.0)
+        # title → axes → axis labels, back to back, each with the treatment the rest
+        # of the video uses for that KIND of thing: TEXT (title, labels) fades in like
+        # all text elsewhere; the AXES are DRAWN with Create, the way this scene draws
+        # its data lines (b/c). So the axes get a nice draw-in without inventing a
+        # text animation the video never uses.
+        self.play(FadeIn(self.plot.title_text), run_time=0.8)
         self.play(Create(VGroup(self.plot.x_axis, self.plot.y_axis,
                                 self.plot.x_ticks, self.plot.y_ticks)), run_time=1.2)
-        self.play(Create(VGroup(self.plot.x_axis_label_text,
-                                self.plot.y_axis_label_text)), run_time=1.0)
+        self.play(FadeIn(VGroup(self.plot.x_axis_label_text,
+                                self.plot.y_axis_label_text)), run_time=0.8)
         # the keep/drop scale on the right
         self.play(FadeIn(self.kd_labels), run_time=0.6)
         self.play(GrowFromCenter(self.kd_arrow), run_time=0.6)
@@ -177,9 +179,9 @@ class LineGraph(YahtzeeScene):
         run_time = 0.8
         hold = 1.5
         self._focus([LG_STRAIGHT], run_time)
-        self.wait(hold)
+        self.wait(5.0)
         self._focus([SM_STRAIGHT], run_time)
-        self.wait(hold)
+        self.wait(3.0)
         self._focus(None, run_time)
 
     # ════════════════════════════════════════════════════════════════════════
