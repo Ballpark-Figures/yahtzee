@@ -60,6 +60,12 @@ class Histogram(YahtzeeScene):
             b.stretch(1e-3, dim=1, about_edge=DOWN)
         self.play(*[Restore(b) for b in bars], *extra, run_time=run_time)
 
+    def _fall_down(self, bars, *extra, run_time=1.0):
+        """Height-only FALL: each bar shrinks back DOWN to the axis (the reverse of
+        _grow_up — same stretch, animated forward). ``extra`` plays alongside."""
+        self.play(*[b.animate.stretch(1e-3, dim=1, about_edge=DOWN) for b in bars],
+                  *extra, run_time=run_time)
+
     def _right_card(self):
         """A card on the right that spans the SAME vertical range as the
         scorecard, leaving a gap of GAP from the scorecard and from the right
@@ -351,9 +357,9 @@ class Histogram(YahtzeeScene):
         # START with the whole 2-3 band (both bump groups covered), then break it
         # down into missing-2, then missing-3.
         self._highlight(sd.overlay_reduced_between(7, 8), "Missing 2-3 bonus pts", HL_COLOR, 1.0)
-        self.wait(2.0)
+        self.wait(1.5)
         self._highlight(sd.overlay_by_reduced(8), "Missing 2 bonus pts", HL_COLOR, 1.0)
-        self.wait(2.0)
+        self.wait(2.5)
         self._highlight(sd.overlay_by_reduced(7), "Missing 3 bonus pts", HL_COLOR, 1.0)
 
     @subscene
@@ -361,7 +367,7 @@ class Histogram(YahtzeeScene):
         # START with the whole 4+ tail (missing 4/5/6+ bumps covered), then break it
         # down: missing-4 here; missing-5 in minus_five, missing-6+ in below_five.
         self._highlight(sd.overlay_reduced_below(7), "Missing 4+ bonus pts", HL_COLOR, 1.0)
-        self.wait(2.0)
+        self.wait(1.0)
         self._highlight(sd.overlay_by_reduced(6), "Missing 4 bonus pts", HL_COLOR, 1.0)
 
     @subscene
@@ -374,5 +380,9 @@ class Histogram(YahtzeeScene):
         run_time = 1.0
         self._highlight(sd.overlay_reduced_below(5), "Missing 6+ bonus pts",
                         HL_COLOR, run_time)
+        self.wait(20.0)
+        # undo the overlay: make its bars FALL back to the axis (reverse of
+        # _grow_up), revealing the base histogram, THEN fade out everything else.
+        self._fall_down(self.cur_overlay, run_time=1.0)
         self.play(FadeOut(self.plot, self.cur_overlay, self.legend), run_time=0.8)
         self.plot = self.cur_overlay = self.legend = None
