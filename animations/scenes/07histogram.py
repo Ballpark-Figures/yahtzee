@@ -78,13 +78,14 @@ class Histogram(YahtzeeScene):
     # ════════════════════════════════════════════════════════════════════════
     @subscene
     def show_plot(self):
-        run_time = 1.5
         self.base = sd.score_distribution()
         self.plot = self._build_plot()
         self.overlay = VGroup()
         self.legend = None
         rest = VGroup(*[m for m in self.plot.submobjects if m is not self.plot.bars])
-        self._grow_up(self.plot.bars, FadeIn(rest), run_time=run_time)
+        self.play(FadeIn(rest), run_time=2.0)
+        self.wait(2.0)
+        self._grow_up(self.plot.bars, run_time=2.0)
 
     @subscene
     def overlay_one(self):
@@ -170,9 +171,9 @@ class Histogram(YahtzeeScene):
         self.plot = self.overlay = self.legend = None
         self.play(FadeIn(self.card, shift=RIGHT * 1.5), run_time=run_time)
         self.wait(0.3)
-        self.card.highlight_rows(self, TOP_ROWS, lag_ratio=0.0, run_time=1.2)
-        self.wait(0.2)
-        self.card.highlight_rows(self, [CHANCE_ROW], run_time=0.8)
+        self.card.highlight_rows(self, TOP_ROWS, lag_ratio=0.0, run_time=0.6)
+        #self.wait(0.2)
+        self.card.highlight_rows(self, [CHANCE_ROW], run_time=0.6)
 
     @subscene
     def giant_bonus(self):
@@ -184,6 +185,7 @@ class Histogram(YahtzeeScene):
                             BONUS2_COLOR)
         self.card_numbers.add(n4)
         self.play(FadeIn(self.panel_card), run_time=run_time)
+        self.wait(2.0)
         self.play(FadeIn(self.h_giant, shift=RIGHT * 0.2), run_time=run_time)
         self.play(FadeIn(self.i_giant[0], shift=RIGHT * 0.2),
                   FadeIn(n4, shift=LEFT * 0.2), run_time=run_time)
@@ -196,6 +198,7 @@ class Histogram(YahtzeeScene):
         top_y = (vc[0].get_center()[1] + vc[5].get_center()[1]) / 2
 
         self.play(FadeIn(self.h_big, shift=RIGHT * 0.2), run_time=run_time)
+        self.wait(1.0)
         big = [
             (self.i_big[0], self._card_num("+2", [c3, top_y, 0], BASE_COLOR)),
             (self.i_big[1], self._card_num("+2", vc[10].get_center(), BASE_COLOR)),
@@ -204,10 +207,12 @@ class Histogram(YahtzeeScene):
         for it, num in big:
             self.card_numbers.add(num)
             self.play(FadeIn(it, shift=RIGHT * 0.2), FadeIn(num, shift=LEFT * 0.2),
-                      run_time=run_time)
-        self.wait(0.2)
+                      run_time=0.7)
+            self.wait(0.3)
+        self.wait(1.0)
 
         self.play(FadeIn(self.h_small, shift=RIGHT * 0.2), run_time=run_time)
+        self.wait(0.5)
         small = [
             (self.i_small[0], self._card_num("+1", vc[6].get_center(), HL_COLOR)),
             (self.i_small[1], self._card_num("+1", vc[7].get_center(), HL_COLOR)),
@@ -217,7 +222,8 @@ class Histogram(YahtzeeScene):
         for it, num in small:
             self.card_numbers.add(num)
             self.play(FadeIn(it, shift=RIGHT * 0.2), FadeIn(num, shift=LEFT * 0.2),
-                      run_time=run_time)
+                      run_time=0.7)
+            self.wait(0.3)
 
     @subscene
     def bonus_table(self):
@@ -233,14 +239,17 @@ class Histogram(YahtzeeScene):
         self.play(FadeOut(self.bonus_panel), FadeIn(self.table, shift=RIGHT * 0.3),
                   run_time=run_time)
         self.bonus_panel = None
-        self.wait(0.4)
-        self._emph([YAHTZEE_ROW], [6])                 # yahtzee box + table row
-        self._emph([9, 10], [4, 5])                    # small & large straight
+        self.wait(4.5)
+        self._emph([YAHTZEE_ROW], [6], run_time=0.3)                 # yahtzee box + table row
+        self.wait(0.3)
+        self._emph([9, 10], [4, 5], run_time=0.3)                    # small & large straight
+
 
     @subscene
     def highlight_kinds(self):
         run_time = 0.9
         self._emph([6, 7], [1, 2])                     # 3- & 4-of-a-kind
+        self.wait(10.0)
 
     def _emph(self, card_rows, table_idxs, hold=1.5, run_time=0.6):
         """Hold a scorecard-box highlight (fill + border) for ``hold`` s while the
@@ -339,14 +348,21 @@ class Histogram(YahtzeeScene):
 
     @subscene
     def minus_two_three(self):
-        run_time = 1.0
-        self._highlight(sd.overlay_by_reduced(8), "Missing 2 bonus pts", HL_COLOR, run_time)
-        self._highlight(sd.overlay_by_reduced(7), "Missing 3 bonus pts", HL_COLOR, run_time)
+        # START with the whole 2-3 band (both bump groups covered), then break it
+        # down into missing-2, then missing-3.
+        self._highlight(sd.overlay_reduced_between(7, 8), "Missing 2-3 bonus pts", HL_COLOR, 1.0)
+        self.wait(2.0)
+        self._highlight(sd.overlay_by_reduced(8), "Missing 2 bonus pts", HL_COLOR, 1.0)
+        self.wait(2.0)
+        self._highlight(sd.overlay_by_reduced(7), "Missing 3 bonus pts", HL_COLOR, 1.0)
 
     @subscene
     def minus_four(self):
-        run_time = 1.0
-        self._highlight(sd.overlay_by_reduced(6), "Missing 4 bonus pts", HL_COLOR, run_time)
+        # START with the whole 4+ tail (missing 4/5/6+ bumps covered), then break it
+        # down: missing-4 here; missing-5 in minus_five, missing-6+ in below_five.
+        self._highlight(sd.overlay_reduced_below(7), "Missing 4+ bonus pts", HL_COLOR, 1.0)
+        self.wait(2.0)
+        self._highlight(sd.overlay_by_reduced(6), "Missing 4 bonus pts", HL_COLOR, 1.0)
 
     @subscene
     def minus_five(self):

@@ -222,6 +222,15 @@ def overlay_reduced_below(k):
     return _dist(rp < k)
 
 
+def overlay_reduced_between(lo, hi):
+    """Games whose reduced-bonus points are in [lo, hi] INCLUSIVE — a combined
+    band (e.g. lo=7, hi=8 = 'missing 2-3': reduced 8 = missing 2, reduced 7 =
+    missing 3, since the max regular total is 10)."""
+    _, yu, flags, _ = _load()
+    rp = _reduced_points(yu, flags)
+    return _dist((rp >= lo) & (rp <= hi))
+
+
 def overlay_all_big_bonuses():
     """Games with all three big bonuses — top bonus, large straight, and a
     yahtzee — but NO extra yahtzee (yu == 1), regardless of small bonuses."""
