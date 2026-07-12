@@ -123,12 +123,12 @@ class LineGraph(YahtzeeScene):
         # title → axes → axis labels, back to back, each a FADE-IN-WHILE-RISING
         # (FadeIn + a small upward shift) — the video's nicer-than-plain fade (scene
         # 04 brings its cards/dice in with FadeIn + a shift the same way).
-        self.play(FadeIn(self.plot.title_text, shift=UP * 0.4), run_time=0.7)
+        self.play(FadeIn(self.plot.title_text, shift=UP * 0.2), run_time=0.7)
         self.play(FadeIn(VGroup(self.plot.x_axis, self.plot.y_axis,
                                 self.plot.x_ticks, self.plot.y_ticks),
-                         shift=UP * 0.4), run_time=0.7)
+                         shift=UP * 0.2), run_time=0.7)
         self.play(FadeIn(VGroup(self.plot.x_axis_label_text,
-                                self.plot.y_axis_label_text), shift=UP * 0.4), run_time=0.7)
+                                self.plot.y_axis_label_text), shift=UP * 0.2), run_time=0.7)
         # the keep/drop scale on the right
         self.play(FadeIn(self.kd_labels), run_time=0.6)
         self.play(GrowFromCenter(self.kd_arrow), run_time=0.6)
