@@ -206,6 +206,7 @@ class LastTurn(YahtzeeScene):
 
         # shared slide-in entrance (from the side)
         self.card.slide_in(self, run_time=1.1)
+        self.wait(2)
 
         # "Highlight boxes one at a time" — a flash walking down every row.
         self.card.highlight_rows(self, list(range(13)), pulse=True,
@@ -243,10 +244,11 @@ class LastTurn(YahtzeeScene):
         # the histogram is the same for every top box, so light up the whole top
         # section (Threes is already held from b; add the other five)
         self._extend_hold([0, 1, 3, 4, 5])
+        self.wait(2.0)
 
         # big + readable on the right (Avg 2.1 is PART of the histogram group)
         self.play(FadeIn(self.hist, shift=UP * 0.3), run_time=1.0)
-        self.wait(0.5)
+        self.wait(4.0)
 
         # park the WHOLE histogram — bars, %, 0-5, "Quantity Rolled" AND Avg 2.1 —
         # centered in the col-4 top block, scaled to fit its width (centered so the
@@ -282,15 +284,16 @@ class LastTurn(YahtzeeScene):
         self.card.transition(self, {R_YAH: None}, run_time=0.6)
         self._hold_row(R_YAH)
         self._reset_board([2, 2, 4, 4, 6], 0.35)
+        self.wait(1.0)
 
         self.play(*self.board.first_roll([2, 2, 4, 4, 6]), run_time=roll_rt)  # 22446
-        self.wait(0.15)
+        self.wait(2.0)
         self.play(*self.board.keep([0, 1]), run_time=keep_rt)                 # keep 22
+        self.wait(0.5)
         self.play(*self.board.roll_rest([3, 3, 3]), run_time=roll_rt)         # 22333
-        self.wait(0.15)
+        self.wait(1.3)
         self.play(*self.board.keep([2, 3, 4]), run_time=keep_rt)              # keep 333
         self.play(*self.board.roll_rest([3, 1]), run_time=roll_rt)            # 33313 (no yahtzee)
-        self.wait(0.3)
         self.card.yahtzee(self, self.board.dice)                             # scores 0
         self.wait(0.3)
 
@@ -308,21 +311,23 @@ class LastTurn(YahtzeeScene):
     # ── f) "we'll get to 3 & 4 of a kind later" — highlight those two rows ────
     @subscene
     def highlight_34kind(self):
-        self.card.highlight_rows(self, [R_3KIND, R_4KIND], run_time=0.4, hold=1.3)
+        self.card.highlight_rows(self, [R_3KIND, R_4KIND], run_time=4.0, hold=1.3)
 
     # ── g) full house: push-forward the groups you'd keep (2pair/3kind/pair/4kind)
     @subscene
     def fh_examples(self):
-        push_rt, morph_rt, hold = 0.4, 0.5, 0.7
+        push_rt, morph_rt, hold = 0.4, 0.5, 0.5
 
         self.card.transition(self, {R_FH: None}, run_time=0.5)
         self._hold_row(R_FH)
         self._show_dice([2, 2, 4, 4, 5], band=2, run_time=0.5)   # two pairs
+        self.wait(2.0)
         self._keep([0, 1, 2, 3], 2, push_rt, hold)                 # keep 2244
         morph_dice(self, self.board.dice, [2, 2, 2, 4, 5], run_time=morph_rt)  # 3 of a kind
-        self._keep([0, 1, 2], 2, push_rt, hold)                    # keep 222
+        self._keep([0, 1, 2], 2, 0.3, hold)                    # keep 222
         morph_dice(self, self.board.dice, [2, 2, 3, 4, 5], run_time=morph_rt)  # single pair
-        self._keep([0, 1], 2, push_rt, hold)                       # keep 22
+        self._keep([0, 1], 2, 0.3, hold)                       # keep 22
+        self.wait(2.0)
         morph_dice(self, self.board.dice, [2, 2, 2, 2, 5], run_time=morph_rt)  # 4 of a kind
         self._keep([0, 1, 2], 2, push_rt, hold)                    # keep 3 of them
 
@@ -350,6 +355,7 @@ class LastTurn(YahtzeeScene):
         self._hold_row(R_LGS)
         self.play(*[FadeOut(d) for d in self.board.dice], run_time=0.4)      # clear the FH dice
         self._setup_lgs_pair()
+        self.wait(1)
         self.play(FadeIn(self.lgs_top, shift=UP * 0.2),
                   FadeIn(self.lgs_bot, shift=DOWN * 0.2), run_time=0.8)
 
@@ -368,18 +374,21 @@ class LastTurn(YahtzeeScene):
         self.play(FadeOut(self.lgs_top), FadeOut(self.lgs_bot), run_time=0.4)
         self.lgs_top = self.lgs_bot = None
         self._show_dice([2, 2, 3, 3, 4], band=2, run_time=0.5)   # 22334
+        self.wait(1.0)
         self._keep([0, 2, 4], 2, 0.4, 0.9)                     # keep one 2, 3, 4
 
     # ── l) 1/6 keeps a spot only if you'd keep >=4 dice (12346 -> keep 1234) ──
     @subscene
     def lgs_1or6(self):
         morph_dice(self, self.board.dice, [1, 2, 3, 4, 6], run_time=0.5)   # 12346
+        self.wait(2.0)
         self._keep([0, 1, 2, 3], 2, 0.4, 0.9)                  # keep the 1 (>=4 dice)
 
     # ── m) otherwise reroll the 1s/6s (12336 -> keep 23) ─────────────────────
     @subscene
     def lgs_reroll16(self):
         morph_dice(self, self.board.dice, [1, 2, 3, 3, 6], run_time=0.5)   # 12336
+        self.wait(1.0)
         self._keep([1, 2], 2, 0.4, 0.9)                        # drop the 1 & 6, keep 23
 
     # ── n) fill the Large Straight row (27%, EV 10.6) ────────────────────────
@@ -417,6 +426,7 @@ class LastTurn(YahtzeeScene):
         self._hold_row(R_SMS)
         self.play(*[FadeOut(d) for d in self.board.dice], run_time=0.4)
         self._setup_sms_triple()
+        self.wait(2)
         self.play(FadeIn(self.sms_rows), FadeIn(self.sms_grey), run_time=0.8)
 
     # ── p) always need a 3 and a 4 ───────────────────────────────────────────
@@ -438,6 +448,7 @@ class LastTurn(YahtzeeScene):
     @subscene
     def sms_keep(self):
         morph_dice(self, self.board.dice, [2, 2, 3, 3, 6], run_time=0.5)   # 22336
+        self.wait(1.5)
         self._keep([0, 2], 2, 0.4, 0.9)                        # keep 2, 3
 
     # ── s) keep a 1 (1&2 no 5) / a 6 (5&6 no 2): 12236->123, 13356->356 ──────
@@ -517,7 +528,9 @@ class LastTurn(YahtzeeScene):
     @subscene
     def chance_col(self):
         self._setup_chance_col()
-        self.play(FadeIn(self.ch_title), FadeIn(self.ch_dice), FadeIn(self.ch_avg), run_time=0.8)
+        self.play(FadeIn(self.ch_title), FadeIn(self.ch_dice), run_time=0.8)
+        self.wait(2.0)
+        self.play(FadeIn(self.ch_avg), run_time=0.8)
 
     # ── w) keep 4/5/6 -> themselves; reroll 1/2/3 -> its own 3.5 ─────────────
     @subscene
@@ -528,6 +541,7 @@ class LastTurn(YahtzeeScene):
         self.play(*[GrowArrow(a) for a, _, _ in rerolls],      # reroll first
                   *[FadeIn(n) for _, n, _ in rerolls], *[FadeIn(l) for _, _, l in rerolls],
                   run_time=0.8)
+        self.wait(0.5)
         self.play(*[GrowArrow(a) for a, _, _ in keeps],        # then keep
                   *[FadeIn(dup) for _, dup, _ in keeps], *[FadeIn(l) for _, _, l in keeps],
                   run_time=0.8)
@@ -551,6 +565,7 @@ class LastTurn(YahtzeeScene):
         self.ch_1st = VGroup(*[m for tr in keeps for m in tr],
                              *[m for tr in rerolls for m in tr])
         a1, n1, l1 = rerolls[-1]                    # bottom die = the 1
+        self.wait(5.0)
         self.play(GrowArrow(a1), FadeIn(n1), FadeIn(l1), run_time=0.5)
         self._ch_1st_rest = (keeps, rerolls[:-1])
 
@@ -561,6 +576,7 @@ class LastTurn(YahtzeeScene):
         self.play(*[GrowArrow(a) for a, _, _ in rest],      # reroll first
                   *[FadeIn(n) for _, n, _ in rest], *[FadeIn(l) for _, _, l in rest],
                   run_time=0.8)
+        self.wait(2.0)
         self.play(*[GrowArrow(a) for a, _, _ in keeps],     # then keep
                   *[FadeIn(dup) for _, dup, _ in keeps], *[FadeIn(l) for _, _, l in keeps],
                   run_time=0.8)
@@ -571,6 +587,7 @@ class LastTurn(YahtzeeScene):
         self.ch_result = crisp_text("Avg 4.67", font_size=28, color=BLACK, font=FONT,
                                     weight="BOLD").move_to([self.ch_x2, self.ch_avg.get_center()[1], 0])
         self.play(FadeIn(self.ch_result, shift=UP * 0.15), run_time=0.6)
+        self.wait(1.0)
         pt, et = self._table_row(R_CHANCE, "–", "23.3")   # prob = dash, EV = 23.3
         self.play(FadeIn(pt, shift=UP * 0.15), FadeIn(et, shift=UP * 0.15), run_time=0.8)
         self._release_row()
@@ -584,13 +601,14 @@ class LastTurn(YahtzeeScene):
                   FadeOut(self.ch_1st), FadeOut(self.ch_result), run_time=0.4)
         self.ch_dice = self.ch_title = self.ch_avg = self.ch_1st = self.ch_result = None
         self.card.transition(self, {R_CHANCE: 22, R_4KIND: None}, run_time=0.5)
-        self.card.highlight_rows(self, [R_3KIND, R_4KIND], run_time=0.4, hold=1.3)
-        self._hold_row(R_4KIND)
+        self.card.highlight_rows(self, [R_3KIND, R_4KIND], run_time=15.0, hold=1.3)
+        self._hold_row(R_4KIND, run_time=5.0)
 
     # ── zc) last roll: keep whatever you have most of (11156 -> 111) ──────────
     @subscene
     def fourk_11156(self):
         self._show_dice([1, 1, 1, 5, 6], band=2, run_time=0.5)   # LAST roll -> band 2
+        self.wait(5.0)
         self._keep([0, 1, 2], 2, 0.4, 0.9)                     # keep 111
 
     # ── zd) already have 4oak -> reroll the last die if <=3 (44442 -> 4444) ──
@@ -603,7 +621,16 @@ class LastTurn(YahtzeeScene):
     @subscene
     def fourk_33334(self):
         self._show_dice([3, 3, 3, 3, 4], band=1, run_time=0.5)   # FIRST reroll -> band 1 (lower)
+        self.wait(2.0)
         self._keep([0, 1, 2, 3], 1, 0.4, 0.9)                  # keep 3333, reroll the 4
+        # footnote in the BOTTOM dice row (band 0): reroll the odd die only if < 5.
+        # "less than" is BOLD (via t2w); built small + scaled so the long caption
+        # stays ONE line (crisp_text wraps a long string at font_size >= 24).
+        note = crisp_text("*Reroll if last die is less than 5", font_size=20,
+                          color=BLACK, font=FONT, t2w={"less than": "BOLD"}).scale(1.2)
+        note.move_to([self._gutter_x(), self.board._slot_point(0, 0)[1], 0])
+        self.play(FadeIn(note), run_time=0.5)
+        self.fk_note = note
 
     # ── the two "success bars" for 11166: keep the 1s vs keep the 6s ─────────
     def _fk_bar(self, dval, w, txt, y, color):
