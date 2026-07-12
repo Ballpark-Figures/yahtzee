@@ -68,12 +68,6 @@ class LineGraph(YahtzeeScene):
             line_stroke=BASE_SW, show_dots=False,
         )
 
-        # the static "frame" = everything except the data lines
-        self.frame = VGroup(*[m for m in (
-            self.plot.x_axis, self.plot.y_axis, self.plot.x_ticks,
-            self.plot.y_ticks, self.plot.x_axis_label_text,
-            self.plot.y_axis_label_text, self.plot.title_text) if m is not None])
-
         # colour end-labels, parked just right of each line's round-13 endpoint
         self.end_labels = VGroup()
         for i, ln in enumerate(self.line_info):
@@ -117,19 +111,25 @@ class LineGraph(YahtzeeScene):
         self.play(*anims, run_time=run_time)
 
     # ════════════════════════════════════════════════════════════════════════
-    # a : axes + title + keep/drop scale, no data yet
+    # a : title → axes → axis labels (back to back), then the keep/drop scale; no data
     # ════════════════════════════════════════════════════════════════════════
     @subscene
     def axes_in(self):
-        run_time = 1.2
         self._setup_plot()
         self._setup_keep_drop()
         self.card = get_card(CARD_W, CARD_H, center=CARD_C)
         self.card.set_z_index(-1)
-        self.play(FadeIn(self.card), run_time=run_time * 0.6)
-        self.play(FadeIn(self.frame),
-                  GrowFromCenter(self.kd_arrow), FadeIn(self.kd_labels),
-                  run_time=run_time)
+        self.play(FadeIn(self.card), run_time=0.6)
+        # title → axes → axis labels, back to back, with reveals nicer than a plain
+        # fade: Write draws the text on; Create draws the axes in (as b/c do the lines).
+        self.play(Write(self.plot.title_text), run_time=1.0)
+        self.play(Create(VGroup(self.plot.x_axis, self.plot.y_axis,
+                                self.plot.x_ticks, self.plot.y_ticks)), run_time=1.2)
+        self.play(Write(VGroup(self.plot.x_axis_label_text,
+                               self.plot.y_axis_label_text)), run_time=1.0)
+        # the keep/drop scale on the right
+        self.play(FadeIn(self.kd_labels), run_time=0.6)
+        self.play(GrowFromCenter(self.kd_arrow), run_time=0.6)
 
     # ════════════════════════════════════════════════════════════════════════
     # b : the small-straight line (the worked example)
@@ -139,6 +139,7 @@ class LineGraph(YahtzeeScene):
         run_time = 2.0
         self.play(Create(self.plot.lines[SM_STRAIGHT]),
                   FadeIn(self.end_labels[SM_STRAIGHT]), run_time=run_time)
+        self.wait(15.0)
 
     # ════════════════════════════════════════════════════════════════════════
     # c : fill in the rest of the lines
@@ -152,6 +153,7 @@ class LineGraph(YahtzeeScene):
             *[FadeIn(self.end_labels[i]) for i in rest],
             run_time=run_time, lag_ratio=0.08,
         )
+        self.wait(15.0)
 
     # ════════════════════════════════════════════════════════════════════════
     # d : lowest line = safest to zero — 4-of-a-kind, then yahtzee
