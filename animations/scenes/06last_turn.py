@@ -630,7 +630,8 @@ class LastTurn(YahtzeeScene):
                           color=BLACK, font=FONT, t2w={"less than": "BOLD"}).scale(1.2)
         note.move_to([self._gutter_x(), self.board._slot_point(0, 0)[1], 0])
         self.play(FadeIn(note), run_time=0.5)
-        self.fk_note = note
+        self.wait(3.0)
+        self.play(FadeOut(note), run_time=0.5)
 
     # ── the two "success bars" for 11166: keep the 1s vs keep the 6s ─────────
     def _fk_bar(self, dval, w, txt, y, color):
@@ -652,6 +653,7 @@ class LastTurn(YahtzeeScene):
         g1, self.fk_bar1, self.fk_lbl1 = self._fk_bar(1, 0.52 * 4.0, "52%", 1.575, SCORE_GREEN)
         g6, self.fk_bar6, self.fk_lbl6 = self._fk_bar(6, 0.23 * 4.0, "23%", 0.675, SCORE_GREEN)
         self.fk_bars = VGroup(g1, g6)
+        self.wait(2.0)
         self.play(FadeIn(g1), FadeIn(g6), run_time=0.8)
 
     # ── zg) bars now = POINTS-IF-SUCCEED (full width), with the SUCCESS % filled,
@@ -686,13 +688,14 @@ class LastTurn(YahtzeeScene):
         cases = [([1, 1, 1, 4, 4], [3, 4]), ([1, 1, 1, 5, 5], [3, 4]),   # keep 44 / 55
                  ([2, 2, 3, 5, 6], [4]),    ([1, 1, 2, 3, 6], [4]),      # keep the 6
                  ([1, 1, 2, 3, 5], [4]),    ([1, 1, 2, 3, 4], [4])]      # keep the 5 / 4
-        # FIRST reroll -> band 1; each case enters already pushed forward and
-        # morphs to the next (no push-and-back)
-        self._show_dice(cases[0][0], band=1, run_time=0.5)
-        self._keep(cases[0][1], 1, push_rt, hold)
+        # FIRST reroll -> band 1; the dice are already there flat (11166 from zf), so
+        # MORPH straight into the first case (no fade-out/fade-in), then each case
+        # morphs to the next (no push-and-back).
+        morph_dice(self, self.board.dice, cases[0][0], run_time=0.3)
+        self._keep(cases[0][1], 1, push_rt, 0.3)
         for vals, keep in cases[1:]:
-            morph_dice(self, self.board.dice, vals, run_time=0.5)
-            self._keep(keep, 1, push_rt, hold)
+            morph_dice(self, self.board.dice, vals, run_time=0.3)
+            self._keep(keep, 1, push_rt, 0.3)
 
     # ── zi) fill the 4-of-a-kind row (28%, EV 5.6) ───────────────────────────
     @subscene
