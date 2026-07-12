@@ -380,9 +380,13 @@ class Histogram(YahtzeeScene):
         run_time = 1.0
         self._highlight(sd.overlay_reduced_below(5), "Missing 6+ bonus pts",
                         HL_COLOR, run_time)
-        self.wait(20.0)
-        # undo the overlay: make its bars FALL back to the axis (reverse of
-        # _grow_up), revealing the base histogram, THEN fade out everything else.
-        self._fall_down(self.cur_overlay, run_time=1.0)
-        self.play(FadeOut(self.plot, self.cur_overlay, self.legend), run_time=0.8)
+        self.wait(3.0)
+        # undo the overlay: its bars FALL back to the axis (reverse of _grow_up) while
+        # the matching legend row (self.legend[1] = "Missing 6+…") fades out WITH them;
+        # the base histogram + its "All games" row (legend[0]) stay. THEN fade the rest
+        # (fade only legend[0] here — legend[1] is already gone, so re-fading the whole
+        # legend would flash it back).
+        self._fall_down(self.cur_overlay, FadeOut(self.legend[1]), run_time=1.0)
+        self.wait(22.0)
+        self.play(FadeOut(self.plot, self.cur_overlay, self.legend[0]), run_time=0.8)
         self.plot = self.cur_overlay = self.legend = None
