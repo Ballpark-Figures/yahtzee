@@ -199,20 +199,29 @@ class TwoPlayer(YahtzeeScene):
                   FadeIn(ev_live), run_time=1.0)
         self.wait(0.4)
 
-        # each example is INDEPENDENT (same 12 from the start): the box fill, the
-        # card's bar/total, and the expected-score counter all move in ONE play.
-        prev = None
-        for row, ev in EV_STEPS:
-            changes = {row: 12} if prev is None else {prev: None, row: 12}
-            self._card_and(self.card, changes,
-                           [self.ev_tr.animate.set_value(ev)], run_time=1.1)
-            self.wait(0.7)
-            prev = row
+        # Each example is INDEPENDENT (same 12 from the start) and pairs with its
+        # OWN line of voiceover, so the steps are UNROLLED (not a loop) — each keeps
+        # a run_time + wait you can tune on its own to match what's being said. The
+        # box fill, the card's bar/total, and the counter all move in ONE play per
+        # example. Numbers stay SOURCED from EV_STEPS (see the header block).
+        (r_good, ev_good), (r_bad, ev_bad), (r_worst, ev_worst) = EV_STEPS
+        # a1) four 3's → Threes = 12 (a GOOD turn: 254.6 → 257.4)
+        self._card_and(self.card, {r_good: 12},
+                       [self.ev_tr.animate.set_value(ev_good)], run_time=1.1)
+        self.wait(0.7)
+        # a2) four of a kind → 4-of-a-Kind = 12 (pretty bad: → 247.5)
+        self._card_and(self.card, {r_good: None, r_bad: 12},
+                       [self.ev_tr.animate.set_value(ev_bad)], run_time=1.1)
+        self.wait(0.7)
+        # a3) two 6's → Sixes = 12 (really bad: → 232.2)
+        self._card_and(self.card, {r_bad: None, r_worst: 12},
+                       [self.ev_tr.animate.set_value(ev_worst)], run_time=1.1)
+        self.wait(0.7)
 
         self.remove(ev_live)
         self.ev_num = self._ev_number()
         self.add(self.ev_num)
-        self._last_box = prev
+        self._last_box = r_worst
 
     # ════════════════════════════════════════════════════════════════════════
     # b) the simplified 4/2/1 bonus-point system
