@@ -109,18 +109,19 @@ class FirstTurn(YahtzeeScene):
     def scroll_top(self):
         # c) fade in the rest, scroll through Sixes24 -> Threes12 one at a time
         self.play(self.wheel.fade_in(), run_time=0.8)
-        indices = [self._idx(SIXES, 24), self._idx(FIVES, 20),
-                    self._idx(LARGE_STRAIGHT, 40), self._idx(FOURS, 16),
-                    self._idx(THREES, 12)]
-        waits = [0.0, 1.0, 0.0, 0.0, 0.0]
-        run_times = [1.0, 0.5, 0.5, 0.5, 0.5]
-        for i in range(len(indices)):
-            idx = indices[i]
+        steps = [                                        # (idx, wait-before, scroll rt)
+            (self._idx(SIXES, 24),          0.0, 1.0),
+            (self._idx(FIVES, 20),          1.0, 0.5),
+            (self._idx(LARGE_STRAIGHT, 40), 0.0, 0.5),
+            (self._idx(FOURS, 16),          0.0, 0.5),
+            (self._idx(THREES, 12),         0.0, 0.5),
+        ]
+        for idx, wait, rt in steps:
             o = self.data[idx]
-            if waits[i] > 0:
-                self.wait(waits[i])
+            if wait > 0:
+                self.wait(wait)
             self._fill_during(o["sc_row"], o["points"],
-                              self.wheel.scroll_to(idx), run_times[i], hold=0.4)
+                              self.wheel.scroll_to(idx), rt, hold=0.4)
 
     @subscene
     def three_of_number(self):
