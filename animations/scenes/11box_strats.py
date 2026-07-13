@@ -125,26 +125,32 @@ class BoxStrats(YahtzeeScene):
     @subscene
     def chance(self):
         self._swap_card(CARD_B, run_time=0.6, hold=[R_CHANCE])   # highlight rises WITH swap
+        self.wait(0.5)
         self.play(*self._enter_dice([2, 2, 3, 4, 5], band=3), run_time=0.4)
 
-        self.card.upper(self, self.board.dice, 2)              # twos = 4 (full fly-in)
-        self.wait(0.3)
+        self.wait(3.6)
+        self.card.upper(self, self.board.dice, 2, run_time=1.0)              # twos = 4 (full fly-in)
         self.card.transition(self, {R_TWOS: None}, run_time=0.6)   # …then remove it
-        self.card.large_straight(self, self.board.dice)        # 22345 → scratch
-        self.wait(0.3)
+        self.card.large_straight(self, self.board.dice, run_time=1.8)        # 22345 → scratch
+        #self.wait(0.3)
         self.card.transition(self, {R_LARGE: None}, run_time=0.6)  # …then remove it
-        self.card.chance(self, self.board.dice)                # chance = 16 (stays)
-
+        self.card.chance(self, self.board.dice, run_time=0.8)                # chance = 16 (stays)
+        self.wait(2.0)
         self._end_beat(0.3, 0.3)                               # dice out, then drop highlight LAST
 
     # ── c) Yahtzee — don't chase it without a fallback (11123 → keep 123) ───────
     @subscene
     def yahtzee(self):
         self._swap_card(CARD_C, run_time=0.6, hold=[R_YAHT])   # Yahtzee lit WITH swap, whole beat
+        self.wait(3.0)
         self.play(*self._first_roll_entrance([1, 1, 1, 2, 3]), run_time=0.4)
+        self.wait(0.5)
         self.play(*self.board.first_roll([1, 1, 1, 2, 3]), run_time=0.7)
+        self.wait(0.5)
         self.card.highlight_rows(self, [R_ONES], color=SCORE_RED, hold=1.0)  # don't dump 1s
+        self.wait(0.5)
         self.play(*self.board.show_keep([0, 3, 4], base_band=1), run_time=0.7)  # keep 1-2-3
+        self.wait(0.5)
         self._end_beat(0.3, 0.3)
 
     # ── d) Straights — 82% small straight on some first roll (montage of 5) ─────
@@ -163,8 +169,9 @@ class BoxStrats(YahtzeeScene):
             self.wait(0.6)
         morph_dice(self, self.board.dice, [4, 2, 1, 3, 1], run_time=0.4)   # #5 = small straight
         self.wait(0.3)
-        # rearrange + flash colors, NO scoring
-        self.card.small_straight(self, self.board.dice, y=BAND_YS[1], score=False)
+        # rearrange + flash colors, SCORE it, then remove the score right after
+        self.card.small_straight(self, self.board.dice, y=BAND_YS[1], score=True)
+        self.card.transition(self, {R_SMALL: None}, run_time=0.6)   # …then remove it
         self._end_beat(0.4, 0.3)                               # remove dice, THEN drop small
 
     # ── e) Large straight — go for it when you have a fallback (NO rerolls) ─────
