@@ -119,19 +119,19 @@ class LineGraph(YahtzeeScene):
         self._setup_keep_drop()
         self.card = get_card(CARD_W, CARD_H, center=CARD_C)
         self.card.set_z_index(-1)
-        self.play(FadeIn(self.card), run_time=0.6)
+        self.play(FadeIn(self.card), run_time=1.0)
         # title → axes → axis labels, back to back, each a FADE-IN-WHILE-RISING
         # (FadeIn + a small upward shift) — the video's nicer-than-plain fade (scene
         # 04 brings its cards/dice in with FadeIn + a shift the same way).
-        self.play(FadeIn(self.plot.title_text, shift=UP * 0.2), run_time=0.7)
+        self.play(FadeIn(self.plot.title_text, shift=UP * 0.2), run_time=1.0)
         self.play(FadeIn(VGroup(self.plot.x_axis, self.plot.y_axis,
                                 self.plot.x_ticks, self.plot.y_ticks),
-                         shift=UP * 0.2), run_time=0.7)
-        self.play(FadeIn(VGroup(self.plot.x_axis_label_text,
-                                self.plot.y_axis_label_text), shift=UP * 0.2), run_time=0.7)
+                         shift=UP * 0.2), run_time=1.0)
+        self.play(FadeIn(VGroup(self.plot.x_axis_label_text), shift=UP * 0.2), run_time=1.0)
+        self.play(FadeIn(VGroup(self.plot.y_axis_label_text), shift=UP * 0.2), run_time=1.0)
         # the keep/drop scale on the right
-        self.play(FadeIn(self.kd_labels), run_time=0.6)
-        self.play(GrowFromCenter(self.kd_arrow), run_time=0.6)
+        self.play(FadeIn(self.kd_labels), run_time=1.0)
+        self.play(GrowFromCenter(self.kd_arrow), run_time=1.0)
 
     # ════════════════════════════════════════════════════════════════════════
     # b : the small-straight line (the worked example)
@@ -195,6 +195,10 @@ class LineGraph(YahtzeeScene):
         self.wait(4.0)
         self._focus([SM_STRAIGHT, THREE_KIND, LG_STRAIGHT], run_time)
         self.wait(hold)
-        # scene 08 is followed by a talking head (THG), so it ends with the full
-        # chart on screen — restore every line/label to full opacity
-        self._focus(None, run_time)
+        self._focus(None, run_time)          # restore the full, complete chart
+        self.wait(hold)
+        # scene 08 → ANIMATED scene 09 → THG (09 sits between; scene 08 is NOT
+        # followed by a talking head). Scene 09 EXPECTS a blank screen ("a animates
+        # the card in"), so scene 08 must end with NOTHING on screen — fade it all out
+        # (chart + end labels + keep/drop scale + card) so 08→09 doesn't hard-cut.
+        self.play(*[FadeOut(m) for m in self.mobjects], run_time=1.0)
