@@ -30,12 +30,6 @@ CARD_G4 = [ 4,  8, None, 12, 15, 18, None, None, 25, 30, 40, 50, 22, None]    # 
 EMPTY   = [None] * 14
 
 
-def _out_fast(t):
-    """Rate func that completes a fade-out by ~40% of the play — so a card's OLD
-    values/bar clear quickly and are gone well before the new ones fade in."""
-    return min(1.0, t * 2.5)
-
-
 class BoxStrats(YahtzeeScene):
     def setup_scene(self):
         # Opens on the SAME empty card scene 10 ended on (LEFT_SC), present at
@@ -47,50 +41,36 @@ class BoxStrats(YahtzeeScene):
 
     # ── helpers ────────────────────────────────────────────────────────────────
     def _swap_card(self, scores, run_time, *, hold=None, keep_dice=False, lead=None):
-        """Fade the card's contents to a new pre-filled state without ghosting OR
-        lingering. The old card's FRAME (grid / panel / row labels / Total bar)
-        stays fully solid while the new card fades in over it, so the structure
-        never dips ("crossfading into itself"). Its DYNAMIC content — values, the
-        (63) bar fill + number, the totals, and (for a fresh highlight) the old
-        regular label under the new bold one — is faded OUT as the new fades in, so
-        nothing lingers at full opacity (no doubled bar number, no bold+regular
-        overlap). A carried hold stays solid; a fresh hold fades in.
-
-        `lead` is extra anims played TOGETHER with the swap (same `run_time`) — e.g.
-        a dice regroup+morph so the dice transition WHILE the card does."""
-        old = self.card
-        carry = hold is not None and set(hold) == set(old.held_rows())
-        new = get_scorecard(center=LEFT_SC, scores=list(scores))
-        new.COUNTER_LAG = 0.0
-        self.add(new)                                  # ON TOP of the still-solid old FRAME
-        anims = [FadeIn(new),                                          # new content fades in…
-                 FadeOut(old.score_texts, rate_func=_out_fast),        # …old values/bar#/totals
-                 FadeOut(old.bar_fill, rate_func=_out_fast)]           #    clear FAST (gone by ~40%)
-        if not keep_dice:                              # keep_dice: carry them into the next beat
-            anims += [FadeOut(d) for d in self.board.dice if d in self.mobjects]
-        if carry:
-            new.hold_rows_instant(self, hold)
-        else:
-            for f, b in old.held_pieces():
-                anims += [FadeOut(f), FadeOut(b)]
-            for r in (hold or []):
-                anims.append(FadeOut(old.labels[r], rate_func=_out_fast))  # clear old regular label fast
-            old._held = None
-            if hold is not None:
-                anims += new.hold_rows_anims(hold)
+        """Change the card to a new pre-filled `scores` state IN PLACE (SAME card
+        mobject) — no crossfade, so the frame never dips and nothing ghosts. Diffs
+        the current cells against `scores` and routes the changes through
+        `card.transition`, folding the highlight change + the dice into that ONE
+        play via transition's `extra`:
+          • `hold` = the rows highlighted AFTER the change — rows dropped from the
+            current hold are released, newly-held rows raised, both in the play.
+          • dice: faded out WITH the change, unless `keep_dice` (carry them on) or a
+            `lead` is given (e.g. a dice regroup+morph to co-play with the change).
+        (Was: build a fresh card and crossfade it over the old one — that reintroduced
+        the very ghosting `transition` exists to avoid. See scene 06 for the in-place
+        refill-one/open-next idiom this now matches.)"""
+        card = self.card
+        # cell diff → the minimal changes to reach `scores` (rows 0..12; no scene-11
+        # state touches the yahtzee bonus at index 13)
+        changes = {row: scores[row] for row in range(13)
+                   if card.value_nums.get(row) != scores[row]}
+        # hold diff → release rows no longer held, raise newly-held rows (folded in)
+        target_hold = set(hold or [])
+        cur_hold = set(card.held_rows())
+        rel_anims, rel_mobs = card.release_rows_anims(sorted(cur_hold - target_hold))
+        extra = rel_anims + card.hold_rows_anims(sorted(target_hold - cur_hold))
+        # dice: a caller `lead` (e.g. a transform) wins; else fade them unless kept
         if lead:
-            anims += list(lead)                        # e.g. a dice transform, WITH the swap
-        self.play(*anims, run_time=run_time)
-        keep = {new, self.board.lines}                 # drop the old card (now hidden) + orphans
-        if keep_dice:
-            keep.update(self.board.dice)               # …but carry the dice through the swap
-        for f, b in new.held_pieces():
-            keep.add(f); keep.add(b)
-        for m in list(self.mobjects):
-            if m not in keep:
-                self.remove(m)
-        old._held = None
-        self.card = new
+            extra += list(lead)
+        elif not keep_dice:
+            extra += [FadeOut(d) for d in self.board.dice if d in self.mobjects]
+        card.transition(self, changes, run_time=run_time, extra=extra)
+        for m in rel_mobs:
+            self.remove(m)
 
     def _enter_dice(self, values, band):
         """Place the dice at `band` with `values` (opacity restored) and return the
@@ -225,15 +205,17 @@ class BoxStrats(YahtzeeScene):
         # swap. Rather than fade the dice out + re-enter, carry the SAME dice over —
         # and transition them (slide back into a flat line + morph to the new roll,
         # in one move) DURING the card swap by riding it as the swap's `lead`.
-        self.wait(2.0)
+        self.wait(1.0)
         dice_xf, commit_dice = self._carry_dice_anims([2, 3, 4, 6, 6], band=1)
         self._swap_card(CARD_EB, run_time=0.6, hold=[R_LARGE], keep_dice=True,
                         lead=dice_xf)
         commit_dice()
         self.card.extend_hold(self, [R_CHANCE], run_time=0.35) # chance lit through the push
         self.play(*self.board.show_keep([0, 1, 2, 3], base_band=1), run_time=0.7)
+        self.wait(2.0)
         self._fade_dice(0.3)
         self.card.release_rows(self, [R_CHANCE], run_time=0.3)  # chance out FIRST
+        self.wait(3.0)
         self.card.release_rows(self, [R_LARGE], run_time=0.3)   # then large straight
 
     # ── f) Full house — comes on its own (three sequences, top-row scored) ──────
@@ -243,25 +225,25 @@ class BoxStrats(YahtzeeScene):
 
         # seq 1 (third roll): 3 threes saved at band 2 → push up, roll the rest → top
         self.play(*self._enter_dice([3, 3, 3, 1, 6], band=2), run_time=0.4)
-        self.play(*self.board.keep([0, 1, 2]), run_time=0.5)
-        self.play(*self.board.roll_rest([4, 5]), run_time=0.7)               # → 33345
-        self.card.upper(self, self.board.dice, 3)              # Threes = 9
+        self.play(*self.board.keep([0, 1, 2]), run_time=0.4)
+        self.play(*self.board.roll_rest([4, 5]), run_time=0.4)               # → 33345
+        #self.card.upper(self, self.board.dice, 3)              # Threes = 9
 
         # seq 2 (2s): BOTH rerolls — first roll 3 twos at band 1, reroll to band 2
         # (22214), reroll again to band 3 (22224), fill from the top
-        self._fade_dice(0.3)
-        self.play(*self._enter_dice([2, 2, 2, 5, 6], band=1), run_time=0.4)
-        self.play(*self.board.keep([0, 1, 2]), run_time=0.5)
-        self.play(*self.board.roll_rest([1, 4]), run_time=0.7)               # → 22214 (band 2)
-        self.play(*self.board.keep([0, 1, 2]), run_time=0.5)
-        self.play(*self.board.roll_rest([2, 4]), run_time=0.7)               # → 22224 (band 3)
-        self.card.upper(self, self.board.dice, 2)              # Twos = 8
+        self._fade_dice(0.2)
+        self.play(*self._enter_dice([2, 2, 2, 5, 6], band=1), run_time=0.2)
+        self.play(*self.board.keep([0, 1, 2]), run_time=0.4)
+        self.play(*self.board.roll_rest([1, 4]), run_time=0.4)               # → 22214 (band 2)
+        self.play(*self.board.keep([0, 1, 2]), run_time=0.4)
+        self.play(*self.board.roll_rest([2, 4]), run_time=0.4)               # → 22224 (band 3)
+        #self.card.upper(self, self.board.dice, 2)              # Twos = 8
 
         # seq 3 (third roll): 3 ones saved at band 2 → roll 5,5 → 11155 full house
-        self._fade_dice(0.3)
-        self.play(*self._enter_dice([1, 1, 1, 3, 6], band=2), run_time=0.4)
-        self.play(*self.board.keep([0, 1, 2]), run_time=0.5)
-        self.play(*self.board.roll_rest([5, 5]), run_time=0.7)               # → 11155
+        self._fade_dice(0.2)
+        self.play(*self._enter_dice([1, 1, 1, 3, 6], band=2), run_time=0.2)
+        self.play(*self.board.keep([0, 1, 2]), run_time=0.4)
+        self.play(*self.board.roll_rest([5, 5]), run_time=0.4)               # → 11155
         self.card.full_house(self, self.board.dice)            # Full House = 25 (fell in)
 
         self._end_beat(0.3, 0.3)
@@ -272,10 +254,12 @@ class BoxStrats(YahtzeeScene):
         self._swap_card(EMPTY, run_time=0.6, hold=[R_3KIND, R_4KIND])  # both lit WITH swap
 
         # 55551 in the TOP row → four 5's belong in Fives, not 4-of-a-kind
+        self.wait(1.5)
         self.play(*self._enter_dice([5, 5, 5, 5, 1], band=3), run_time=0.4)
         self.card.upper(self, self.board.dice, 5)              # Fives = 20
 
         # 55552 SECOND roll (band 2) → keep 5's, roll a 3 → 55553 → 4-kind (top)
+        self.wait(2.0)
         self._fade_dice(0.3)
         self.play(*self._enter_dice([5, 5, 5, 5, 2], band=2), run_time=0.4)
         self.play(*self.board.keep([0, 1, 2, 3]), run_time=0.5)
@@ -283,6 +267,7 @@ class BoxStrats(YahtzeeScene):
         self.card.four_of_a_kind(self, self.board.dice)        # 4-of-a-Kind = 23
 
         # new card (3k/4k stay lit across the swap); 44442 in top row → fill 4-kind
+        self.wait(2.5)
         self._fade_dice(0.3)
         self._swap_card(CARD_G3, run_time=0.6, hold=[R_3KIND, R_4KIND])
         self.play(*self._enter_dice([4, 4, 4, 4, 2], band=3), run_time=0.4)
