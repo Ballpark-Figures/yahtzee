@@ -369,6 +369,7 @@ class TopBonus(YahtzeeScene):
         self._setup_card()
         self.card.slide_in(self, run_time=0.9)          # shared slide-in, from the left
         # a region spanning rows 0-5 across ALL three columns (incl. the (63) column)
+        self.wait(1.0)
         hdr = self.card.header_rect
         left, right = hdr.get_left()[0], hdr.get_right()[0]
         ytop = self.card.value_cells[0].get_top()[1]
@@ -381,11 +382,13 @@ class TopBonus(YahtzeeScene):
     def three_of_each(self):
         self._setup_grid()
         self.play(FadeIn(self.right_card), run_time=0.6)
+        self.wait(1)
         self.play(LaggedStart(*[FadeIn(d, scale=0.6) for d in self.grid_dice],
                               lag_ratio=0.04), run_time=0.7)
 
         # every column sum (3v, under each column) AND every row sum (21, right of
         # each row) form at the SAME time, each from copies of the relevant pips.
+        self.wait(1)
         self.sum_texts = VGroup()
         anims, copies = [], VGroup()
         for c in range(6):
@@ -443,7 +446,11 @@ class TopBonus(YahtzeeScene):
 
         # reconfigure: 4 fours & 4 twos, then 2 of each, then 4 fours/2 threes
         self._fill_step([3, 8, 9, 16, 15, 18], fade_rt, sum_val=69, mirror=True)
+        self.wait(0.5)
         self._fill_step([3, 4, 9,  8, 15, 18], fade_rt, sum_val=51, mirror=True)
+        self.wait(1.0)
+        self._fill_step([3, 6, 9, 12, 15, 18], fade_rt, sum_val=63, mirror=True)
+        self.wait(1.0)
         self._fill_step([3, 6, 6, 16, 15, 18], fade_rt, sum_val=64, mirror=True)  # Threes 9->6
 
         # slide the surplus 4 from the fours into the threes: lift out, across, fall
@@ -456,13 +463,22 @@ class TopBonus(YahtzeeScene):
 
         # lift back to the top, then fill the 3rd three AND empty the ones together;
         # the 3's box rises to 9 (a real three), the 1's box empties (down).
+        self.wait(0.5)
         self.play(blk.animate.move_to([cx3, top_ride_y, 0]), run_time=0.6)
         self._fill_step([0, 6, 9, 12, 15, 18], fade_rt, box_changes={2: 9, 0: None})
         self.play(blk.animate.move_to([cx1, top_ride_y, 0]), run_time=across_rt)  # slide along top
         self.play(blk.animate.move_to([cx1, drop_y, 0]), run_time=drop_rt)        # rests in empty ones; box unchanged
 
+        # turn the whole setup BACK into the standard "3 of each = 63": drop the
+        # surplus block and refill every container completely (green) again, with the
+        # corner sum returning to 63. (blk is gone now, so it is NOT in the cleanup
+        # fade below — re-fading a removed mob flashes it back.)
+        self.play(FadeOut(blk), run_time=drop_rt)
+        self._fill_step([3, 6, 9, 12, 15, 18], fade_rt, sum_val=63, mirror=True)
+
+        self.wait(5.0)
         live_sum.clear_updaters()
-        self.play(FadeOut(blk), *[FadeOut(g) for g in self.cfills.values()],
+        self.play(*[FadeOut(g) for g in self.cfills.values()],
                   FadeOut(self.bg_outline), FadeOut(self.bg_lines),
                   FadeOut(self.bg_labels), FadeOut(live_sum), run_time=clear_rt)
         self._clear_top_boxes(clear_rt)                  # reset the scorecard tally
