@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from config import *
 from assets.scorecard import get_scorecard
-from assets.dice import DiceBoard, morph_dice, regroup_anims, slot_point, BAND_YS
+from assets.dice import DiceBoard, morph_dice, slot_point, BAND_YS
 
 # ── Scorecard ROW indices (card order — yahtzee=11 sits ABOVE chance=12) ───────
 R_ONES, R_TWOS, R_THREES, R_FOURS, R_FIVES, R_SIXES = range(6)
@@ -46,7 +46,7 @@ class BoxStrats(YahtzeeScene):
         self.board = DiceBoard()
 
     # ── helpers ────────────────────────────────────────────────────────────────
-    def _swap_card(self, scores, run_time, *, hold=None, keep_dice=False):
+    def _swap_card(self, scores, run_time, *, hold=None, keep_dice=False, lead=None):
         """Fade the card's contents to a new pre-filled state without ghosting OR
         lingering. The old card's FRAME (grid / panel / row labels / Total bar)
         stays fully solid while the new card fades in over it, so the structure
@@ -54,7 +54,10 @@ class BoxStrats(YahtzeeScene):
         (63) bar fill + number, the totals, and (for a fresh highlight) the old
         regular label under the new bold one — is faded OUT as the new fades in, so
         nothing lingers at full opacity (no doubled bar number, no bold+regular
-        overlap). A carried hold stays solid; a fresh hold fades in."""
+        overlap). A carried hold stays solid; a fresh hold fades in.
+
+        `lead` is extra anims played TOGETHER with the swap (same `run_time`) — e.g.
+        a dice regroup+morph so the dice transition WHILE the card does."""
         old = self.card
         carry = hold is not None and set(hold) == set(old.held_rows())
         new = get_scorecard(center=LEFT_SC, scores=list(scores))
@@ -75,6 +78,8 @@ class BoxStrats(YahtzeeScene):
             old._held = None
             if hold is not None:
                 anims += new.hold_rows_anims(hold)
+        if lead:
+            anims += list(lead)                        # e.g. a dice transform, WITH the swap
         self.play(*anims, run_time=run_time)
         keep = {new, self.board.lines}                 # drop the old card (now hidden) + orphans
         if keep_dice:
@@ -99,16 +104,32 @@ class BoxStrats(YahtzeeScene):
         self.board.kept = []
         return [FadeIn(d) for d in self.board.dice]
 
-    def _carry_dice(self, values, band, run_time):
+    def _carry_dice_anims(self, values, band):
         """TRANSFORM the current dice into a new flat `band` roll instead of fading
-        them out and re-entering: regroup them into a flat line (undo any keep
-        split), then MORPH their faces to `values`. Resets the board to that flat
-        band. The regroup→morph pair is how scenes 04/06 carry dice between rolls."""
-        self.play(*regroup_anims(self.board.dice, band), run_time=run_time)
-        self.board.band = band
-        self.board.slot = {i: i for i in range(5)}
-        self.board.kept = []
-        morph_dice(self, self.board.dice, values, run_time=run_time)
+        them out and re-entering: each die slides into its flat `band` slot AND
+        morphs its face to `values` in ONE Transform (regroup + morph together).
+        Returns (anims, commit): play `anims` (optionally WITH something else, e.g.
+        the card swap), then call commit() to re-sync die values/positions + the
+        board to that flat band. Carrying dice between rolls is the scene-04/06
+        idiom; doing it as one move+morph lets it ride the card swap."""
+        anims = []
+        for i, d in enumerate(self.board.dice):
+            tgt = d.copy()
+            tgt.set_value(values[i])
+            tgt.set_opacity(1.0)
+            tgt.move_to(slot_point(band, i))
+            anims.append(Transform(d, tgt))
+
+        def commit():
+            for i, d in enumerate(self.board.dice):        # re-sync (visual no-op)
+                d.set_value(values[i])
+                d.set_opacity(1.0)
+                d.move_to(slot_point(band, i))
+            self.board.band = band
+            self.board.slot = {i: i for i in range(5)}
+            self.board.kept = []
+
+        return anims, commit
 
     def _first_roll_entrance(self, values):
         """Set the dice at band 0 (opacity restored) for a rolling first roll;
@@ -201,11 +222,14 @@ class BoxStrats(YahtzeeScene):
         self.card.release_rows(self, [R_SMALL], run_time=0.3)  # drop small (dice STAY — carried to ex 2)
 
         # example 2: change card (sm filled, chance open). Large re-raised WITH the
-        # swap. Rather than fade the dice out + re-enter, carry the SAME dice over:
-        # swap KEEPING them, then regroup+morph them into the new roll.
+        # swap. Rather than fade the dice out + re-enter, carry the SAME dice over —
+        # and transition them (slide back into a flat line + morph to the new roll,
+        # in one move) DURING the card swap by riding it as the swap's `lead`.
         self.wait(2.0)
-        self._swap_card(CARD_EB, run_time=0.6, hold=[R_LARGE], keep_dice=True)
-        self._carry_dice([2, 3, 4, 6, 6], band=1, run_time=0.5)
+        dice_xf, commit_dice = self._carry_dice_anims([2, 3, 4, 6, 6], band=1)
+        self._swap_card(CARD_EB, run_time=0.6, hold=[R_LARGE], keep_dice=True,
+                        lead=dice_xf)
+        commit_dice()
         self.card.extend_hold(self, [R_CHANCE], run_time=0.35) # chance lit through the push
         self.play(*self.board.show_keep([0, 1, 2, 3], base_band=1), run_time=0.7)
         self._fade_dice(0.3)
