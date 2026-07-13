@@ -66,6 +66,30 @@ class FirstTurn(YahtzeeScene):
         during the flash)."""
         self.card.flash_rows(self, [(sc_row, value)], hold=hold)
 
+    def _fill_during(self, sc_row, value, scroll_anim, scroll_rt, *, hold=0.5,
+                     fade=0.25, color=ACCENT_GOLD):
+        """Like _fill, but the box highlight + its number flash in DURING
+        `scroll_anim` (the wheel scroll), not after: the flash-in fires QUICKLY near
+        the END of the scroll (a late rate_func, in the SAME play), then holds, then
+        fades out. Hand-rolled because Scorecard.flash_rows self-plays its flash-in,
+        so it can't share the scroll's play. (`value` must be a number.)"""
+        card = self.card
+        fill, border, bold = card._row_highlight(sc_row, color, 0.45)
+        num = crisp_text(str(value), font_size=card.font_size, color=BLACK,
+                         font=FONT).move_to(card.value_cells[sc_row].get_center())
+        card.labels[sc_row].save_state()
+        # ramp the flash-in over only the LAST `fade` seconds of the scroll
+        start = max(0.0, 1.0 - fade / scroll_rt)
+        late = lambda t: smooth(0.0 if t <= start else (t - start) / (1.0 - start))
+        self.play(scroll_anim,
+                  FadeIn(fill, rate_func=late), FadeIn(border, rate_func=late),
+                  Transform(card.labels[sc_row], bold, rate_func=late),
+                  FadeIn(num, rate_func=late), run_time=scroll_rt)
+        self.wait(hold)
+        self.play(FadeOut(fill), FadeOut(border), Restore(card.labels[sc_row]),
+                  FadeOut(num), run_time=fade)
+        self.remove(fill, border, num)
+
     # ── beats ────────────────────────────────────────────────────────────────
     @subscene
     def bring_card(self):
@@ -85,28 +109,34 @@ class FirstTurn(YahtzeeScene):
     def scroll_top(self):
         # c) fade in the rest, scroll through Sixes24 -> Threes12 one at a time
         self.play(self.wheel.fade_in(), run_time=0.8)
-        for idx in [self._idx(SIXES, 24), self._idx(FIVES, 20),
+        indices = [self._idx(SIXES, 24), self._idx(FIVES, 20),
                     self._idx(LARGE_STRAIGHT, 40), self._idx(FOURS, 16),
-                    self._idx(THREES, 12)]:
+                    self._idx(THREES, 12)]
+        waits = [0.0, 1.0, 0.0, 0.0, 0.0]
+        run_times = [1.0, 0.5, 0.5, 0.5, 0.5]
+        for i in range(len(indices)):
+            idx = indices[i]
             o = self.data[idx]
-            self.play(self.wheel.scroll_to(idx), run_time=1.0)
-            self._fill(o["sc_row"], o["points"], hold=0.4)
+            if waits[i] > 0:
+                self.wait(waits[i])
+            self._fill_during(o["sc_row"], o["points"],
+                              self.wheel.scroll_to(idx), run_times[i], hold=0.4)
 
     @subscene
     def three_of_number(self):
         # d) scroll to the first "3 of a number" (three 6s -> Sixes 18)
         idx = self._idx(SIXES, 18)
         o = self.data[idx]
-        self.play(self.wheel.scroll_to(idx), run_time=1.2)
-        self._fill(o["sc_row"], o["points"], hold=0.5)
+        self._fill_during(o["sc_row"], o["points"],
+                          self.wheel.scroll_to(idx), 1.2, hold=0.5)
 
     @subscene
     def full_house(self):
         # e) scroll to full house
         idx = self._idx(FULL_HOUSE, 25)
         o = self.data[idx]
-        self.play(self.wheel.scroll_to(idx), run_time=1.2)
-        self._fill(o["sc_row"], o["points"], hold=0.5)
+        self._fill_during(o["sc_row"], o["points"],
+                          self.wheel.scroll_to(idx), 1.2, hold=0.5)
 
     @subscene
     def straights(self):
@@ -114,8 +144,8 @@ class FirstTurn(YahtzeeScene):
         for cat, pts in [(LARGE_STRAIGHT, 40), (SMALL_STRAIGHT, 30)]:
             idx = self._idx(cat, pts)
             o = self.data[idx]
-            self.play(self.wheel.scroll_to(idx), run_time=1.2)
-            self._fill(o["sc_row"], o["points"], hold=0.5)
+            self._fill_during(o["sc_row"], o["points"],
+                              self.wheel.scroll_to(idx), 1.2, hold=0.5)
 
     @subscene
     def two_or_fewer(self):
@@ -137,16 +167,15 @@ class FirstTurn(YahtzeeScene):
         # (default gold) flash for the one we'd actually use
         self.card.flash_rows(self, [(6, None)], color=SCORE_RED, hold=0.6)
         idx = self._idx(THREE_KIND, 28)
-        self.play(self.wheel.scroll_to(idx), run_time=1.2)
-        self.card.flash_rows(self, [(6, 28)], hold=0.8)   # default (gold)
+        self._fill_during(6, 28, self.wheel.scroll_to(idx), 1.2, hold=0.8)  # gold, DURING the scroll
 
     @subscene
     def worst(self):
         # j) scroll all the way to the bottom (Chance 19 / 23446)
         idx = self._idx(CHANCE, 19)
         o = self.data[idx]
-        self.play(self.wheel.scroll_to(idx), run_time=2.0)
-        self._fill(o["sc_row"], o["points"], hold=0.6)
+        self._fill_during(o["sc_row"], o["points"],
+                          self.wheel.scroll_to(idx), 2.0, hold=0.6)
 
     @subscene
     def clear_to_card(self):
