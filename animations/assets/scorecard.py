@@ -610,6 +610,23 @@ class Scorecard(VGroup):
             scene.remove(fill, border)
         self._held = keep or None
 
+    def release_rows_anims(self, rows=None):
+        """Build + RETURN the release anims for held `rows` (ALL by default) and
+        the faded fill/border mobjects to drop — mirror of `hold_rows_anims`, so a
+        caller can fold a hold-release into another play (e.g. a card transition).
+        Unregisters the dropped rows immediately; the caller `scene.remove(*mobs)`
+        after the play. Returns ([], []) if nothing matches."""
+        held = getattr(self, "_held", None)
+        if not held:
+            return [], []
+        want = None if rows is None else ({rows} if isinstance(rows, int) else set(rows))
+        drop = [p for p in held if want is None or p[2] in want]
+        keep = [p for p in held if not (want is None or p[2] in want)]
+        anims = [a for fill, border, r in drop
+                 for a in (FadeOut(fill), FadeOut(border), Restore(self.labels[r]))]
+        self._held = keep or None
+        return anims, [m for fill, border, _r in drop for m in (fill, border)]
+
     def slide_in(self, scene, *, from_dir=LEFT, dist=None, run_time=1.0, lead=None,
                  play=True):
         """The STANDARD scorecard entrance: slide it in from `from_dir` (DEFAULT:
@@ -1043,7 +1060,7 @@ class Scorecard(VGroup):
         )
         scene.remove(hl, *copies)
 
-    def transition(self, scene, changes, *, run_time=1.1, flash=True):
+    def transition(self, scene, changes, *, run_time=1.1, flash=True, extra=None):
         """Transition the card to a new state declaratively, in ONE play. `changes`
         maps a row to its new value: an int sets/replaces the cell (shown as a
         plain number, e.g. 0 for a scratch); None clears the cell. The top/bottom
@@ -1051,7 +1068,12 @@ class Scorecard(VGroup):
         together (via `_animate_to`). This is for plain state edits — clearing,
         scratching, replacing a value; the fancy demo flourishes (pips flying,
         dice spinning, colored boxes) build their own `lead` and call `_animate_to`
-        directly."""
+        directly.
+
+        `extra` is any additional anims to CO-PLAY with the cell/bar changes (in
+        the same lead) — e.g. a row-highlight raise/release, or dice moving — so a
+        caller doesn't have to rebuild the card just to run something alongside the
+        state change. (This is what scenes 09/12's `_card_and` hand-rolls.)"""
         fades   = []
         new_top = self._top_sum
         new_bot = self._bottom_sum
@@ -1081,6 +1103,8 @@ class Scorecard(VGroup):
             if row == YAHTZEE_IDX:
                 self._yahtzee_is_50 = (val == 50)
 
+        if extra:
+            fades += list(extra)                         # co-play (highlight, dice, …)
         lead = AnimationGroup(*fades) if fades else None
         self._animate_to(scene, top=new_top, bottom=new_bot, lead=lead,
                          run_time=run_time, flash=flash)
