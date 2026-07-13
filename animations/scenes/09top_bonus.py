@@ -469,14 +469,20 @@ class TopBonus(YahtzeeScene):
         self.play(blk.animate.move_to([cx1, top_ride_y, 0]), run_time=across_rt)  # slide along top
         self.play(blk.animate.move_to([cx1, drop_y, 0]), run_time=drop_rt)        # rests in empty ones; box unchanged
 
-        # turn the whole setup BACK into the standard "3 of each = 63": drop the
-        # surplus block and refill every container completely (green) again, with the
-        # corner sum returning to 63. (blk is gone now, so it is NOT in the cleanup
-        # fade below — re-fading a removed mob flashes it back.)
-        self.play(FadeOut(blk), run_time=drop_rt)
-        self._fill_step([3, 6, 9, 12, 15, 18], fade_rt, sum_val=63, mirror=True)
+        # turn BACK into the standard "3 of each = 63": the gold surplus block MORPHS
+        # straight into the Ones' green fill (yellow 4 -> green 3), while the Fours box
+        # drops 16->12 and the corner sum returns to 63 — all in one play. (blk is
+        # consumed by the transform, so it is NOT in the cleanup fade below.)
+        self.wait(1.0)
+        self.remove(self.cfills[0])                      # drop the old (empty) Ones fill
+        new_ones = self._cfill(0, 3)
+        self._card_and({0: 3, 3: 12},
+                       [ReplacementTransform(blk, new_ones),
+                        self._sum_tr.animate.set_value(63)], fade_rt)
+        self.cfills[0] = new_ones
+        self.levels = [3, 6, 9, 12, 15, 18]
 
-        self.wait(5.0)
+        self.wait(4.0)
         live_sum.clear_updaters()
         self.play(*[FadeOut(g) for g in self.cfills.values()],
                   FadeOut(self.bg_outline), FadeOut(self.bg_lines),
