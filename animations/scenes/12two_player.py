@@ -26,8 +26,9 @@ EV_STEPS = [(2, 257.4), (7, 247.5), (5, 232.2)]   # (scorecard row, expected tot
 # section, 3-kind and chance.
 CARD_A = [3, 6, 9, 12, 15, 18, 18, 22, 25, 30,  0, 50, 20, 0]
 CARD_B = [3, 8, 12, 12, 15, 18, 26,  0, 25, 30, 40,  0, 28, 0]
-# Beat d: full except Fours(3)/Sixes(5)/SmS(9)/Yahtzee(11); top devs sum to +5.
-CARD_D = [1, 8, 9, None, 20, None, 20, 18, 25, None, 40, None, 22, 0]
+# Beat d: full except Fours(3)/Sixes(5)/SmS(9)/Yahtzee(11); 4-of-a-kind SCRATCHED
+# to 0 (a filled box that earns no bonus); top devs sum to +5.
+CARD_D = [1, 8, 9, None, 20, None, 20, 0, 25, None, 40, None, 22, 0]
 D_TOP_DEVS = {0: -2, 1: +2, 2: 0, 4: +5}      # filled top box -> (score − 3×face)
 # Beats e/f: two mid-game 4-col cards with the SAME number of boxes filled (9
 # each). LEFT is ahead (expected final ~269 vs ~232 — see scene12_numbers).
@@ -54,6 +55,7 @@ COL4_W     = 0.8                         # narrow 4th "bonus" column
 
 # bonus-point tier colours — SAME as scene 07's summary panel
 BONUS_COLOR = {1: ACCENT_GOLD, 2: ACCENT_FILL, 4: ACCENT_RED}
+ZERO_COLOR  = GREY                        # a filled box that earned 0 bonus (col 4)
 FADED_OP    = 0.45                        # faded 4th-column expectations
 
 
@@ -129,6 +131,19 @@ class TwoPlayer(YahtzeeScene):
         yb = scores[13] or 0
         total = sum(p for _, p in entries) + 4 * (yb // 100)
         return entries, total
+
+    def _bonus_reveal(self, scores):
+        """FILLED bonus boxes, top-to-bottom, as [(row, pts)] — pts is the tier value
+        when the box qualifies for its bonus, else 0 (a filled-but-scratched box, e.g.
+        a 4-of-a-kind slot scored 0). OPEN boxes (None) and the top section are left
+        out (the top bonus is judged separately, faded). For the walk-through."""
+        quals = [(R_3K, scores[6] not in (None, 0), 1),
+                 (R_4K, scores[7] not in (None, 0), 1),
+                 (R_FH, scores[8] == 25, 1),
+                 (R_SS, scores[9] == 30, 1),
+                 (R_LS, scores[10] == 40, 2),
+                 (R_YZ, scores[11] == 50, 2)]
+        return [(r, pts if ok else 0) for r, ok, pts in quals if scores[r] is not None]
 
     def _c4_key_y(self, card, key):
         """The col-4 y for a bonus key: "TOP" -> the top-section band, else its row."""
@@ -352,16 +367,19 @@ class TwoPlayer(YahtzeeScene):
         tc = self.cD.col4_region(range(6))[0]
         self.d_top2 = self._c4_text("2", tc[0], tc[1], ACCENT_FILL, op=FADED_OP)
 
-        # already-EARNED bonus points for CARD_D (full colour, col 4), revealed up
-        # front — one number per bonus, with a running total in the footer that
-        # ticks up as each is added. Same point system as the rest of the scene / 07.
-        entries, _ = self._bonus_entries(CARD_D)
+        # walk the FILLED bonus boxes top-to-bottom (col 4, full colour) — 4-of-a-kind
+        # is a scratched 0 (grey, worth nothing) — with a running total in the footer
+        # that ticks up as each lands. The OPEN boxes' faded expectations (built above)
+        # then feed the SAME total. Point system = rest of the scene / scene 07.
+        reveal = self._bonus_reveal(CARD_D)
         x4 = self.cD.col4_cells[0].get_center()[0]
         self.d_earned, run = [], 0             # [(number mob, cumulative total)]
-        for key, pts in entries:
+        for row, pts in reveal:
             run += pts
             self.d_earned.append(
-                (self._c4_text(str(pts), x4, self._c4_key_y(self.cD, key), BONUS_COLOR[pts]), run))
+                (self._c4_text(str(pts), x4, self._c4_key_y(self.cD, row),
+                               BONUS_COLOR.get(pts, ZERO_COLOR)), run))
+        self.d_earned_total = run              # total after the filled-box walk (=4)
         self.d_bonus_tr = ValueTracker(0)
         _ty = self.cD.total_text.get_center()[1]
         self.d_bonus_tot = always_redraw(
@@ -379,27 +397,29 @@ class TwoPlayer(YahtzeeScene):
 
         self.play(self.cD.slide_in(self, from_dir=DOWN, play=False), run_time=0.9)
 
-        # ONE animation: drop in the already-earned bonus points (full colour), the
-        # footer bonus total ticking up with each number as it lands.
+        # ONE animation: walk in the filled boxes' bonus points (full colour; 4-of-a-
+        # kind is a grey 0), the footer total ticking up with each as it lands -> 4.
         self.add(self.d_bonus_tot)
         self.play(LaggedStart(*[
             AnimationGroup(FadeIn(num), self.d_bonus_tr.animate.set_value(cum))
             for num, cum in self.d_earned], lag_ratio=0.4), run_time=1.5)
-        self._freeze_bonus_total()      # live counter -> static text (picklable snapshot)
 
+        base = self.d_earned_total          # 4; the faded open-box expectations add on
         self.wait(7.0)
-        self.cD.highlight_rows(self, [R_YZ], run_time=0.8)       # open Yahtzee -> 0
-        self.play(FadeIn(self.d_yz0), run_time=step)
+        self.cD.highlight_rows(self, [R_YZ], run_time=0.8)       # open Yahtzee -> 0 (4->4)
+        self.play(FadeIn(self.d_yz0), self.d_bonus_tr.animate.set_value(base), run_time=step)
         self.wait(1.0)
-        self.cD.highlight_rows(self, [R_SS], run_time=0.8)       # open SmS -> 1
-        self.play(FadeIn(self.d_ss1), run_time=step)
+        self.cD.highlight_rows(self, [R_SS], run_time=0.8)       # open SmS -> 1 (4->5)
+        self.play(FadeIn(self.d_ss1), self.d_bonus_tr.animate.set_value(base + 1), run_time=step)
         self.wait(2.0)
 
         self.play(FadeIn(self.d_devs, lag_ratio=0.3), run_time=2.0)   # ±x per top box
         self.wait(0.2)
         self.play(FadeIn(self.d_sum), run_time=step)                  # their sum (+5)
-        self.play(FadeIn(self.d_top2), run_time=step)                 # -> faded 2
+        self.play(FadeIn(self.d_top2),                                # -> faded 2 (5->7)
+                  self.d_bonus_tr.animate.set_value(base + 3), run_time=step)
         self.wait(0.8)
+        self._freeze_bonus_total()      # live counter -> static text (picklable snapshot)
 
     # ════════════════════════════════════════════════════════════════════════
     # e/f) ahead -> secure sure points ; behind -> go big
