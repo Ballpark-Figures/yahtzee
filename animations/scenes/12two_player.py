@@ -429,18 +429,20 @@ class TwoPlayer(YahtzeeScene):
     # ════════════════════════════════════════════════════════════════════════
     # e/f) ahead -> secure sure points ; behind -> go big
     # ════════════════════════════════════════════════════════════════════════
-    def _zero_flash(self, card, row, *, hold=0.9, fade=0.28):
+    def _zero_flash(self, card, row, *, run_time=0.28, hold=0.9):
         """Zero a box for illustration: highlight the row, show the 0 ONLY while
-        it's highlighted, then clear both (the example card is left untouched)."""
+        it's highlighted, then clear both (the example card is left untouched).
+        `run_time` is the flash IN/OUT duration (each play); `hold` is the pause it
+        sits open in between."""
         fill, border, bold = card._row_highlight(row, ACCENT_GOLD, 0.45)
         zero = crisp_text("0", font_size=card.font_size, color=BLACK,
                           font=FONT).move_to(card.value_cells[row].get_center())
         card.labels[row].save_state()
         self.play(FadeIn(fill), FadeIn(border),
-                  Transform(card.labels[row], bold), FadeIn(zero), run_time=fade)
+                  Transform(card.labels[row], bold), FadeIn(zero), run_time=run_time)
         self.wait(hold)
         self.play(FadeOut(fill), FadeOut(border),
-                  Restore(card.labels[row]), FadeOut(zero), run_time=fade)
+                  Restore(card.labels[row]), FadeOut(zero), run_time=run_time)
         self.remove(fill, border, zero)
 
     def _setup_two(self):
@@ -462,13 +464,17 @@ class TwoPlayer(YahtzeeScene):
         self.play(FadeIn(self.e4L), FadeIn(self.e4R), run_time=0.5)
 
         # LEFT (ahead): lock in easy points, then it's fine to zero the Yahtzee
+        self.wait(3.5)
         self.eL.highlight_rows(self, [R_SS], run_time=0.9)
+        self.wait(0.5)
         self.eL.highlight_rows(self, TOP_ROWS, run_time=1.0)
+        self.wait(1.5)
         self._zero_flash(self.eL, R_YZ)
 
     @subscene
     def behind(self):
         # RIGHT (behind): keep the Yahtzee alive, sacrifice ones then 4 of a kind
         self.eR.highlight_rows(self, [R_YZ], run_time=0.9)
+        self.wait(1.5)
         self._zero_flash(self.eR, 0)
         self._zero_flash(self.eR, R_4K)
