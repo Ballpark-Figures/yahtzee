@@ -429,20 +429,21 @@ class TwoPlayer(YahtzeeScene):
     # ════════════════════════════════════════════════════════════════════════
     # e/f) ahead -> secure sure points ; behind -> go big
     # ════════════════════════════════════════════════════════════════════════
-    def _zero_flash(self, card, row, *, run_time=0.28, hold=0.9):
-        """Zero a box for illustration: highlight the row, show the 0 ONLY while
-        it's highlighted, then clear both (the example card is left untouched).
-        `run_time` is the flash IN/OUT duration (each play); `hold` is the pause it
-        sits open in between."""
+    def _zero_flash(self, card, row, *, run_time=1.46):
+        """Zero a box for illustration: highlight the row, show the 0 ONLY while it's
+        highlighted, then clear both (the example card is left untouched). `run_time`
+        is the WHOLE flash's duration — the fade in, the hold open, and the fade out
+        all scale proportionally with it (0.28 + 0.90 + 0.28 at the default 1.46)."""
+        r = run_time / 1.46
         fill, border, bold = card._row_highlight(row, ACCENT_GOLD, 0.45)
         zero = crisp_text("0", font_size=card.font_size, color=BLACK,
                           font=FONT).move_to(card.value_cells[row].get_center())
         card.labels[row].save_state()
         self.play(FadeIn(fill), FadeIn(border),
-                  Transform(card.labels[row], bold), FadeIn(zero), run_time=run_time)
-        self.wait(hold)
+                  Transform(card.labels[row], bold), FadeIn(zero), run_time=0.28 * r)
+        self.wait(0.9 * r)
         self.play(FadeOut(fill), FadeOut(border),
-                  Restore(card.labels[row]), FadeOut(zero), run_time=run_time)
+                  Restore(card.labels[row]), FadeOut(zero), run_time=0.28 * r)
         self.remove(fill, border, zero)
 
     def _setup_two(self):
