@@ -113,10 +113,10 @@ class TwoPlayer(YahtzeeScene):
         return crisp_text(s, font=FONT, font_size=fs, color=color,
                           weight="BOLD").move_to([x, y, 0]).set_opacity(op)
 
-    def _c4_group(self, card, scores, *, show_total=True):
-        """Column-4 bonus-point numbers: one per earned bonus (tier coloured like
-        scene 07), plus the running total in the footer (white, matching the
-        Total row text)."""
+    def _bonus_entries(self, scores):
+        """Earned bonuses for `scores` as [(key, pts)] (key = "TOP" or a row) plus
+        their point total. THE point system (which bonus is worth what) — shared by
+        every 4th-column user here, matching scene 07's tiers."""
         top_sum = sum(s for s in scores[0:6] if s is not None)
         entries = []
         if top_sum >= 63:
@@ -128,13 +128,22 @@ class TwoPlayer(YahtzeeScene):
                 entries.append((r, pts))
         yb = scores[13] or 0
         total = sum(p for _, p in entries) + 4 * (yb // 100)
+        return entries, total
 
+    def _c4_key_y(self, card, key):
+        """The col-4 y for a bonus key: "TOP" -> the top-section band, else its row."""
+        return (card.col4_region(range(6))[0][1] if key == "TOP"
+                else card.col4_cells[key].get_center()[1])
+
+    def _c4_group(self, card, scores, *, show_total=True):
+        """Column-4 bonus-point numbers: one per earned bonus (tier coloured like
+        scene 07), plus the running total in the footer (white, matching the
+        Total row text)."""
+        entries, total = self._bonus_entries(scores)
         x = card.col4_cells[0].get_center()[0]
         g = VGroup()
         for key, pts in entries:
-            y = (card.col4_region(range(6))[0][1] if key == "TOP"
-                 else card.col4_cells[key].get_center()[1])
-            g.add(self._c4_text(str(pts), x, y, BONUS_COLOR[pts]))
+            g.add(self._c4_text(str(pts), x, self._c4_key_y(card, key), BONUS_COLOR[pts]))
         if show_total:
             g.add(self._c4_text(str(total), x, card.total_text.get_center()[1], WHITE))
         return g
@@ -197,7 +206,7 @@ class TwoPlayer(YahtzeeScene):
         self.play(self.card.slide_in(self, play=False),
                   FadeIn(self.ev_label, shift=UP * 0.2),
                   FadeIn(ev_live), run_time=1.0)
-        self.wait(0.4)
+        self.wait(2.0)
 
         # Each example is INDEPENDENT (same 12 from the start) and pairs with its
         # OWN line of voiceover, so the steps are UNROLLED (not a loop) — each keeps
@@ -208,15 +217,15 @@ class TwoPlayer(YahtzeeScene):
         # a1) four 3's → Threes = 12 (a GOOD turn: 254.6 → 257.4)
         self._card_and(self.card, {r_good: 12},
                        [self.ev_tr.animate.set_value(ev_good)], run_time=1.1)
-        self.wait(0.7)
+        self.wait(2.0)
         # a2) four of a kind → 4-of-a-Kind = 12 (pretty bad: → 247.5)
         self._card_and(self.card, {r_good: None, r_bad: 12},
                        [self.ev_tr.animate.set_value(ev_bad)], run_time=1.1)
-        self.wait(0.7)
+        self.wait(2.0)
         # a3) two 6's → Sixes = 12 (really bad: → 232.2)
         self._card_and(self.card, {r_bad: None, r_worst: 12},
                        [self.ev_tr.animate.set_value(ev_worst)], run_time=1.1)
-        self.wait(0.7)
+        self.wait(1.0)
 
         self.remove(ev_live)
         self.ev_num = self._ev_number()
@@ -294,8 +303,8 @@ class TwoPlayer(YahtzeeScene):
         self.play(FadeIn(self.c4A), FadeIn(self.c4B), run_time=0.6)
 
         # highlight the WHOLE 4th column, then the WHOLE 3rd column, on both cards
-        self._col_highlight([self._col4_region(self.cA), self._col4_region(self.cB)], hold=hold)
-        self._col_highlight([self._col3_region(self.cA), self._col3_region(self.cB)], hold=hold)
+        self._col_highlight([self._col4_region(self.cA), self._col4_region(self.cB)], hold=3.0)
+        self._col_highlight([self._col3_region(self.cA), self._col3_region(self.cB)], hold=1.5)
 
     # ════════════════════════════════════════════════════════════════════════
     # d) judging the open boxes: pace markers + faded 0/1/2
@@ -317,6 +326,15 @@ class TwoPlayer(YahtzeeScene):
                        color=BLACK, weight="BOLD")
         return t.move_to([x, y, 0], aligned_edge=RIGHT)
 
+    def _freeze_bonus_total(self):
+        """Swap the live (always_redraw) bonus total for a static text at its final
+        value, so the subscene snapshot stays picklable (no lambda in scene state)."""
+        self.remove(self.d_bonus_tot)
+        x4 = self.cD.col4_cells[0].get_center()[0]
+        ty = self.cD.total_text.get_center()[1]
+        self.d_bonus_tot = self._c4_text(f"{self.d_bonus_tr.get_value():.0f}", x4, ty, WHITE)
+        self.add(self.d_bonus_tot)
+
     def _setup_remaining(self):
         self.cD = get_scorecard(scores=CARD_D, center=CENTER_SC,
                                 fourth_column=True, fourth_width=COL4_W)
@@ -334,6 +352,21 @@ class TwoPlayer(YahtzeeScene):
         tc = self.cD.col4_region(range(6))[0]
         self.d_top2 = self._c4_text("2", tc[0], tc[1], ACCENT_FILL, op=FADED_OP)
 
+        # already-EARNED bonus points for CARD_D (full colour, col 4), revealed up
+        # front — one number per bonus, with a running total in the footer that
+        # ticks up as each is added. Same point system as the rest of the scene / 07.
+        entries, _ = self._bonus_entries(CARD_D)
+        x4 = self.cD.col4_cells[0].get_center()[0]
+        self.d_earned, run = [], 0             # [(number mob, cumulative total)]
+        for key, pts in entries:
+            run += pts
+            self.d_earned.append(
+                (self._c4_text(str(pts), x4, self._c4_key_y(self.cD, key), BONUS_COLOR[pts]), run))
+        self.d_bonus_tr = ValueTracker(0)
+        _ty = self.cD.total_text.get_center()[1]
+        self.d_bonus_tot = always_redraw(
+            lambda: self._c4_text(f"{self.d_bonus_tr.get_value():.0f}", x4, _ty, WHITE))
+
     @subscene
     def remaining_boxes(self):
         self._setup_remaining()
@@ -346,12 +379,23 @@ class TwoPlayer(YahtzeeScene):
 
         self.play(self.cD.slide_in(self, from_dir=DOWN, play=False), run_time=0.9)
 
+        # ONE animation: drop in the already-earned bonus points (full colour), the
+        # footer bonus total ticking up with each number as it lands.
+        self.add(self.d_bonus_tot)
+        self.play(LaggedStart(*[
+            AnimationGroup(FadeIn(num), self.d_bonus_tr.animate.set_value(cum))
+            for num, cum in self.d_earned], lag_ratio=0.4), run_time=1.5)
+        self._freeze_bonus_total()      # live counter -> static text (picklable snapshot)
+
+        self.wait(7.0)
         self.cD.highlight_rows(self, [R_YZ], run_time=0.8)       # open Yahtzee -> 0
         self.play(FadeIn(self.d_yz0), run_time=step)
+        self.wait(1.0)
         self.cD.highlight_rows(self, [R_SS], run_time=0.8)       # open SmS -> 1
         self.play(FadeIn(self.d_ss1), run_time=step)
+        self.wait(2.0)
 
-        self.play(FadeIn(self.d_devs, lag_ratio=0.3), run_time=1.0)   # ±x per top box
+        self.play(FadeIn(self.d_devs, lag_ratio=0.3), run_time=2.0)   # ±x per top box
         self.wait(0.2)
         self.play(FadeIn(self.d_sum), run_time=step)                  # their sum (+5)
         self.play(FadeIn(self.d_top2), run_time=step)                 # -> faded 2
@@ -384,7 +428,8 @@ class TwoPlayer(YahtzeeScene):
     def ahead(self):
         self._setup_two()
 
-        clutter = [self.cD, self.d_yz0, self.d_ss1, self.d_devs, self.d_sum, self.d_top2]
+        clutter = [self.cD, self.d_yz0, self.d_ss1, self.d_devs, self.d_sum, self.d_top2,
+                   self.d_bonus_tot, *[m for m, _ in self.d_earned]]
         self.play(*[FadeOut(m) for m in clutter], run_time=0.6)
         self.cD = None
 
