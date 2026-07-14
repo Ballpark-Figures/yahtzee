@@ -25,8 +25,8 @@ class Transitions(YahtzeeScene):
     """Scene 00 — the part-title cards between scene groups.
 
     Each card starts ON SCREEN (two centred lines: Part # / title), holds, then
-    slides UP off the top to reveal the blank background for the cut into the next
-    scene. One subscene per part, in video order:
+    FADES out to reveal the blank background for the cut into the next scene. One
+    subscene per part, in video order:
 
       a math        — Part 0  : The Math
       b endgame     — Part −1 : The Endgame
@@ -50,14 +50,13 @@ class Transitions(YahtzeeScene):
 
     def _show(self, num, name, *, hold, run_time):
         """Card is on screen from the start, holds `hold`s (read time — tuned per
-        card to its voiceover), then slides UP off the top over `run_time` (the exit
-        motion) to reveal blank. hold + run_time are separate knobs on purpose: one
-        is pacing, one is motion."""
+        card to its voiceover), then FADES out over `run_time` to reveal the blank
+        background. hold + run_time are separate knobs on purpose: one is pacing, one
+        is the fade."""
         card = self._card(num, name)
         self.add(card)
         self.wait(hold)
-        off = config.frame_y_radius + card.height / 2 + 0.5   # clear the top edge
-        self.play(card.animate.shift(UP * off), run_time=run_time)
+        self.play(FadeOut(card), run_time=run_time)
 
     # a : Part 0 — The Math
     @subscene
