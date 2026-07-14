@@ -53,9 +53,10 @@ LBL_FS     = 34
 # get_two_scorecards — the shared two-card convention.
 COL4_W     = 0.8                         # narrow 4th "bonus" column
 
-# bonus-point tier colours — SAME as scene 07's summary panel
+# bonus-point tier colours — SAME as scene 07's summary panel. A col-4 number is
+# ALWAYS drawn in its category's tier colour, even a 0 (a scratched box shows a
+# tier-coloured 0, not a neutral one — cf. the faded Yahtzee 0 in ACCENT_FILL).
 BONUS_COLOR = {1: ACCENT_GOLD, 2: ACCENT_FILL, 4: ACCENT_RED}
-ZERO_COLOR  = GREY                        # a filled box that earned 0 bonus (col 4)
 FADED_OP    = 0.45                        # faded 4th-column expectations
 
 
@@ -133,17 +134,19 @@ class TwoPlayer(YahtzeeScene):
         return entries, total
 
     def _bonus_reveal(self, scores):
-        """FILLED bonus boxes, top-to-bottom, as [(row, pts)] — pts is the tier value
-        when the box qualifies for its bonus, else 0 (a filled-but-scratched box, e.g.
-        a 4-of-a-kind slot scored 0). OPEN boxes (None) and the top section are left
-        out (the top bonus is judged separately, faded). For the walk-through."""
+        """FILLED bonus boxes, top-to-bottom, as [(row, pts, tier)] — `pts` is the
+        value shown (the tier value when the box qualifies, else 0 for a filled-but-
+        scratched box, e.g. a 4-of-a-kind scored 0); `tier` is the category's worth,
+        used for the COLOUR: a 0 is drawn in the colour it WOULD be if earned (the
+        col-4 convention — cf. the faded Yahtzee 0 in ACCENT_FILL), never neutral.
+        OPEN boxes (None) + the top section are left out (top bonus judged separately)."""
         quals = [(R_3K, scores[6] not in (None, 0), 1),
                  (R_4K, scores[7] not in (None, 0), 1),
                  (R_FH, scores[8] == 25, 1),
                  (R_SS, scores[9] == 30, 1),
                  (R_LS, scores[10] == 40, 2),
                  (R_YZ, scores[11] == 50, 2)]
-        return [(r, pts if ok else 0) for r, ok, pts in quals if scores[r] is not None]
+        return [(r, tier if ok else 0, tier) for r, ok, tier in quals if scores[r] is not None]
 
     def _c4_key_y(self, card, key):
         """The col-4 y for a bonus key: "TOP" -> the top-section band, else its row."""
@@ -368,17 +371,18 @@ class TwoPlayer(YahtzeeScene):
         self.d_top2 = self._c4_text("2", tc[0], tc[1], ACCENT_FILL, op=FADED_OP)
 
         # walk the FILLED bonus boxes top-to-bottom (col 4, full colour) — 4-of-a-kind
-        # is a scratched 0 (grey, worth nothing) — with a running total in the footer
-        # that ticks up as each lands. The OPEN boxes' faded expectations (built above)
-        # then feed the SAME total. Point system = rest of the scene / scene 07.
+        # is a scratched 0 drawn in its OWN tier colour (gold, as if earned; the col-4
+        # convention, cf. the faded Yahtzee 0) — with a running total in the footer that
+        # ticks up as each lands. The OPEN boxes' faded expectations (built above) then
+        # feed the SAME total. Point system = rest of the scene / scene 07.
         reveal = self._bonus_reveal(CARD_D)
         x4 = self.cD.col4_cells[0].get_center()[0]
         self.d_earned, run = [], 0             # [(number mob, cumulative total)]
-        for row, pts in reveal:
+        for row, pts, tier in reveal:
             run += pts
             self.d_earned.append(
                 (self._c4_text(str(pts), x4, self._c4_key_y(self.cD, row),
-                               BONUS_COLOR.get(pts, ZERO_COLOR)), run))
+                               BONUS_COLOR[tier]), run))
         self.d_earned_total = run              # total after the filled-box walk (=4)
         self.d_bonus_tr = ValueTracker(0)
         _ty = self.cD.total_text.get_center()[1]
@@ -405,7 +409,7 @@ class TwoPlayer(YahtzeeScene):
             for num, cum in self.d_earned], lag_ratio=0.4), run_time=1.5)
 
         base = self.d_earned_total          # 4; the faded open-box expectations add on
-        self.wait(7.0)
+        self.wait(6.0)
         self.cD.highlight_rows(self, [R_YZ], run_time=0.8)       # open Yahtzee -> 0 (4->4)
         self.play(FadeIn(self.d_yz0), self.d_bonus_tr.animate.set_value(base), run_time=step)
         self.wait(1.0)
@@ -413,9 +417,10 @@ class TwoPlayer(YahtzeeScene):
         self.play(FadeIn(self.d_ss1), self.d_bonus_tr.animate.set_value(base + 1), run_time=step)
         self.wait(2.0)
 
-        self.play(FadeIn(self.d_devs, lag_ratio=0.3), run_time=2.0)   # ±x per top box
+        self.play(FadeIn(self.d_devs, lag_ratio=0.3), run_time=4.0)   # ±x per top box
         self.wait(0.2)
         self.play(FadeIn(self.d_sum), run_time=step)                  # their sum (+5)
+        self.wait(1.0)
         self.play(FadeIn(self.d_top2),                                # -> faded 2 (5->7)
                   self.d_bonus_tr.animate.set_value(base + 3), run_time=step)
         self.wait(0.8)
