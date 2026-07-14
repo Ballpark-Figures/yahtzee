@@ -27,7 +27,7 @@ way.
 - Use the existing machinery in `animations/assets/`: `DiceBoard`,
   `roll_lines()`, `slot_point(band, slot)`, `slot_x(slot)`, and `BAND_YS`
   (4 bands; dice roll UP from band 0 → 1 → 2 → 3, separated by 3 guide lines).
-  `99test.py` is the canonical example. Default die size is `DIE_SIZE = 0.95`.
+  `97test.py` is the canonical example. Default die size is `DIE_SIZE = 0.95`.
 - Scorecard sits at `LEFT_SC`; dice on the right at `slot_x(...)`.
 - **Rolling a turn:** `place_initial` (band 0) → `first_roll` (band 1) →
   `keep(idxs)` + `roll_rest(vals)` (up to band 2) → `keep` + `roll_rest` (band 3).
