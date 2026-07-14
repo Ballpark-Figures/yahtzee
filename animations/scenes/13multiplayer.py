@@ -345,6 +345,7 @@ class Multiplayer(YahtzeeScene):
     @subscene
     def best_of_5(self):
         self._transition(5, count_title=True, run_time=3.0)
+        self.wait(10.0)
 
     @subscene
     def best_of_10(self):
@@ -454,7 +455,7 @@ class Multiplayer(YahtzeeScene):
         its timings live here, so it's easy to tune: the morph runs over ``run_time``
         (the reflow settling by ``settle``), then the median leader draws back in over
         ``lead_in``."""
-        run_time, settle, lead_in = 5.0, 0.35, 0.5       # finale timings (tweak here)
+        run_time, settle, lead_in = 7.0, 0.35, 0.5       # finale timings (tweak here)
         seq, meds, beat, mt, nt, gt = self._setup_perfect(run_time, settle)
         self._morph_chain(seq, meds, beat, self.cur_n, self.n_perfect, mt, nt, run_time, gt=gt)
         self._finish_perfect()

@@ -196,7 +196,7 @@ class LineGraph(YahtzeeScene):
         self._focus([SM_STRAIGHT, THREE_KIND, LG_STRAIGHT], run_time)
         self.wait(hold)
         self._focus(None, run_time)          # restore the full, complete chart
-        self.wait(hold)
+        #self.wait(1.0)
         # scene 08 → ANIMATED scene 09 → THG (09 sits between; scene 08 is NOT
         # followed by a talking head). Scene 09 EXPECTS a blank screen ("a animates
         # the card in"), so scene 08 must end with NOTHING on screen — fade it all out

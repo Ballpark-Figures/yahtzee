@@ -712,7 +712,9 @@ class LastTurn(YahtzeeScene):
         self.card.transition(self, {R_4KIND: 20, R_3KIND: None}, run_time=0.5)  # refill 4K, open 3K
         self._hold_row(R_3KIND)
         self._show_dice([2, 2, 3, 4, 5], band=2, run_time=0.5)   # 22345, 2nd reroll -> band 2
+        self.wait(1.5)
         self._keep([0, 1], 2, push_rt, hold)                        # keep 22
+        self.wait(0.5)
         morph_dice(self, self.board.dice, [3, 3, 3, 3, 1], run_time=0.5)   # 33331
         self._keep([0, 1, 2], 2, push_rt, hold)                     # keep 333 (reroll extra 3 & the 1)
 
@@ -727,11 +729,11 @@ class LastTurn(YahtzeeScene):
         cases = [([2, 2, 3, 4, 5], [4]),       # 22345: keep the single 5 over the pair of 2s (4K keeps 22)
                  ([1, 1, 1, 3, 3], [3, 4]),    # 11133: keep the pair of 3s over THREE 1s (4K keeps 111)
                  ([2, 2, 3, 3, 6], [2, 3, 4])] # 22336: keep 3,3,6 over the pair of 2s (4K keeps 33)
-        self._show_dice(cases[0][0], band=1, run_time=0.5)   # FIRST reroll -> band 1
-        self._keep(cases[0][1], 1, push_rt, hold)
+        self._show_dice(cases[0][0], band=1, run_time=0.3)   # FIRST reroll -> band 1
+        self._keep(cases[0][1], 1, push_rt, 0.3)
         for vals, keep in cases[1:]:
-            morph_dice(self, self.board.dice, vals, run_time=0.5)
-            self._keep(keep, 1, push_rt, hold)
+            morph_dice(self, self.board.dice, vals, run_time=0.3)
+            self._keep(keep, 1, push_rt, 0.3)
 
     # ── zl) fill the 3-of-a-kind row (71%, EV 15) ────────────────────────────
     @subscene

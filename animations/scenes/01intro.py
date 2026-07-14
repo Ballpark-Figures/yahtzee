@@ -375,7 +375,7 @@ class Intro(YahtzeeScene):
         # one big die in the middle
         dice[0].scale(big / grid)
         self.play(FadeIn(dice[0]), run_time=1.0)
-        self.wait(1)
+        self.wait(6)
 
         # the six roll out into the grid, each starting at the big lone size and
         # shrinking to the grid size as it tosses to its slot.
@@ -396,19 +396,19 @@ class Intro(YahtzeeScene):
     def pairs(self):
         self._setup_buildup()           # owns the build-up grids (uses one_die_dice)
         self.add(self.bgrid[1])
-        self._grow_step(1, run_time=2.4)
+        self._grow_step(1, run_time=0.8)
 
     @subscene
     def trios(self):
-        self._grow_step(2, run_time=2.4)
+        self._grow_step(2, run_time=0.8)
 
     @subscene
     def quads(self):
-        self._grow_step(3, run_time=2.4)
+        self._grow_step(3, run_time=0.8)
 
     @subscene
     def quints(self):
-        self._grow_step(4, run_time=2.4)
+        self._grow_step(4, run_time=1.6)
 
     # ── shrink each of the 252 by how likely it is ────────────────────────────
     @subscene
@@ -417,7 +417,7 @@ class Intro(YahtzeeScene):
         self.play(*[g.animate.scale(s)
                     for g, s in zip(groups, self.outcome_shrink)], run_time=1.5)
         self.wait(1)
-        self.play(FadeOut(groups), run_time=1.0)
+        self.play(FadeOut(groups), run_time=1)
 
     # ── dice roll up through the bands, count 252 -> 504 -> 756 ───────────────
     @subscene
@@ -458,7 +458,7 @@ class Intro(YahtzeeScene):
 
         # roll_rt / count_rt are the per-roll knobs; reroll_lag controls how much
         # the next roll overlaps the previous 252's fade-in.
-        roll_rt, count_rt, reroll_lag = 0.9, 0.3, 0.4
+        roll_rt, count_rt, reroll_lag = 0.5, 0.3, 0.4
         self.play(roll(1, self.tr_roll_vals[0], run_time=roll_rt))
         for i, band in zip((1, 2), (2, 3)):
             self.play(LaggedStart(count_in(i - 1, run_time=count_rt),
@@ -492,7 +492,7 @@ class Intro(YahtzeeScene):
     @subscene
     def box_combos(self):
         self._setup_box_combos()        # owns box glows / 2's / products (card carried)
-        BEAT = 0.2
+        BEAT = 1/12
         N = 13
         twos, products = self.box_twos, self.box_products
 
@@ -638,7 +638,7 @@ class Intro(YahtzeeScene):
             run_time=2.2,
         )
         self.remove(self.box_combos_label)
-        self.wait(0.1)
+        self.wait(3)
 
         # ── (b) 756 moves into the bottom row; "Dice States" moves to its right.
         small_log = ValueTracker(math.log10(756))
@@ -669,7 +669,7 @@ class Intro(YahtzeeScene):
                   MoveToTarget(self.dice_states_label), run_time=0.7)
         self.remove(self.tr_756, self.dice_states_label)
         self.add(bottom)
-        self.wait(0.4)
+        self.wait(1)
 
         # rebuild the big counter+label so they scale and drift to center (y:
         # top_y->0) with _mult_t, landing centered as the 756 disappears.
@@ -681,7 +681,7 @@ class Intro(YahtzeeScene):
         # ── (c) tick the top number down to remove finished states ────────────
         self.play(big.animate.set_value(math.log10(self.gt_after_cull)),
                   run_time=1.0)
-        self.wait(0.4)
+        self.wait(1)
 
         # ── (d) multiply: big grows + counts up, small shrinks + counts down to
         #        1 (disappears); captions fade over the first ~1s. ─────────────

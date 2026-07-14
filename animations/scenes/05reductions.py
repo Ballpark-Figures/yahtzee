@@ -285,15 +285,15 @@ class Reductions(YahtzeeScene):
         hold = 1.0
         # the three top-section edits, unrolled so each has its own run_time + wait.
         self.card1.transition(self, EX_TOPS[0], run_time=0.8)   # top -> 53
-        self.wait(0.35)
+        self.wait(2.0)
         self.card1.transition(self, EX_TOPS[1], run_time=0.8)   # top -> 63
-        self.wait(0.35)
+        #self.wait(1.0)
         self.card1.transition(self, EX_TOPS[2], run_time=0.8)   # top -> 93
-        self.wait(0.35)
+        self.wait(2.0)
         # …only which boxes are still open matters (the 1's) —
         highlight(self, [self._box_target(self.card1, 0)], hold=hold)
         # — then restore the top section to its earlier state.
-        self.wait(3)
+        #self.wait(3)
         self.card1.transition(self, RESTORE_TOP, run_time=0.8)
         # transition() adds new-value cell texts at SCENE level (orphaned from the
         # card group). Hard-swap the whole thing for a FRESH clean SCORES1 card
@@ -317,6 +317,7 @@ class Reductions(YahtzeeScene):
         self.wait(0.5)
         self.play(FadeOut(self.strike), run_time=0.4)
         self.strike = None
+        self.wait(0.5)
         # …then highlight the open bottom boxes (all we actually need).
         highlight(self, [self._box_target(self.card1, r) for r in OPEN_BOTTOM],
                   hold=hold)
@@ -326,9 +327,9 @@ class Reductions(YahtzeeScene):
     @subscene
     def reduce_second(self):
         self._setup_reduce_second()
-        count, label_rt = 2.4, 0.6
+        label_rt = 0.6
         self._count_to(self.num, BLANK_A, BLANK_C,
-                       self.num_label, self._rs_to, count=count, label_rt=label_rt)
+                       self.num_label, self._rs_to, count=1.5, label_rt=label_rt)
 
     # h) replay scene-04's ending on THIS card: empty it box-by-box, the solver's
     #    avg-points-remaining climbing to ~254.6; the finale removes the card and

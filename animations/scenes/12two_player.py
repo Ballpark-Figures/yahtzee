@@ -476,6 +476,6 @@ class TwoPlayer(YahtzeeScene):
     def behind(self):
         # RIGHT (behind): keep the Yahtzee alive, sacrifice ones then 4 of a kind
         self.eR.highlight_rows(self, [R_YZ], run_time=0.9)
-        self.wait(1.5)
-        self._zero_flash(self.eR, 0)
-        self._zero_flash(self.eR, R_4K)
+        self.wait(2.5)
+        self._zero_flash(self.eR, 0, run_time=1.0)
+        self._zero_flash(self.eR, R_4K, run_time=1.0)

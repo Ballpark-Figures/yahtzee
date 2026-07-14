@@ -56,16 +56,16 @@ class Rules(YahtzeeScene):
     @subscene
     def roll_mechanic(self):
         b = self.board
-        self.play(*b.first_roll([3, 2, 4, 6, 6]), run_time=1.0)
-        self.wait(0.3)
-        self.play(*b.keep([3, 4]), run_time=0.6)                # keep the two 6s
-        self.wait(0.15)
-        self.play(*b.roll_rest([5, 6, 1]), run_time=1.0)        # → a third 6
-        self.wait(0.3)
-        self.play(*b.keep([3, 4, 1]), run_time=0.6)             # keep three 6s
-        self.wait(0.15)
-        self.play(*b.roll_rest([6, 2]), run_time=1.0)           # → four 6s
+        self.play(*b.first_roll([3, 2, 4, 6, 6]), run_time=0.7)
+        self.wait(2.3)
+        self.play(*b.keep([3, 4]), run_time=0.5)                # keep the two 6s
         self.wait(0.5)
+        self.play(*b.roll_rest([5, 6, 1]), run_time=0.7)        # → a third 6
+        self.wait(3.3)
+        self.play(*b.keep([3, 4, 1]), run_time=0.5)             # keep three 6s
+        self.wait(0.5)
+        self.play(*b.roll_rest([6, 2]), run_time=0.7)           # → four 6s
+        self.wait(3.3)
         self.card.upper(self, b.dice, 6)                        # Sixes → 24
 
     # ── c. a bad roll → scratch a box with a 0 ─────────────────────────────────
@@ -86,7 +86,7 @@ class Rules(YahtzeeScene):
         self.card.reset(self, run_time=0.8)             # empty the card again
         self.wait(0.2)
         self.card.highlight_rows(self, range(6), color=YELLOW, run_time=0.9)
-        self.wait(0.2)
+        self.wait(3.0)
         dice = self.board.dice
         morph_dice(self, dice, [5, 5, 5, 5, 2], run_time=0.6)
         self.wait(0.2)
@@ -108,10 +108,10 @@ class Rules(YahtzeeScene):
             (3, [3, 3, 1, 4, 6]),   # Threes→  6  (68)   two 3s ← crosses 63 here
         ]
         for face, vals in top_plan:
-            morph_dice(self, dice, vals, run_time=0.6)
-            self.wait(0.1)
-            self.card.upper(self, dice, face)
-            self.wait(0.25)
+            morph_dice(self, dice, vals, run_time=0.2)
+            #self.wait(0.1)
+            self.card.upper(self, dice, face, run_time=1.2)
+            #self.wait(0.25)
 
     # ── f. enter the centred-dice showcase; 3-of-a-Kind and 4-of-a-Kind ────────
     @subscene
@@ -137,9 +137,10 @@ class Rules(YahtzeeScene):
     @subscene
     def full_house(self):
         self._set_title("Full House")
+        self.wait(1.0)
         dice = self.board.dice
         morph_dice(self, dice, [5, 2, 5, 2, 5], run_time=0.6)   # triple/pair interleaved
-        self.wait(0.1)
+        self.wait(1.0)
         self.card.full_house(self, dice)                # → 25
 
     # ── h. small straight (gray unused), then large straight ───────────────────
@@ -151,13 +152,13 @@ class Rules(YahtzeeScene):
         morph_dice(self, dice, [3, 1, 6, 2, 4], run_time=0.6)
         self.wait(0.1)
         # the unused-die gray is now part of small_straight itself
-        self.card.small_straight(self, dice, y=self.CENTER_Y)   # → 30
+        self.card.small_straight(self, dice, y=self.CENTER_Y, run_time=2.0)   # → 30
         self.wait(0.2)
 
         self._set_title("Large Straight")
-        morph_dice(self, dice, [2, 5, 1, 4, 3], run_time=0.6)
+        morph_dice(self, dice, [2, 5, 1, 4, 3], run_time=0.3)
         self.wait(0.1)
-        self.card.large_straight(self, dice, y=self.CENTER_Y)   # → 40
+        self.card.large_straight(self, dice, y=self.CENTER_Y, run_time=2.0)   # → 40
 
     # ── i. Yahtzee ────────────────────────────────────────────────────────────
     @subscene
@@ -174,7 +175,7 @@ class Rules(YahtzeeScene):
         self._set_title("Chance")
         dice = self.board.dice
         morph_dice(self, dice, [2, 3, 4, 4, 6], run_time=0.6)
-        self.wait(0.1)
+        self.wait(1.5)
         self.card.chance(self, dice)                    # → 19
 
     # ── k. Joker, no bonus: scratch Yahtzee + empty Fours and Large Straight, ──
@@ -187,16 +188,17 @@ class Rules(YahtzeeScene):
         # Straight — one declarative transition; counters reverse together (the
         # bar drops back below 63 as Fours empties).
         card.transition(self, {3: None, 10: None, 11: 0})
-        self.wait(0.3)
+        self.wait(2.0)
 
-        self._set_title("Extra Yahtzee")                # carries into l as well
         dice = self.board.dice
         morph_dice(self, dice, [4, 4, 4, 4, 4], run_time=0.6)    # a 4s Yahtzee
-        self.wait(0.2)
+        self.wait(1.0)
+        self._set_title("Extra Yahtzee")                # carries into l as well
+        self.wait(2.0)
         card.joker_fill(self, dice, 3, 20, y=self.CENTER_Y)      # → Fours (re-crosses 63)
-        self.wait(0.3)
+        self.wait(2.5)
         morph_dice(self, dice, [5, 5, 5, 5, 5], run_time=0.6)    # a 5s Yahtzee
-        self.wait(0.2)
+        self.wait(0.3)
         card.joker_fill(self, dice, 10, 40, y=self.CENTER_Y)     # → Large Straight (40)
 
     # ── l. real-50 case: turn the 0 into a 50, empty 4-of-a-Kind, then a 6s ─────

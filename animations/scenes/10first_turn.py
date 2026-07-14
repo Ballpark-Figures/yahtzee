@@ -103,7 +103,7 @@ class FirstTurn(YahtzeeScene):
         self.wheel.hide_all()
         self.add(self.wheel)
         self.play(self.wheel.fade_in([0]), FadeIn(self.title), run_time=1.0)
-        self._fill(11, 50, hold=0.6)
+        self._fill(11, 50, hold=1.0)
 
     @subscene
     def scroll_top(self):
@@ -111,10 +111,10 @@ class FirstTurn(YahtzeeScene):
         self.play(self.wheel.fade_in(), run_time=0.8)
         steps = [                                        # (idx, wait-before, scroll rt)
             (self._idx(SIXES, 24),          0.0, 1.0),
-            (self._idx(FIVES, 20),          1.0, 0.5),
-            (self._idx(LARGE_STRAIGHT, 40), 0.0, 0.5),
-            (self._idx(FOURS, 16),          0.0, 0.5),
-            (self._idx(THREES, 12),         0.0, 0.5),
+            (self._idx(FIVES, 20),          3.0, 0.4),
+            (self._idx(LARGE_STRAIGHT, 40), 0.0, 0.4),
+            (self._idx(FOURS, 16),          0.0, 0.4),
+            (self._idx(THREES, 12),         0.0, 0.4),
         ]
         for idx, wait, rt in steps:
             o = self.data[idx]
@@ -154,6 +154,7 @@ class FirstTurn(YahtzeeScene):
         # in sync with the highlight, then vanish — committed fill untouched)
         self.card.flash_rows(self, [(3, 8), (4, 10), (5, 12)],
                              color=SCORE_RED, hold=0.8)              # two 4s/5s/6s
+        self.wait(1.0)
         self.card.flash_rows(self, [(1, 2), (2, 3), (3, 4), (4, 5), (5, 6)],
                              color=SCORE_RED, hold=0.8)              # 23456 singles
 
@@ -183,3 +184,4 @@ class FirstTurn(YahtzeeScene):
         # k) Fade the list + title, leaving the (already-empty) scorecard at
         # LEFT_SC so scene 11 opens on the same card — seamless hard cut.
         self.play(FadeOut(self.wheel), FadeOut(self.title), run_time=1.0)
+        self.wait(10.0)

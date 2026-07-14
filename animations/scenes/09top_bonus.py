@@ -482,7 +482,7 @@ class TopBonus(YahtzeeScene):
         self.cfills[0] = new_ones
         self.levels = [3, 6, 9, 12, 15, 18]
 
-        self.wait(4.0)
+        self.wait(5.0)
         live_sum.clear_updaters()
         self.play(*[FadeOut(g) for g in self.cfills.values()],
                   FadeOut(self.bg_outline), FadeOut(self.bg_lines),
@@ -494,6 +494,7 @@ class TopBonus(YahtzeeScene):
     def table_empty(self):
         self._setup_table()
         self.play(FadeIn(self.table_static), run_time=0.8)
+        self.wait(1.0)
         self.play(FadeIn(self.ev_line, shift=UP * 0.2), run_time=0.6)
 
     def _reveal_row(self, count, run_time, lag=0.14):
@@ -521,6 +522,7 @@ class TopBonus(YahtzeeScene):
     @subscene
     def fill_2(self):
         self._reveal_and_cycle(2, [2, 4, 6, 8, 10, 12], 1.2)
+        self.wait(2.0)
         self._highlight_cells_with_box([(2, 0)], {0: 2}, hold=1.0)    # 2 ones
         self._highlight_cells_with_box([(2, 5)], {5: 12}, hold=1.0)   # 2 sixes = 12
 
@@ -530,7 +532,10 @@ class TopBonus(YahtzeeScene):
     def fill_1_0(self):
         self._reveal_and_cycle(1, [1, 2, 3, 4, 5, 6], 1.2)
         self._reveal_and_cycle(0, [0, 0, 0, 0, 0, 0], 1.2)
+        self.wait(1.0)
         self._highlight_cells_with_box([(0, 0), (0, 1)], {0: 0, 1: 0}, hold=1.0)
         self._highlight_cells_with_box([(0, 2)], {2: 0}, hold=1.0)
+        #self.wait(0.5)
         self._highlight_cells_with_box([(0, 3), (0, 4), (0, 5)],
                                        {3: 0, 4: 0, 5: 0}, hold=1.0)
+        self.wait(10.0)
