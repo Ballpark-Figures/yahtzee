@@ -56,8 +56,8 @@ TERMINAL = 13
 
 # per-state reach/expected_final cache (gitignored — matches /math/data/*; regenerable)
 REACH_CACHE_DIR = "data/state_reach"
-_CACHE_DT = dict(mask=np.uint16, upper=np.uint8, lower=np.uint16,
-                 num_yahtzees=np.uint8, reach=np.float64, expected_final=np.float32)
+_CACHE_DT = dict(mask=np.uint16, upper=np.uint8, lower=np.uint16, num_yahtzees=np.uint8,
+                 reach=np.float64, expected_final=np.float64)  # f64: exact rounding for diffs
 
 _LO_BITS, _NY_BITS = 9, 4  # pack upper<128, lower<512, num_y<16 into one int64
 
@@ -258,6 +258,23 @@ def diff_distribution(per_level) -> dict:
     return out
 
 
+def diff_pair_counts(per_level) -> dict:
+    """Per level: int array C where C[n] = number of UNORDERED pairs of states whose
+    rounded expected finals differ by exactly n (states counted EQUALLY, not reach-
+    weighted). C[0] = distinct states with the same rounded value; sum_n C[n] =
+    C(#states, 2). (The unweighted count counterpart of diff_distribution.)"""
+    out = {}
+    for lvl, d in enumerate(per_level):
+        v = np.rint(d["expected_final"]).astype(np.int64)
+        h = np.bincount(v).astype(np.int64)               # state COUNT per rounded EV
+        ac = np.correlate(h, h, mode="full")[len(h) - 1:]  # ac[n] = sum_v h[v]*h[v+n]
+        n_states = int(h.sum())
+        C = ac.copy()
+        C[0] = (ac[0] - n_states) // 2                    # unordered distinct same-value pairs
+        out[lvl] = C
+    return out
+
+
 def _print_coverage(tbl):
     ts = [k for k in tbl[0] if k != "n_states"]
     hdr = "  ".join(f"{t*100:>7g}%" for t in ts)
@@ -293,3 +310,10 @@ if __name__ == "__main__":
             mean = float((np.arange(len(P)) * P).sum())
             print(f"  level {lvl:2d}: P(|Δ|=0)={P[0]:.4f}  mean|Δ|={mean:6.2f}  "
                   f"max|Δ|={span:4d}  (sum={P.sum():.4f})")
+
+        print("\nUnweighted pair COUNTS (# state pairs at each |Δ|):")
+        dc = diff_pair_counts(pl)
+        for lvl in sorted(dc):
+            C = dc[lvl]
+            print(f"  level {lvl:2d}: pairs(|Δ|=0)={int(C[0]):>16,}  "
+                  f"total pairs={int(C.sum()):>18,}")
