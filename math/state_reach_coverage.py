@@ -33,8 +33,15 @@ Or import forward_reach()/coverage_table()/diff_distribution() (see notebooks/).
 from __future__ import annotations
 
 import argparse
+import sys
 
 import numpy as np
+
+if sys.version_info < (3, 10):  # the pipeline (turn_kernel) uses @dataclass(slots=True)
+    raise RuntimeError(
+        "Run this with the yahtzee .venv (Python 3.10+; the pipeline uses 3.14). "
+        "In VSCode/Jupyter, select .venv/bin/python as the notebook kernel — not the "
+        "default/base Python.")
 
 from constants import (
     SIXES, YAHTZEE, YAHTZEE_POINTS, EXTRA_YAHTZEE_BONUS,
