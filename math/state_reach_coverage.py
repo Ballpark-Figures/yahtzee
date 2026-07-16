@@ -1,6 +1,6 @@
 """Reach probability + expected final points of every full GameState under optimal
-play, and downstream analyses (coverage thresholds; per-level pairwise difference
-distribution of rounded expected points).
+play, and downstream analyses (coverage thresholds; per-level expected-final GAP
+distribution between two independent optimal games).
 
 The state is the FIRST reduction (== math/game_state.GameState):
     (filled_mask, upper_total, lower_total, num_yahtzees)      -- upper/lower UNCAPPED
@@ -33,6 +33,7 @@ Or import forward_reach()/coverage_table()/diff_distribution() (see notebooks/).
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 import numpy as np
@@ -52,6 +53,11 @@ from state_properties import load_shard
 
 THRESHOLDS = (0.5, 0.9, 0.99, 0.999, 0.9999)
 TERMINAL = 13
+
+# per-state reach/expected_final cache (gitignored — matches /math/data/*; regenerable)
+REACH_CACHE_DIR = "data/state_reach"
+_CACHE_DT = dict(mask=np.uint16, upper=np.uint8, lower=np.uint16,
+                 num_yahtzees=np.uint8, reach=np.float64, expected_final=np.float32)
 
 _LO_BITS, _NY_BITS = 9, 4  # pack upper<128, lower<512, num_y<16 into one int64
 
@@ -119,7 +125,44 @@ def _transition(mask, up, lo, ny, reach, lut, kernel):
     return mask | (1 << c), n_up, n_lo, n_ny, sr * p
 
 
-def forward_reach(max_level: int = TERMINAL, verbose: bool = False) -> list[dict]:
+def _cache_path(level):
+    return os.path.join(REACH_CACHE_DIR, f"level_{level:02d}.npz")
+
+
+def _load_cache():
+    if not all(os.path.exists(_cache_path(l)) for l in range(TERMINAL + 1)):
+        return None
+    return [dict(np.load(_cache_path(l))) for l in range(TERMINAL + 1)]
+
+
+def _save_cache(per_level):
+    os.makedirs(REACH_CACHE_DIR, exist_ok=True)
+    for lvl, d in enumerate(per_level):
+        np.savez_compressed(_cache_path(lvl), **{k: v.astype(_CACHE_DT[k]) for k, v in d.items()})
+
+
+def forward_reach(max_level: int = TERMINAL, verbose: bool = False,
+                  cache: bool = True, recompute: bool = False) -> list[dict]:
+    """Reach + expected_final per full state, per level. The full (max_level=13) result
+    is CACHED to data/state_reach/ (regenerable, gitignored) so re-running is instant.
+    Pass recompute=True or cache=False to bypass; a partial max_level<13 is never cached."""
+    full = max_level >= TERMINAL
+    if full and cache and not recompute:
+        cached = _load_cache()
+        if cached is not None:
+            if verbose:
+                print(f"loaded cached reach ({sum(len(d['reach']) for d in cached):,} states) "
+                      f"from {REACH_CACHE_DIR}/")
+            return cached
+    per_level = _forward_pass(max_level, verbose)
+    if full and cache:
+        _save_cache(per_level)
+        if verbose:
+            print(f"cached reach to {REACH_CACHE_DIR}/")
+    return per_level
+
+
+def _forward_pass(max_level: int = TERMINAL, verbose: bool = False) -> list[dict]:
     """Forward pass. Returns per_level[k] = dict of aligned numpy arrays:
         mask, upper, lower, num_yahtzees, reach, expected_final
     for every optimal-play-reachable full GameState at level k (reach sums to 1)."""
@@ -197,17 +240,21 @@ def coverage_table(per_level, thresholds=THRESHOLDS) -> dict:
 
 
 def diff_distribution(per_level) -> dict:
-    """Per level: np.array `d` where d[n] = number of UNORDERED pairs of states whose
-    rounded expected finals differ by exactly n (n=0 -> distinct states, same value)."""
+    """Per level: array P where P[n] = probability that two states drawn INDEPENDENTLY
+    from the reach distribution have rounded expected finals differing by exactly n
+    (absolute difference). P sums to 1. With q[v] = total reach mass at rounded value v:
+        P[0]   = sum_v q[v]^2                 (both draws land on the same value)
+        P[n>0] = 2 * sum_v q[v]*q[v+n]
+    i.e. the expected-final GAP distribution between two independent optimal games at
+    the same level."""
     out = {}
     for lvl, d in enumerate(per_level):
         v = np.rint(d["expected_final"]).astype(np.int64)
-        h = np.bincount(v).astype(np.int64)              # histogram over rounded EV
-        ac = np.correlate(h, h, mode="full")[len(h) - 1:]  # ac[n] = sum_v h[v]*h[v+n]
-        n_states = int(h.sum())
-        pairs = ac.copy()
-        pairs[0] = (ac[0] - n_states) // 2               # unordered distinct same-value pairs
-        out[lvl] = pairs
+        q = np.bincount(v, weights=d["reach"])            # prob mass per rounded EV (sums to 1)
+        ac = np.correlate(q, q, mode="full")[len(q) - 1:]  # ac[n] = sum_v q[v]*q[v+n]
+        P = 2.0 * ac
+        P[0] = ac[0]
+        out[lvl] = P
     return out
 
 
@@ -228,20 +275,21 @@ def _print_coverage(tbl):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--max-level", type=int, default=TERMINAL)
-    ap.add_argument("--diffs", action="store_true", help="also print a diff-distribution summary")
+    ap.add_argument("--diffs", action="store_true", help="also print the gap-distribution summary")
+    ap.add_argument("--recompute", action="store_true", help="ignore the cache and recompute")
     args = ap.parse_args()
 
-    print("Forward pass over the full-state DAG…")
-    pl = forward_reach(args.max_level, verbose=True)
+    pl = forward_reach(args.max_level, verbose=True, recompute=args.recompute)
     print()
     _print_coverage(coverage_table(pl))
 
     if args.diffs:
-        print("\nPairwise difference distribution (rounded expected finals):")
+        print("\nExpected-final GAP distribution (two independent optimal games, rounded):")
         dd = diff_distribution(pl)
         for lvl in sorted(dd):
-            d = dd[lvl]
-            nz = np.nonzero(d)[0]
-            span = nz[-1] if len(nz) else 0
-            print(f"  level {lvl:2d}: max diff {span:4d}, "
-                  f"pairs(0)={d[0]:,}, total pairs={int(d.sum()):,}")
+            P = dd[lvl]
+            nz = np.nonzero(P > 1e-12)[0]
+            span = int(nz[-1]) if len(nz) else 0
+            mean = float((np.arange(len(P)) * P).sum())
+            print(f"  level {lvl:2d}: P(|Δ|=0)={P[0]:.4f}  mean|Δ|={mean:6.2f}  "
+                  f"max|Δ|={span:4d}  (sum={P.sum():.4f})")
