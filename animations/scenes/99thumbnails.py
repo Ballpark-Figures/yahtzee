@@ -180,7 +180,10 @@ class Thumbnails(YahtzeeScene):
         ctr = body.get_center()
         theta = math.atan2(ASCEND_STEP, SLOT_DX)  # dice-line angle → perpendicular divide
         u = np.array([math.cos(theta), math.sin(theta), 0.0])   # gradient axis
-        span = size                               # cover the die interior along u
+        # Cover the die's FULL projection onto u — the tilted corners reach beyond
+        # size/2 (~size*0.68 at this angle), so size alone left a gap (beige backing
+        # showing) at the bottom-left corner. 1.5 clears it with margin.
+        span = size * 1.5
         strip_w = span / n_strips
         overlay = VGroup()
         for i in range(n_strips):
