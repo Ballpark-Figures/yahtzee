@@ -130,7 +130,7 @@ def _keep_group_table(stage, empty, payload, row, box_pts, cat_of):
         raw_total += group_p
         kept = keep_to_values(keep_idx)
         rows.append({
-            "Kept dice": " ".join(str(int(v)) for v in kept) if kept else "(reroll all)",
+            "Kept dice": "-".join(str(int(v)) for v in kept) if kept else "(reroll all)",
             "Probability (%)": round(100.0 * group_p, 1),
             "Expected turn points": round(exp_turn, 2),
             "Most likely box": DISPLAY_NAMES[best_cat],
@@ -164,7 +164,7 @@ def _final_table(empty, box_pts, cat_of):
             # Probability (not shown in scene 10) inserted before the game total.
             "Box": r["box"],
             "Turn points": r["points"],
-            "Dice": " ".join(str(int(v)) for v in r["dice"]),
+            "Dice": "-".join(str(int(v)) for v in r["dice"]),
             "Probability (%)": round(100.0 * prob, 1),
             "Expected game total": round(float(r["ev"]), 1),
         })
