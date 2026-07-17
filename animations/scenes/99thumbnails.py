@@ -43,9 +43,9 @@ class Thumbnails(YahtzeeScene):
     downscale/JPEG pass) — but in the NEW brand FONT (Inter, via `crisp_text`).
 
     Grab the PNG per thumbnail with:
-        render 99a --frames "1.0" --extract        # 1080p, from the render loop
-    or, for a true 4K export (like battleship):
-        <repo>/.venv/bin/manim -s -qk 99thumbnails.py Thumbnails   # whole-scene last frame
+        render 99a --thumb                         # 4K PNG (manim -s -qk), the upload asset
+        render 99a --thumb --fast                  # quick low-res PNG to check layout
+    The PNG lands (and its path prints) under media/images/99thumbnails/.
 
     NB numbers on a thumbnail are still SOURCED, never invented (see the
     numbers-are-the-product rule).
