@@ -4,6 +4,7 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
+from manim import config as MCFG            # real frame is 16x9 (y-radius 4.5)
 from config import *
 from assets.dice import get_die
 
@@ -69,7 +70,6 @@ class Thumbnails(YahtzeeScene):
         # possible positions" (01intro.py gt_final; Script.md row 01 col 2).
         NUM_POSITIONS = "258,521,977,812,672"
         NUM_WIDTH = 14.5
-        NUM_Y     = 2.15
 
         # ---- the dice (12345, colored pips) ---------------------------------
         DIE_SIZE_THUMB = 2.4    # big prop dice
@@ -82,18 +82,20 @@ class Thumbnails(YahtzeeScene):
             interpolate_color(BG_COLOR, BLACK, BG_GRAD_DARK),
         )
 
-        # the number: big, bold, black, in the brand FONT (Inter)
-        number = crisp_text(NUM_POSITIONS, font_size=48, color=BLACK)
-        number.scale_to_fit_width(NUM_WIDTH)
-        number.move_to([0, NUM_Y, 0])
-        if NUM_STROKE_W > 0:
-            number.set_stroke(BLACK, width=NUM_STROKE_W, opacity=1.0)
-
         # 1-2-3-4-5 with per-value rainbow pips/border (pip_coloring convention)
         dice = VGroup(*[
             get_die(value=v, size=DIE_SIZE_THUMB, pip_coloring=True)
             for v in range(1, 6)
         ]).arrange(RIGHT, buff=DICE_BUFF)
         dice.move_to([0, DICE_Y, 0])
+
+        # the number: big, bold, black, in the brand FONT (Inter). Center it
+        # vertically between the top of the frame and the top of the dice.
+        number = crisp_text(NUM_POSITIONS, font_size=48, color=BLACK)
+        number.scale_to_fit_width(NUM_WIDTH)
+        num_y = (MCFG.frame_y_radius + dice.get_top()[1]) / 2
+        number.move_to([0, num_y, 0])
+        if NUM_STROKE_W > 0:
+            number.set_stroke(BLACK, width=NUM_STROKE_W, opacity=1.0)
 
         self.add(bg, number, dice)
