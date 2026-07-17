@@ -17,7 +17,8 @@ depend ONLY on the kept dice, so they are constant across a keep group (asserted
 For the final table each row is a distinct OPTIMAL placement (box + score),
 grouped exactly as scene 10 does — read straight from the committed scene-10
 cache so it is identical to what's on screen. Columns:
-    Dice (sample) | Probability (%) | Box | Turn points | Expected game total
+    Box | Turn points | Dice (sample) | Expected game total | Probability (%)
+(scene-10 column order for the shared columns; Probability was not in scene 10)
 where Probability = P(the turn ENDS in this placement) under optimal play
 (the whole (box, score) group's mass, not the single sample hand).
 
@@ -159,11 +160,12 @@ def _final_table(empty, box_pts, cat_of):
         prob = group_prob[(int(r["cat"]), int(r["points"]))]
         raw_total += prob
         rows.append({
-            "Dice": " ".join(str(int(v)) for v in r["dice"]),
-            "Probability (%)": round(100.0 * prob, 1),
+            # scene-10 column order: Box | Points | Dice | Avg (game total).
             "Box": r["box"],
             "Turn points": r["points"],
+            "Dice": " ".join(str(int(v)) for v in r["dice"]),
             "Expected game total": round(float(r["ev"]), 1),
+            "Probability (%)": round(100.0 * prob, 1),   # not shown in scene 10
         })
     assert abs(raw_total - 1.0) < 1e-3, f"final placement mass = {raw_total}"
     df = pd.DataFrame(rows).sort_values(
