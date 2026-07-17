@@ -241,22 +241,22 @@ class Thumbnails(YahtzeeScene):
     def straight_field_positions(self):
         self._straight_field_thumb(labels="positions")
 
-    # ── x–z: light-body 252 field, labeled, KEEP the dice behind the number and
-    #         make it prominent 3 ways (compare, then apply the winner) ──────────
-    # x : bg-colour halo/outline on the text
+    # ── x–z: light-body 252 field, dice DIMMED behind the number (kept, not removed),
+    #         the 3 text versions ────────────────────────────────────────────────
+    # x : number only
     @thumbnail
-    def field_prom_halo(self):
-        self._dice_field_thumb(labels=True, body_palette=LIGHT_BODY, treatment="halo")
+    def field_dim_plain(self):
+        self._dice_field_thumb(labels=False, body_palette=LIGHT_BODY, treatment="dim")
 
-    # y : translucent scrim panel behind the text
+    # y : All / number / Positions
     @thumbnail
-    def field_prom_scrim(self):
-        self._dice_field_thumb(labels=True, body_palette=LIGHT_BODY, treatment="scrim")
-
-    # z : dim the dice behind/near the text
-    @thumbnail
-    def field_prom_dim(self):
+    def field_dim_labeled(self):
         self._dice_field_thumb(labels=True, body_palette=LIGHT_BODY, treatment="dim")
+
+    # z : number / Positions
+    @thumbnail
+    def field_dim_positions(self):
+        self._dice_field_thumb(labels="positions", body_palette=LIGHT_BODY, treatment="dim")
 
     def _dice_field_thumb(self, labels, body_palette=None, treatment=None):
         """The 252 distinct 5-dice outcomes from scene 1 filling the frame (21×12,
@@ -310,7 +310,7 @@ class Thumbnails(YahtzeeScene):
         For None and 'dim' the number is SHRUNK so its zone (text + margin) stops just
         short of the outer columns — those full columns are never removed / dimmed."""
         KEEP_OUT = 0.3
-        DIM_MARGIN, DIM_OPACITY = 0.5, 0.22
+        DIM_MARGIN, DIM_OPACITY = 0.35, 0.22
         bg = vertical_gradient_panel(
             interpolate_color(BG_COLOR, WHITE, 0.06),
             interpolate_color(BG_COLOR, BLACK, 0.05),
