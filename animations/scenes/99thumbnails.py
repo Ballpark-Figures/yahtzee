@@ -241,10 +241,29 @@ class Thumbnails(YahtzeeScene):
     def straight_field_positions(self):
         self._straight_field_thumb(labels="positions")
 
-    def _dice_field_thumb(self, labels, body_palette=None):
+    # ── x–z: light-body 252 field, labeled, KEEP the dice behind the number and
+    #         make it prominent 3 ways (compare, then apply the winner) ──────────
+    # x : bg-colour halo/outline on the text
+    @thumbnail
+    def field_prom_halo(self):
+        self._dice_field_thumb(labels=True, body_palette=LIGHT_BODY, treatment="halo")
+
+    # y : translucent scrim panel behind the text
+    @thumbnail
+    def field_prom_scrim(self):
+        self._dice_field_thumb(labels=True, body_palette=LIGHT_BODY, treatment="scrim")
+
+    # z : dim the dice behind/near the text
+    @thumbnail
+    def field_prom_dim(self):
+        self._dice_field_thumb(labels=True, body_palette=LIGHT_BODY, treatment="dim")
+
+    def _dice_field_thumb(self, labels, body_palette=None, treatment=None):
         """The 252 distinct 5-dice outcomes from scene 1 filling the frame (21×12,
         flow_order='dr'). `body_palette` (a value→colour map) puts that colour on the
-        die BODIES with black pips; None keeps scene 1's pip-colouring."""
+        die BODIES with black pips; None keeps scene 1's pip-colouring. `treatment`
+        is forwarded to _field_thumb (None removes crowded sets; dim/scrim/halo keep
+        them and make the number prominent another way)."""
         DIE_SIZE = 0.24        # scene 1's 252-quint die size
         DIE_BUFF = 0.025       # scene 1's k=5 within-group buff
 
@@ -261,7 +280,7 @@ class Thumbnails(YahtzeeScene):
         groups.arrange_in_grid(rows=21, cols=12, buff=(DIE_BUFF * 4, DIE_BUFF * 4),
                                flow_order="dr")
         _fit_field(groups, rows=21)
-        self._field_thumb(groups, 21, labels)
+        self._field_thumb(groups, 21, labels, treatment)
 
     def _straight_field_thumb(self, labels):
         """Scene 3's 120 large-straight color arrangements filling the frame (15×8,
@@ -280,30 +299,61 @@ class Thumbnails(YahtzeeScene):
         _fit_field(groups, rows=15)
         self._field_thumb(groups, 15, labels)
 
-    def _field_thumb(self, groups, rows, labels):
+    def _field_thumb(self, groups, rows, labels, treatment=None):
         """Shared finisher for a frame-filling dice field (`groups` already arranged +
-        fit; `rows` = sets per column). Shrinks the vertically-centered number so its
-        keep-out never reaches the outer columns (they fully survive), drops the sets
-        it crowds, and adds bg + kept sets + number."""
+        fit; `rows` = sets per column). `treatment` decides how the number is made
+        prominent over the field:
+          None    — REMOVE the sets it crowds (shrinking the number so the outer
+                    columns fully survive);
+          'dim'   — keep every set, fade the ones near the text to low opacity;
+          'scrim' — keep every set, lay a translucent panel behind the text;
+          'halo'  — keep every set, give the text a thick bg-colour outline."""
         KEEP_OUT = 0.3
         bg = vertical_gradient_panel(
             interpolate_color(BG_COLOR, WHITE, 0.06),
             interpolate_color(BG_COLOR, BLACK, 0.05),
         )
-        # flow_order='dr' fills column-major (`rows` per column): first `rows` = left
-        # column, last `rows` = right. Cap the number width so its keep-out stops just
-        # short of those, so the full outer columns appear.
-        gl = list(groups)
-        col_left_inner  = max(g.get_right()[0] for g in gl[:rows])
-        col_right_inner = min(g.get_left()[0]  for g in gl[-rows:])
-        max_half = min(-col_left_inner, col_right_inner) - KEEP_OUT - 0.02
-        num_width = min(13.0, 2 * max_half)
 
-        block = self._number_block(0, labels, num_width=num_width)
+        if treatment is None:
+            # flow_order='dr' fills column-major (`rows` per column): first `rows` =
+            # left column, last `rows` = right. Cap the number width so its keep-out
+            # stops just short of those, so the full outer columns appear.
+            gl = list(groups)
+            col_left_inner  = max(g.get_right()[0] for g in gl[:rows])
+            col_right_inner = min(g.get_left()[0]  for g in gl[-rows:])
+            max_half = min(-col_left_inner, col_right_inner) - KEEP_OUT - 0.02
+            num_width = min(13.0, 2 * max_half)
+            block = self._number_block(0, labels, num_width=num_width)
+            block.move_to(ORIGIN)
+            lines = list(block.submobjects) if isinstance(block, VGroup) else [block]
+            kept = VGroup(*[g for g in groups if not _near_text(g, lines, KEEP_OUT)])
+            self.add(bg, kept, block)
+            return
+
+        # keep-all treatments: full-width number over the whole field
+        block = self._number_block(0, labels)
         block.move_to(ORIGIN)
         lines = list(block.submobjects) if isinstance(block, VGroup) else [block]
-        kept = VGroup(*[g for g in groups if not _near_text(g, lines, KEEP_OUT)])
-        self.add(bg, kept, block)
+
+        if treatment == "dim":
+            DIM_MARGIN, DIM_OPACITY = 0.5, 0.22
+            for g in groups:
+                if _near_text(g, lines, DIM_MARGIN):
+                    for die in g:                    # per-Die (asset's set_opacity)
+                        die.set_opacity(DIM_OPACITY)
+            self.add(bg, groups, block)
+        elif treatment == "scrim":
+            pad = 0.35
+            scrim = RoundedRectangle(
+                width=block.width + 2 * pad, height=block.height + 2 * pad,
+                corner_radius=0.3, stroke_width=0,
+                fill_color=BG_COLOR, fill_opacity=0.68).move_to(block.get_center())
+            self.add(bg, groups, scrim, block)
+        elif treatment == "halo":
+            halo = block.copy()
+            halo.set_fill(BG_COLOR, opacity=1.0)
+            halo.set_stroke(BG_COLOR, width=22, opacity=1.0)   # bg-colour moat
+            self.add(bg, groups, halo, block)
 
     # ── shared builders ────────────────────────────────────────────────────────
     def _anim_dice(self):
