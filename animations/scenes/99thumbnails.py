@@ -130,6 +130,11 @@ class Thumbnails(YahtzeeScene):
     def straight_half4_labeled(self):
         self._half_thumb(4, labels=True)
 
+    # k : j but WITHOUT the "All" — only "Positions" below the number
+    @thumbnail
+    def straight_half4_positions(self):
+        self._half_thumb(4, labels="positions")
+
     # ── shared builders ────────────────────────────────────────────────────────
     def _anim_dice(self):
         """1..5 with the scene-2 animation body colours (RED..BLUE)."""
@@ -220,10 +225,11 @@ class Thumbnails(YahtzeeScene):
         return d
 
     def _number_block(self, dice_top_y, labels):
-        """The number block shared by every thumbnail: the big sourced number, and
-        — when `labels` — 'All' above and 'Positions' below (smaller, centered).
-        Returns the mobject, centered horizontally and vertically between the frame
-        top and dice_top_y.
+        """The number block shared by every thumbnail: the big sourced number,
+        optionally wrapped by 'All' above and/or 'Positions' below (smaller). Returns
+        the mobject, centered horizontally and vertically between the frame top and
+        dice_top_y. `labels` selects which words: False/None (none), True/'both'
+        (All + Positions), or 'positions' (only 'Positions').
 
         The number 258,521,977,812,672 = scene 1's final reveal, the "~259 trillion
         possible positions" (01intro.py gt_final; Script.md row 01 col 2)."""
@@ -238,23 +244,27 @@ class Thumbnails(YahtzeeScene):
         number.scale_to_fit_width(NUM_WIDTH)
         number.set_stroke(BLACK, width=NUM_STROKE_W, opacity=1.0)
 
-        if labels:
-            all_lbl, pos_lbl = (crisp_text(w, font_size=48, color=BLACK)
-                                for w in ("All", "Positions"))
-            for lbl in (all_lbl, pos_lbl):
-                lbl.scale_to_fit_height(number.height * LABEL_FRAC)
-                lbl.set_stroke(BLACK, width=LABEL_STROKE, opacity=1.0)
-            # Balance the labels around the DIGITS, not the bbox: the commas hang
-            # below the baseline, so measuring to the bbox bottom pushes 'Positions'
-            # further from the number than 'All'. Use the digit tops and the baseline
-            # (bottom of the first digit '2') so both gaps are equal.
-            digit_top = number.get_top()[1]
-            baseline  = number[0].get_bottom()[1]
-            all_lbl.next_to(np.array([0, digit_top, 0]), UP, buff=LABEL_GAP)
-            pos_lbl.next_to(np.array([0, baseline, 0]), DOWN, buff=LABEL_GAP)
-            block = VGroup(all_lbl, number, pos_lbl)
-        else:
-            block = number
+        show_all = labels in (True, "both")
+        show_pos = labels in (True, "both", "positions")
+
+        def _label(word, ref_y, direction):
+            lbl = crisp_text(word, font_size=48, color=BLACK)
+            lbl.scale_to_fit_height(number.height * LABEL_FRAC)
+            lbl.set_stroke(BLACK, width=LABEL_STROKE, opacity=1.0)
+            # Balance labels around the DIGITS, not the bbox: the commas hang below
+            # the baseline, so measuring to the bbox bottom would push 'Positions'
+            # further from the number than 'All'. Use the digit tops / the baseline
+            # (bottom of the first digit '2') so the gaps match.
+            lbl.next_to(np.array([0, ref_y, 0]), direction, buff=LABEL_GAP)
+            return lbl
+
+        parts = []
+        if show_all:
+            parts.append(_label("All", number.get_top()[1], UP))
+        parts.append(number)
+        if show_pos:
+            parts.append(_label("Positions", number[0].get_bottom()[1], DOWN))
+        block = VGroup(*parts) if len(parts) > 1 else number
 
         block.move_to([0, (MCFG.frame_y_radius + dice_top_y) / 2, 0])
         return block
