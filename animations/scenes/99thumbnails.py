@@ -1,5 +1,5 @@
 from pathlib import Path
-from itertools import combinations_with_replacement
+from itertools import combinations_with_replacement, permutations
 import math
 import sys
 
@@ -225,26 +225,29 @@ class Thumbnails(YahtzeeScene):
     def field_light_positions(self):
         self._dice_field_thumb(labels="positions", body_palette=LIGHT_BODY)
 
+    # u–w : scene 3's 120 large-straight color arrangements instead of the 252 combos
+    # u : number only
+    @thumbnail
+    def straight_field_plain(self):
+        self._straight_field_thumb(labels=False)
+
+    # v : All / number / Positions
+    @thumbnail
+    def straight_field_labeled(self):
+        self._straight_field_thumb(labels=True)
+
+    # w : number / Positions
+    @thumbnail
+    def straight_field_positions(self):
+        self._straight_field_thumb(labels="positions")
+
     def _dice_field_thumb(self, labels, body_palette=None):
-        """The 252 distinct 5-dice outcomes from scene 1 filling the frame, with the
-        number block centered vertically; any dice-set that comes within KEEP_OUT of
-        the text is removed so the words sit in clear space. `body_palette` (a value→
-        colour map) puts that colour on the die BODIES with black pips/border; None
-        keeps scene 1's pip-colouring."""
-        BG_GRAD_LIGHT = 0.06
-        BG_GRAD_DARK  = 0.05
+        """The 252 distinct 5-dice outcomes from scene 1 filling the frame (21×12,
+        flow_order='dr'). `body_palette` (a value→colour map) puts that colour on the
+        die BODIES with black pips; None keeps scene 1's pip-colouring."""
         DIE_SIZE = 0.24        # scene 1's 252-quint die size
         DIE_BUFF = 0.025       # scene 1's k=5 within-group buff
-        KEEP_OUT = 0.3         # remove dice-sets within this margin of the text
 
-        bg = vertical_gradient_panel(
-            interpolate_color(BG_COLOR, WHITE, BG_GRAD_LIGHT),
-            interpolate_color(BG_COLOR, BLACK, BG_GRAD_DARK),
-        )
-
-        # 252 sets of 5 dice, canonical order, 21×12 down the rows, fit to the frame —
-        # matches scene 1's 252 grid (flow_order="dr"). Pips coloured by value, OR
-        # (body_palette) the value colour on the body with black pips.
         def _die(v):
             if body_palette is not None:
                 return get_die(v, size=DIE_SIZE, body_color=body_palette[v])
@@ -258,22 +261,48 @@ class Thumbnails(YahtzeeScene):
         groups.arrange_in_grid(rows=21, cols=12, buff=(DIE_BUFF * 4, DIE_BUFF * 4),
                                flow_order="dr")
         _fit_field(groups, rows=21)
+        self._field_thumb(groups, 21, labels)
 
-        # Shrink the number just enough that its keep-out never reaches the leftmost
-        # / rightmost dice columns, so those full columns survive. flow_order='dr'
-        # fills column-major (21 per column): first 21 = left column, last 21 = right.
+    def _straight_field_thumb(self, labels):
+        """Scene 3's 120 large-straight color arrangements filling the frame (15×8,
+        flow_order='dr'): each set is a 1-2-3-4-5 straight with a distinct permutation
+        of DIE_COLORS on the bodies (black pips). Matches 03dice.py straight_120."""
+        DIE_SIZE = 0.2         # scene 3's 120-straight die size
+        DIE_BUFF = 0.04        # scene 3's within-group buff
+
+        groups = VGroup(*[
+            VGroup(*[get_die(v, size=DIE_SIZE, body_color=c)
+                     for v, c in zip((1, 2, 3, 4, 5), perm)]).arrange(RIGHT, buff=DIE_BUFF)
+            for perm in permutations(DIE_COLORS)          # 120 orderings of the 5 colours
+        ])
+        groups.arrange_in_grid(rows=15, cols=8, buff=(DIE_BUFF * 4, DIE_BUFF * 4),
+                               flow_order="dr")
+        _fit_field(groups, rows=15)
+        self._field_thumb(groups, 15, labels)
+
+    def _field_thumb(self, groups, rows, labels):
+        """Shared finisher for a frame-filling dice field (`groups` already arranged +
+        fit; `rows` = sets per column). Shrinks the vertically-centered number so its
+        keep-out never reaches the outer columns (they fully survive), drops the sets
+        it crowds, and adds bg + kept sets + number."""
+        KEEP_OUT = 0.3
+        bg = vertical_gradient_panel(
+            interpolate_color(BG_COLOR, WHITE, 0.06),
+            interpolate_color(BG_COLOR, BLACK, 0.05),
+        )
+        # flow_order='dr' fills column-major (`rows` per column): first `rows` = left
+        # column, last `rows` = right. Cap the number width so its keep-out stops just
+        # short of those, so the full outer columns appear.
         gl = list(groups)
-        col_left_inner  = max(g.get_right()[0] for g in gl[:21])    # left col's right edge
-        col_right_inner = min(g.get_left()[0]  for g in gl[-21:])   # right col's left edge
+        col_left_inner  = max(g.get_right()[0] for g in gl[:rows])
+        col_right_inner = min(g.get_left()[0]  for g in gl[-rows:])
         max_half = min(-col_left_inner, col_right_inner) - KEEP_OUT - 0.02
         num_width = min(13.0, 2 * max_half)
 
-        # centered-vertically number block; drop the dice-sets it crowds
         block = self._number_block(0, labels, num_width=num_width)
         block.move_to(ORIGIN)
         lines = list(block.submobjects) if isinstance(block, VGroup) else [block]
         kept = VGroup(*[g for g in groups if not _near_text(g, lines, KEEP_OUT)])
-
         self.add(bg, kept, block)
 
     # ── shared builders ────────────────────────────────────────────────────────
