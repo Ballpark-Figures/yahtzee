@@ -8,12 +8,18 @@ Three tables, one per roll stage of turn 1, each ranked by EXPECTED GAME TOTAL:
 
 For the first two tables each row is one of the 252 distinct dice hands you could
 be holding at that stage. Columns:
-    Dice | Expected turn points | Most likely box | Expected game total
+    Dice | Probability | Expected turn points | Most likely box | Expected game total
+where Probability = P(holding this hand at this stage) under optimal play (for
+roll 1 that is just the raw initial-roll probability).
 
 For the final table each row is a distinct OPTIMAL placement (box + score),
 grouped exactly as scene 10 does — read straight from the committed scene-10
 cache so it is identical to what's on screen. Columns:
-    Dice (sample) | Box | Turn points | Expected game total
+    Dice (sample) | Probability | Box | Turn points | Expected game total
+where Probability = P(the turn ENDS in this placement) under optimal play
+(the whole (box, score) group's mass, not the single sample hand).
+
+All probabilities come from the shared stage_dice_probs() helper (stages A/B/C).
 
 NOTHING here re-derives strategy. The expected-game-total column is pulled from
 the solved value-iteration payload (ev_A / ev_B). The mid-turn "expected turn
@@ -35,7 +41,7 @@ import pandas as pd
 
 from precomputed import ALL_DICE_STATES, dice_idx_to_values
 from reduced_game_state import ReducedGameState
-from state_explorer import get_state_row
+from state_explorer import get_state_row, stage_dice_probs
 from turn_kernel import REROLL_MATRIX, PAIR_TABLE, immediate_transition
 
 N_DICE = len(ALL_DICE_STATES)               # 252
@@ -79,21 +85,23 @@ def _final_nums_from_hand(d_start, stage, dec_A, dec_B):
     raise ValueError("stage must be 'A' or 'B'")
 
 
-def _mid_turn_table(stage, payload, row):
-    """One row per dice hand at stage A/B, ranked by expected game total."""
-    dec_A = payload["decisions_A"][row]
-    dec_B = payload["decisions_B"][row]
-    dec_C = payload["decisions_C"][row]
-    ev = payload["ev_A"][row] if stage == "A" else payload["ev_B"][row]
-
-    # Box points written for each FINAL hand under its optimal category (turn 1:
-    # mask empty, no bonuses can trigger, so reward == box_points).
+def _box_pts_and_cat(dec_C):
+    """Per FINAL hand: (box points written, optimal category) under the policy.
+    Turn 1 has an empty mask so no bonus can trigger; reward == box_points."""
     box_pts = np.array([
         immediate_transition(mask=0, upper=0, eligible=False,
                              dice_idx=d2, category=int(dec_C[d2]))[0]
         for d2 in range(N_DICE)
     ], dtype=np.float64)
-    cat_of = dec_C.astype(np.int64)
+    return box_pts, dec_C.astype(np.int64)
+
+
+def _mid_turn_table(stage, empty, payload, row, box_pts, cat_of):
+    """One row per dice hand at stage A/B, ranked by expected game total."""
+    dec_A = payload["decisions_A"][row]
+    dec_B = payload["decisions_B"][row]
+    ev = payload["ev_A"][row] if stage == "A" else payload["ev_B"][row]
+    reach = stage_dice_probs(empty, stage)   # P(hold this hand at this stage)
 
     rows = []
     for d in range(N_DICE):
@@ -105,6 +113,7 @@ def _mid_turn_table(stage, payload, row):
         best_cat = int(np.argmax(cat_prob))
         rows.append({
             "Dice": dice_str(d),
+            "Probability": round(float(reach[d]), 6),
             "Expected turn points": round(exp_turn, 2),
             "Most likely box": DISPLAY_NAMES[best_cat],
             "Expected game total": round(float(ev[d]), 2),
@@ -115,14 +124,23 @@ def _mid_turn_table(stage, payload, row):
     return df
 
 
-def _final_table():
+def _final_table(empty, box_pts, cat_of):
     """Scene-10's grouped placement table, read from its committed cache so it
-    is identical to what's on screen."""
+    is identical to what's on screen. Probability = P(the turn ends in this
+    (box, score) placement) under optimal play = the group's stage-C mass."""
+    p_C = stage_dice_probs(empty, "C")
+    group_prob = {}                              # (category_idx, box_points) -> P
+    for d2 in range(N_DICE):
+        key = (int(cat_of[d2]), int(box_pts[d2]))
+        group_prob[key] = group_prob.get(key, 0.0) + float(p_C[d2])
+
     data = json.loads(SCENE10_CACHE.read_text())
     rows = []
     for r in data["outcomes"]:
+        prob = group_prob[(int(r["cat"]), int(r["points"]))]
         rows.append({
             "Dice": " ".join(str(int(v)) for v in r["dice"]),
+            "Probability": round(prob, 6),
             "Box": r["box"],
             "Turn points": r["points"],
             "Expected game total": round(float(r["ev"]), 2),
@@ -137,16 +155,19 @@ def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     empty = ReducedGameState(filled_mask=0, upper_total=0, yahtzee_eligible=False)
     payload, row = get_state_row(empty)
+    box_pts, cat_of = _box_pts_and_cat(payload["decisions_C"][row])
 
     tables = {
-        "roll1": _mid_turn_table("A", payload, row),
-        "reroll1": _mid_turn_table("B", payload, row),
-        "reroll2_final": _final_table(),
+        "roll1": _mid_turn_table("A", empty, payload, row, box_pts, cat_of),
+        "reroll1": _mid_turn_table("B", empty, payload, row, box_pts, cat_of),
+        "reroll2_final": _final_table(empty, box_pts, cat_of),
     }
     for name, df in tables.items():
+        total_p = float(df["Probability"].sum())
+        assert abs(total_p - 1.0) < 1e-3, f"{name} probabilities sum to {total_p}"
         path = OUT_DIR / f"{name}.csv"
         df.to_csv(path, index=False)
-        print(f"wrote {path}  ({len(df)} rows)")
+        print(f"wrote {path}  ({len(df)} rows, Probability sums to {total_p:.6f})")
         print(df.head(5).to_string(index=False))
         print()
 
