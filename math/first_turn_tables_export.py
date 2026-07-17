@@ -33,7 +33,7 @@ instead of the initial-roll distribution.
 
 Run from math/ with the ROOT venv (needs pandas/numpy):
     ../.venv/bin/python first_turn_tables_export.py
-Writes exports/first_turn_tables/{roll1,reroll1,reroll2_final}.csv
+Writes data/exports/first_turn_tables/{roll1,reroll1,reroll2_final}.csv
 """
 import json
 from pathlib import Path
@@ -49,7 +49,7 @@ from turn_kernel import REROLL_MATRIX, PAIR_TABLE, immediate_transition
 N_DICE = len(ALL_DICE_STATES)               # 252
 _RNG = np.arange(N_DICE)
 
-OUT_DIR = Path("exports/first_turn_tables")
+OUT_DIR = Path("data/exports/first_turn_tables")
 # Scene-10 committed cache (the final-roll table exactly as shown on screen).
 SCENE10_CACHE = Path(__file__).resolve().parents[1] / (
     "animations/assets/first_turn_cache.json")

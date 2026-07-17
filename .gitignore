@@ -44,6 +44,10 @@ animations/**/cache/
 !/math/data/turn_kernels/
 !/math/data/turn_kernels/**
 
+# Keep published CSV exports (Datawrapper/Substack tables)
+!/math/data/exports/
+!/math/data/exports/**
+
 # Keep only the initial final outcome distribution
 !/math/data/final_outcome_dists/
 /math/data/final_outcome_dists/*
