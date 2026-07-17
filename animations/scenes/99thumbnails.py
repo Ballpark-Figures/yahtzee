@@ -6,7 +6,12 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from manim import config as MCFG            # real frame is 16x9 (y-radius 4.5)
 from config import *
-from assets.dice import get_die, DIE_COLORS
+from assets.dice import get_die, DIE_COLORS, SLOT_DX, ascend_and_flash
+
+# Scene 2's large-straight staircase rises `step` per die over a SLOT_DX gap
+# (assets/dice.py `ascend_and_flash`), so its slope is ASCEND_STEP / SLOT_DX.
+# Read the step from the function's own default so the thumbnail can't drift.
+ASCEND_STEP = ascend_and_flash.__kwdefaults__["step"]
 
 
 def vertical_gradient_panel(top_color, bottom_color, width=16.0, height=9.0,
@@ -121,9 +126,13 @@ class Thumbnails(YahtzeeScene):
         # ---- the dice (12345, colored BODIES on a diagonal) -----------------
         # Colored-die mode (body_color) => black pips + border, bodies red->blue
         # per DIE_COLORS — the identity coloring of scene 03's large straight.
+        # SLOPE matches scene 2's large-straight staircase: ascend_and_flash steps
+        # each die up 0.2 over a SLOT_DX horizontal gap (assets/dice.py), so the
+        # diagonal's dy/dx = 0.2 / SLOT_DX. Derive DICE_DY from DICE_DX so the
+        # thumbnail's tilt is that exact slope (not a made-up one).
         DIE_SIZE_THUMB = 1.7
-        DICE_DX        = 1.85    # rightward step per die
-        DICE_DY        = 1.15    # upward step per die (ascending 1->5 staircase)
+        DICE_DX        = 2.5     # rightward step per die (spacing; free thumbnail choice)
+        DICE_DY        = DICE_DX * (ASCEND_STEP / SLOT_DX)   # upward step → scene-2 slope
         DICE_CENTER_Y  = -1.3
 
         bg = vertical_gradient_panel(
