@@ -79,13 +79,6 @@ class Thumbnails(YahtzeeScene):
         # ---- anti-artifact tunables (mirror battleship's 00thumbnail) --------
         BG_GRAD_LIGHT = 0.06   # how far the top of the bg leans toward WHITE
         BG_GRAD_DARK  = 0.05   # how far the bottom of the bg leans toward BLACK
-        NUM_STROKE_W  = 3.0    # extra black stroke on the digits (bolds them)
-
-        # ---- the number (sourced) -------------------------------------------
-        # 258,521,977,812,672 = scene 1's final reveal, the "~259 trillion
-        # possible positions" (01intro.py gt_final; Script.md row 01 col 2).
-        NUM_POSITIONS = "258,521,977,812,672"
-        NUM_WIDTH = 13.0
 
         # ---- the dice (12345, colored pips) ---------------------------------
         DIE_SIZE_THUMB = 2.4    # big prop dice
@@ -108,16 +101,9 @@ class Thumbnails(YahtzeeScene):
         for d in dice:                       # thicker border (keeps pip_coloring color)
             d.body.set_stroke(width=DIE_BORDER_W)
 
-        # the number: big, bold, black, in the brand FONT (Inter). Center it
-        # vertically between the top of the frame and the top of the dice.
-        number = crisp_text(NUM_POSITIONS, font_size=48, color=BLACK)
-        number.scale_to_fit_width(NUM_WIDTH)
-        num_y = (MCFG.frame_y_radius + dice.get_top()[1]) / 2
-        number.move_to([0, num_y, 0])
-        if NUM_STROKE_W > 0:
-            number.set_stroke(BLACK, width=NUM_STROKE_W, opacity=1.0)
-
-        self.add(bg, number, dice)
+        # "All" / number / "Positions", centered above the dice
+        block = self._number_block(dice.get_top()[1])
+        self.add(bg, block, dice)
 
     # b : same number, "large-straight" styling — colored BODIES (black pips)
     #     stepped along a diagonal. THE ANIMATION's flash colours (scene 2's
@@ -200,6 +186,34 @@ class Thumbnails(YahtzeeScene):
         d.add_to_back(backing)                    # beige backing behind the strips
         return d
 
+    def _number_block(self, dice_top_y):
+        """The label block shared by EVERY thumbnail: the big sourced number with
+        'All' above and 'Positions' below (smaller, centered). Returns the VGroup,
+        centered horizontally and vertically between the frame top and dice_top_y.
+
+        The number 258,521,977,812,672 = scene 1's final reveal, the "~259 trillion
+        possible positions" (01intro.py gt_final; Script.md row 01 col 2)."""
+        NUM_POSITIONS = "258,521,977,812,672"
+        NUM_WIDTH     = 13.0
+        NUM_STROKE_W  = 3.0
+        LABEL_FRAC    = 0.45   # 'All'/'Positions' height ÷ the number's height
+        LABEL_STROKE  = 1.5
+        LABEL_BUFF    = 0.22   # gap between the labels and the number
+
+        number = crisp_text(NUM_POSITIONS, font_size=48, color=BLACK)
+        number.scale_to_fit_width(NUM_WIDTH)
+        number.set_stroke(BLACK, width=NUM_STROKE_W, opacity=1.0)
+
+        all_lbl, pos_lbl = (crisp_text(w, font_size=48, color=BLACK)
+                            for w in ("All", "Positions"))
+        for lbl in (all_lbl, pos_lbl):
+            lbl.scale_to_fit_height(number.height * LABEL_FRAC)
+            lbl.set_stroke(BLACK, width=LABEL_STROKE, opacity=1.0)
+
+        block = VGroup(all_lbl, number, pos_lbl).arrange(DOWN, buff=LABEL_BUFF)
+        block.move_to([0, (MCFG.frame_y_radius + dice_top_y) / 2, 0])
+        return block
+
     def _straight_thumb(self, dice):
         """Shared builder for the diagonal large-straight thumbnails (b/c/d): the
         frames differ ONLY in the per-die colouring passed in. Steps the dice along
@@ -208,12 +222,7 @@ class Thumbnails(YahtzeeScene):
         # ---- anti-artifact tunables (mirror battleship's 00thumbnail) --------
         BG_GRAD_LIGHT = 0.06
         BG_GRAD_DARK  = 0.05
-        NUM_STROKE_W  = 3.0
         DIE_BORDER_W  = 6.0                       # match subscene a's border thickness
-
-        # ---- the number (sourced, same as subscene a) -----------------------
-        NUM_POSITIONS = "258,521,977,812,672"
-        NUM_WIDTH = 13.0
 
         # ---- diagonal geometry ----------------------------------------------
         # Size/spacing match subscene a (size 2.4, buff 0.45). SLOPE matches scene 2's
@@ -234,12 +243,6 @@ class Thumbnails(YahtzeeScene):
             d.body.set_stroke(width=DIE_BORDER_W)  # thicken border to match a
         group.move_to([0, DICE_CENTER_Y, 0])
 
-        # number centered vertically between the frame top and the dice's top
-        number = crisp_text(NUM_POSITIONS, font_size=48, color=BLACK)
-        number.scale_to_fit_width(NUM_WIDTH)
-        num_y = (MCFG.frame_y_radius + group.get_top()[1]) / 2
-        number.move_to([0, num_y, 0])
-        if NUM_STROKE_W > 0:
-            number.set_stroke(BLACK, width=NUM_STROKE_W, opacity=1.0)
-
-        self.add(bg, number, group)
+        # "All" / number / "Positions", centered above the dice
+        block = self._number_block(group.get_top()[1])
+        self.add(bg, block, group)
