@@ -108,9 +108,10 @@ def _keep_group_table(stage, empty, payload, row, box_pts, cat_of):
     KEEP-ALL-5 rows (made hands: you keep everything, so the box + score are
     locked) are further merged by their resulting (box, score) — every made hand
     with the same outcome is equivalent — into a single row that shows the
-    lexicographically-first hand as its Kept dice example and has its WHOLE row
-    (except Rank) bolded via Markdown to mark it as completed (enable 'parse
-    Markdown' in Datawrapper's Refine tab)."""
+    lexicographically-first hand as its Kept dice example and has its TEXT cells
+    (Kept dice, Most likely box) bolded via Markdown to mark it as completed
+    (enable 'parse Markdown' in Datawrapper's Refine tab). Numeric cells are left
+    unbolded so Datawrapper keeps those columns numeric."""
     dec_A = payload["decisions_A"][row]
     dec_B = payload["decisions_B"][row]
     dec = dec_A if stage == "A" else dec_B
@@ -175,8 +176,10 @@ def _keep_group_table(stage, empty, payload, row, box_pts, cat_of):
     # Bold every cell (except Rank) of the completed (made-hand) rows via Markdown
     # (enable 'parse Markdown' in Datawrapper's Refine tab).
     made_mask = df.pop("_made")
-    for c in [col for col in df.columns if col != "Rank"]:
-        col = df[c].astype(object)               # allow str + number in one column
+    # Bold only the TEXT cells of made-hand rows (bolding numeric cells makes
+    # Datawrapper treat those columns as text and drops their number formatting).
+    for c in ["Kept dice", "Most likely box"]:
+        col = df[c].astype(object)
         col.loc[made_mask] = col.loc[made_mask].map(lambda v: f"**{v}**")
         df[c] = col
     return df
@@ -226,10 +229,7 @@ def main():
         "reroll2_final": _final_table(empty, box_pts, cat_of),
     }
     for name, df in tables.items():
-        # strip Markdown bold before summing (bolded made-hand cells are strings)
-        probs = pd.to_numeric(
-            df["Probability (%)"].astype(str).str.replace("*", "", regex=False))
-        total_p = float(probs.sum())                   # rounded; ~100 modulo drift
+        total_p = float(df["Probability (%)"].sum())   # rounded; ~100 modulo drift
         path = OUT_DIR / f"{name}.csv"
         df.to_csv(path, index=False)
         print(f"wrote {path}  ({len(df)} rows, rounded Probability sums to {total_p:.1f}%)")
