@@ -114,6 +114,7 @@ def _keep_group_table(stage, empty, payload, row, box_pts, cat_of):
         groups.setdefault(int(dec[d]), []).append(d)
 
     rows = []
+    raw_total = 0.0                          # unrounded mass, for the partition check
     for keep_idx, hands in groups.items():
         rep = hands[0]                       # any hand in the group (same future)
         nums, denom = _final_nums_from_hand(rep, stage, dec_A, dec_B)
@@ -124,14 +125,17 @@ def _keep_group_table(stage, empty, payload, row, box_pts, cat_of):
         best_cat = int(np.argmax(cat_prob))
         ev_group = float(ev[rep])
         assert max(abs(float(ev[h]) - ev_group) for h in hands) < 1e-4, keep_idx
+        group_p = float(sum(reach[h] for h in hands))
+        raw_total += group_p
         kept = keep_to_values(keep_idx)
         rows.append({
             "Kept dice": " ".join(str(int(v)) for v in kept) if kept else "(reroll all)",
-            "Probability (%)": round(100.0 * float(sum(reach[h] for h in hands)), 3),
+            "Probability (%)": round(100.0 * group_p, 1),
             "Expected turn points": round(exp_turn, 2),
             "Most likely box": DISPLAY_NAMES[best_cat],
-            "Expected game total": round(ev_group, 2),
+            "Expected game total": round(ev_group, 1),
         })
+    assert abs(raw_total - 1.0) < 1e-3, f"{stage} keep mass = {raw_total}"
     df = pd.DataFrame(rows).sort_values(
         "Expected game total", ascending=False).reset_index(drop=True)
     df.insert(0, "Rank", np.arange(1, len(df) + 1))
@@ -150,15 +154,18 @@ def _final_table(empty, box_pts, cat_of):
 
     data = json.loads(SCENE10_CACHE.read_text())
     rows = []
+    raw_total = 0.0                          # unrounded mass, for the partition check
     for r in data["outcomes"]:
         prob = group_prob[(int(r["cat"]), int(r["points"]))]
+        raw_total += prob
         rows.append({
             "Dice": " ".join(str(int(v)) for v in r["dice"]),
-            "Probability (%)": round(100.0 * prob, 3),
+            "Probability (%)": round(100.0 * prob, 1),
             "Box": r["box"],
             "Turn points": r["points"],
-            "Expected game total": round(float(r["ev"]), 2),
+            "Expected game total": round(float(r["ev"]), 1),
         })
+    assert abs(raw_total - 1.0) < 1e-3, f"final placement mass = {raw_total}"
     df = pd.DataFrame(rows).sort_values(
         "Expected game total", ascending=False).reset_index(drop=True)
     df.insert(0, "Rank", np.arange(1, len(df) + 1))
@@ -177,11 +184,10 @@ def main():
         "reroll2_final": _final_table(empty, box_pts, cat_of),
     }
     for name, df in tables.items():
-        total_p = float(df["Probability (%)"].sum())
-        assert abs(total_p - 100.0) < 0.1, f"{name} probabilities sum to {total_p}"
+        total_p = float(df["Probability (%)"].sum())   # rounded; ~100 modulo drift
         path = OUT_DIR / f"{name}.csv"
         df.to_csv(path, index=False)
-        print(f"wrote {path}  ({len(df)} rows, Probability sums to {total_p:.3f}%)")
+        print(f"wrote {path}  ({len(df)} rows, rounded Probability sums to {total_p:.1f}%)")
         print(df.head(5).to_string(index=False))
         print()
 
