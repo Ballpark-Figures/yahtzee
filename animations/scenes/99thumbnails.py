@@ -24,6 +24,13 @@ ASCEND_STEP = ascend_and_flash.__kwdefaults__["step"]
 THUMB_DIE_SIZE = 2.4
 ANIM_COLORS = [RED, ORANGE, YELLOW, GREEN, BLUE]
 
+# Lighter value→body palette matching scene 3's large-straight dice: values 1-5 are
+# DIE_COLORS (the exact bright colours scene 3 uses); the 6th (#9B59B6, flat-UI
+# amethyst) completes the 5-colour set. FLAG: DIE_COLORS has no 6th, so the purple
+# is a new hex chosen to match — swap it if you'd rather use another.
+LIGHT_BODY = {v: DIE_COLORS[v - 1] for v in range(1, 6)}
+LIGHT_BODY[6] = "#9B59B6"
+
 
 def vertical_gradient_panel(top_color, bottom_color, width=16.0, height=9.0,
                             n_strips=140):
@@ -186,27 +193,44 @@ class Thumbnails(YahtzeeScene):
     def field_positions(self):
         self._dice_field_thumb(labels="positions")
 
-    # o–q : l–n but with the 6 value COLOURS on the die BODIES (black pips/border)
+    # o–q : l–n but with the 6 DEEP value colours (PIP_COLORS) on the die BODIES
     # o : number only
     @thumbnail
     def field_body_plain(self):
-        self._dice_field_thumb(labels=False, colored_body=True)
+        self._dice_field_thumb(labels=False, body_palette=PIP_COLORS)
 
     # p : All / number / Positions
     @thumbnail
     def field_body_labeled(self):
-        self._dice_field_thumb(labels=True, colored_body=True)
+        self._dice_field_thumb(labels=True, body_palette=PIP_COLORS)
 
     # q : number / Positions
     @thumbnail
     def field_body_positions(self):
-        self._dice_field_thumb(labels="positions", colored_body=True)
+        self._dice_field_thumb(labels="positions", body_palette=PIP_COLORS)
 
-    def _dice_field_thumb(self, labels, colored_body=False):
+    # r–t : like o–q but the LIGHTER bodies matching scene 3's large straights
+    # r : number only
+    @thumbnail
+    def field_light_plain(self):
+        self._dice_field_thumb(labels=False, body_palette=LIGHT_BODY)
+
+    # s : All / number / Positions
+    @thumbnail
+    def field_light_labeled(self):
+        self._dice_field_thumb(labels=True, body_palette=LIGHT_BODY)
+
+    # t : number / Positions
+    @thumbnail
+    def field_light_positions(self):
+        self._dice_field_thumb(labels="positions", body_palette=LIGHT_BODY)
+
+    def _dice_field_thumb(self, labels, body_palette=None):
         """The 252 distinct 5-dice outcomes from scene 1 filling the frame, with the
         number block centered vertically; any dice-set that comes within KEEP_OUT of
-        the text is removed so the words sit in clear space. `colored_body` puts the
-        6 value colours on the die BODIES (black pips/border) instead of on the pips."""
+        the text is removed so the words sit in clear space. `body_palette` (a value→
+        colour map) puts that colour on the die BODIES with black pips/border; None
+        keeps scene 1's pip-colouring."""
         BG_GRAD_LIGHT = 0.06
         BG_GRAD_DARK  = 0.05
         DIE_SIZE = 0.24        # scene 1's 252-quint die size
@@ -220,10 +244,10 @@ class Thumbnails(YahtzeeScene):
 
         # 252 sets of 5 dice, canonical order, 21×12 down the rows, fit to the frame —
         # matches scene 1's 252 grid (flow_order="dr"). Pips coloured by value, OR
-        # (colored_body) the value colour on the body with black pips.
+        # (body_palette) the value colour on the body with black pips.
         def _die(v):
-            if colored_body:
-                return get_die(v, size=DIE_SIZE, body_color=PIP_COLORS[v])
+            if body_palette is not None:
+                return get_die(v, size=DIE_SIZE, body_color=body_palette[v])
             return get_die(v, size=DIE_SIZE, pip_coloring=True)
 
         combos = list(combinations_with_replacement(range(1, 7), 5))   # 252, canonical
