@@ -1,4 +1,5 @@
 from pathlib import Path
+from itertools import combinations_with_replacement
 import math
 import sys
 
@@ -46,6 +47,39 @@ def vertical_gradient_panel(top_color, bottom_color, width=16.0, height=9.0,
             ).move_to([0, y, 0])
         )
     return strips
+
+
+# ── the 252 dice-sets from scene 1 (for the dice-field thumbnails) ────────────
+# Fit + row-balance the 252-set grid to the frame with equal margins — replicates
+# scene 1's _fit_equal_margins / _balance_rows (01intro.py) so it reads the same.
+_FIELD_MARGIN = 0.15
+_FIELD_W = 16 - 2 * _FIELD_MARGIN     # 15.7
+_FIELD_H = 9 - 2 * _FIELD_MARGIN      # 8.7
+
+
+def _fit_field(group, rows):
+    group.scale_to_fit_width(_FIELD_W)
+    if group.height > _FIELD_H:
+        group.scale_to_fit_height(_FIELD_H)
+    group.move_to(ORIGIN)
+    if rows >= 2 and group.height < _FIELD_H - 1e-3:   # stretch ROW positions to fill H
+        factor = _FIELD_H / group.height
+        cy = group.get_center()[1]
+        for sub in group:
+            x, y, z = sub.get_center()
+            sub.move_to([x, cy + (y - cy) * factor, z])
+    return group
+
+
+def _near_text(g, lines, margin):
+    """True if dice-set `g`'s bbox comes within `margin` of ANY text line's bbox."""
+    gl, gr, gb, gt = g.get_left()[0], g.get_right()[0], g.get_bottom()[1], g.get_top()[1]
+    for L in lines:
+        ll, lr = L.get_left()[0] - margin, L.get_right()[0] + margin
+        lb, lt = L.get_bottom()[1] - margin, L.get_top()[1] + margin
+        if not (gr < ll or gl > lr or gt < lb or gb > lt):
+            return True
+    return False
 
 
 class Thumbnails(YahtzeeScene):
@@ -134,6 +168,57 @@ class Thumbnails(YahtzeeScene):
     @thumbnail
     def straight_half4_positions(self):
         self._half_thumb(4, labels="positions")
+
+    # ── l–n: the 252 dice-sets from scene 1 filling the frame, text centered ────
+    # l : + centered number (no words)
+    @thumbnail
+    def field_plain(self):
+        self._dice_field_thumb(labels=False)
+
+    # m : + centered 'All' / number / 'Positions'
+    @thumbnail
+    def field_labeled(self):
+        self._dice_field_thumb(labels=True)
+
+    # n : + centered number / 'Positions'
+    @thumbnail
+    def field_positions(self):
+        self._dice_field_thumb(labels="positions")
+
+    def _dice_field_thumb(self, labels):
+        """The 252 distinct 5-dice outcomes from scene 1 filling the frame, with the
+        number block centered vertically; any dice-set that comes within KEEP_OUT of
+        the text is removed so the words sit in clear space."""
+        BG_GRAD_LIGHT = 0.06
+        BG_GRAD_DARK  = 0.05
+        DIE_SIZE = 0.24        # scene 1's 252-quint die size
+        DIE_BUFF = 0.025       # scene 1's k=5 within-group buff
+        KEEP_OUT = 0.3         # remove dice-sets within this margin of the text
+
+        bg = vertical_gradient_panel(
+            interpolate_color(BG_COLOR, WHITE, BG_GRAD_LIGHT),
+            interpolate_color(BG_COLOR, BLACK, BG_GRAD_DARK),
+        )
+
+        # 252 sets of 5 pip-coloured dice, canonical order, 21×12 down the rows,
+        # fit to the frame — matches scene 1's 252 grid (flow_order="dr").
+        combos = list(combinations_with_replacement(range(1, 7), 5))   # 252, canonical
+        groups = VGroup(*[
+            VGroup(*[get_die(v, size=DIE_SIZE, pip_coloring=True) for v in combo])
+            .arrange(RIGHT, buff=DIE_BUFF)
+            for combo in combos
+        ])
+        groups.arrange_in_grid(rows=21, cols=12, buff=(DIE_BUFF * 4, DIE_BUFF * 4),
+                               flow_order="dr")
+        _fit_field(groups, rows=21)
+
+        # centered-vertically number block; drop the dice-sets it crowds
+        block = self._number_block(0, labels)
+        block.move_to(ORIGIN)
+        lines = list(block.submobjects) if isinstance(block, VGroup) else [block]
+        kept = VGroup(*[g for g in groups if not _near_text(g, lines, KEEP_OUT)])
+
+        self.add(bg, kept, block)
 
     # ── shared builders ────────────────────────────────────────────────────────
     def _anim_dice(self):
