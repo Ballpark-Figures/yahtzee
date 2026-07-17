@@ -110,10 +110,22 @@ class Thumbnails(YahtzeeScene):
 
         self.add(bg, number, dice)
 
-    # b : same number, "large-straight" styling — colored BODIES (red->blue,
-    #     black pips) stepped along a diagonal, like scene 03's straight
+    # b : same number, "large-straight" styling — colored BODIES (black pips)
+    #     stepped along a diagonal. THE ANIMATION's flash colours (scene 2's
+    #     large_straight: RED/ORANGE/YELLOW/GREEN/BLUE).
     @thumbnail
     def straight(self):
+        self._straight_thumb([RED, ORANGE, YELLOW, GREEN, BLUE])
+
+    # c : identical to b EXCEPT the palette — scene 03's straight DIE_COLORS
+    #     (softer hexes) instead of the pure animation colours.
+    @thumbnail
+    def straight_alt(self):
+        self._straight_thumb(list(DIE_COLORS))
+
+    def _straight_thumb(self, body_colors):
+        """Shared builder for the diagonal large-straight thumbnails (b/c); the
+        two differ ONLY in `body_colors` (one die body colour per value 1..5)."""
         # ---- anti-artifact tunables (mirror battleship's 00thumbnail) --------
         BG_GRAD_LIGHT = 0.06
         BG_GRAD_DARK  = 0.05
@@ -124,16 +136,14 @@ class Thumbnails(YahtzeeScene):
         NUM_WIDTH = 13.0
 
         # ---- the dice (12345, colored BODIES on a diagonal) -----------------
-        # Colored-die mode (body_color) => black pips + border, bodies red->blue
-        # per DIE_COLORS — the identity coloring of scene 03's large straight.
-        # SLOPE matches scene 2's large-straight staircase: ascend_and_flash steps
-        # each die up 0.2 over a SLOT_DX horizontal gap (assets/dice.py), so the
-        # diagonal's dy/dx = 0.2 / SLOT_DX. Derive DICE_DY from DICE_DX so the
-        # thumbnail's tilt is that exact slope (not a made-up one).
-        DIE_SIZE_THUMB = 1.7
-        DICE_DX        = 2.5     # rightward step per die (spacing; free thumbnail choice)
+        # Colored-die mode (body_color) => black pips + border. Size/spacing match
+        # subscene a (DIE_SIZE 2.4, buff 0.45). SLOPE matches scene 2's large-
+        # straight staircase: ascend_and_flash steps each die up by ASCEND_STEP
+        # over a SLOT_DX gap (assets/dice.py), so dy/dx = ASCEND_STEP / SLOT_DX.
+        DIE_SIZE_THUMB = 2.4
+        DICE_DX        = DIE_SIZE_THUMB + 0.45    # spacing = size + buff, like 99a
         DICE_DY        = DICE_DX * (ASCEND_STEP / SLOT_DX)   # upward step → scene-2 slope
-        DICE_CENTER_Y  = -1.3
+        DICE_CENTER_Y  = -1.5
 
         bg = vertical_gradient_panel(
             interpolate_color(BG_COLOR, WHITE, BG_GRAD_LIGHT),
@@ -141,7 +151,7 @@ class Thumbnails(YahtzeeScene):
         )
 
         dice = VGroup(*[
-            get_die(v, size=DIE_SIZE_THUMB, body_color=DIE_COLORS[v - 1])
+            get_die(v, size=DIE_SIZE_THUMB, body_color=body_colors[v - 1])
             for v in range(1, 6)
         ])
         for i, d in enumerate(dice):             # step each die along the diagonal
