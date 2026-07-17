@@ -103,7 +103,14 @@ def _keep_group_table(stage, empty, payload, row, box_pts, cat_of):
     """One row per distinct optimal KEEP at stage A/B (the 252 hands grouped by
     the dice kept), ranked by expected game total. The kept dice fully determine
     the future, so expected turn points / most likely box / expected game total
-    are constant across a keep group; Probability sums over the group's hands."""
+    are constant across a keep group; Probability sums over the group's hands.
+
+    KEEP-ALL-5 rows (made hands: you keep everything, so the box + score are
+    locked) are further merged by their resulting (box, score) — every made hand
+    with the same outcome is equivalent — into a single row that shows the
+    lexicographically-first hand as its Kept dice example and has its WHOLE row
+    (except Rank) bolded via Markdown to mark it as completed (enable 'parse
+    Markdown' in Datawrapper's Refine tab)."""
     dec_A = payload["decisions_A"][row]
     dec_B = payload["decisions_B"][row]
     dec = dec_A if stage == "A" else dec_B
@@ -115,6 +122,7 @@ def _keep_group_table(stage, empty, payload, row, box_pts, cat_of):
         groups.setdefault(int(dec[d]), []).append(d)
 
     rows = []
+    made = {}                                # (cat, points) -> merged made-hand acc
     raw_total = 0.0                          # unrounded mass, for the partition check
     for keep_idx, hands in groups.items():
         rep = hands[0]                       # any hand in the group (same future)
@@ -129,17 +137,48 @@ def _keep_group_table(stage, empty, payload, row, box_pts, cat_of):
         group_p = float(sum(reach[h] for h in hands))
         raw_total += group_p
         kept = keep_to_values(keep_idx)
-        rows.append({
-            "Kept dice": "-".join(str(int(v)) for v in kept) if kept else "(reroll all)",
-            "Probability (%)": round(100.0 * group_p, 1),
-            "Expected turn points": round(exp_turn, 2),
-            "Most likely box": DISPLAY_NAMES[best_cat],
-            "Expected game total": round(ev_group, 1),
-        })
+        if len(kept) == 5:
+            # Made hand: keep all 5 -> box + score locked. Merge equivalent made
+            # hands (same box + score) and remember the lex-first example.
+            key = (best_cat, int(box_pts[rep]))
+            m = made.setdefault(key, {"prob": 0.0, "ev": ev_group,
+                                      "exp_turn": exp_turn, "examples": []})
+            m["prob"] += group_p
+            m["examples"].append(tuple(int(v) for v in kept))
+            assert abs(m["ev"] - ev_group) < 1e-4, key
+        else:
+            rows.append({
+                "Kept dice": "-".join(str(int(v)) for v in kept) if kept else "(reroll all)",
+                "Probability (%)": round(100.0 * group_p, 1),
+                "Expected turn points": round(exp_turn, 2),
+                "Most likely box": DISPLAY_NAMES[best_cat],
+                "Expected game total": round(ev_group, 1),
+                "_made": False,
+            })
     assert abs(raw_total - 1.0) < 1e-3, f"{stage} keep mass = {raw_total}"
+
+    for (cat, pts), m in made.items():
+        box = DISPLAY_NAMES[cat]
+        ex = "-".join(str(v) for v in min(m["examples"]))   # lexicographically first
+        rows.append({
+            "Kept dice": ex,
+            "Probability (%)": round(100.0 * m["prob"], 1),
+            "Expected turn points": round(m["exp_turn"], 2),
+            "Most likely box": box,
+            "Expected game total": round(m["ev"], 1),
+            "_made": True,
+        })
+
     df = pd.DataFrame(rows).sort_values(
         "Expected game total", ascending=False).reset_index(drop=True)
     df.insert(0, "Rank", np.arange(1, len(df) + 1))
+    # Bold every cell (except Rank) of the completed (made-hand) rows via Markdown
+    # (enable 'parse Markdown' in Datawrapper's Refine tab).
+    made_mask = df.pop("_made")
+    for c in [col for col in df.columns if col != "Rank"]:
+        col = df[c].astype(object)               # allow str + number in one column
+        col.loc[made_mask] = col.loc[made_mask].map(lambda v: f"**{v}**")
+        df[c] = col
     return df
 
 
@@ -187,7 +226,10 @@ def main():
         "reroll2_final": _final_table(empty, box_pts, cat_of),
     }
     for name, df in tables.items():
-        total_p = float(df["Probability (%)"].sum())   # rounded; ~100 modulo drift
+        # strip Markdown bold before summing (bolded made-hand cells are strings)
+        probs = pd.to_numeric(
+            df["Probability (%)"].astype(str).str.replace("*", "", regex=False))
+        total_p = float(probs.sum())                   # rounded; ~100 modulo drift
         path = OUT_DIR / f"{name}.csv"
         df.to_csv(path, index=False)
         print(f"wrote {path}  ({len(df)} rows, rounded Probability sums to {total_p:.1f}%)")
