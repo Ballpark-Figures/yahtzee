@@ -276,7 +276,6 @@ class Thumbnails(YahtzeeScene):
         DICE_DX       = THUMB_DIE_SIZE + 0.45     # spacing = size + buff, like 99a
         DICE_DY       = DICE_DX * (ASCEND_STEP / SLOT_DX)   # upward step → scene-2 slope
         DICE_CENTER_Y = -1.5
-        LABEL_DROP    = 0.5     # words versions: nudge dice + text down together
 
         bg = vertical_gradient_panel(
             interpolate_color(BG_COLOR, WHITE, BG_GRAD_LIGHT),
@@ -290,7 +289,17 @@ class Thumbnails(YahtzeeScene):
         group.move_to([0, DICE_CENTER_Y, 0])
 
         block = self._number_block(group.get_top()[1], labels)
-        if labels:                               # drop dice + text down together
-            group.shift(DOWN * LABEL_DROP)
-            block.shift(DOWN * LABEL_DROP)
+        if labels:
+            # Equalize three vertical gaps: frame-top↔'All', 'Positions'↔die-4 top,
+            # and die-1 bottom↔frame-bottom. Solve for the block-top T and a dice
+            # shift s (die-4 = dice[3], the 2nd-highest; die-1 = dice[0], lowest):
+            #   G1 = fy - T ; G2 = (T - H) - die4_top ; G3 = die1_bot + fy
+            #   set G1 = G2 = G3 = G  →  G = (2·fy - H - die4_top + die1_bot) / 3
+            fy       = MCFG.frame_y_radius
+            H        = block.height
+            die4_top = dice[3].get_top()[1]
+            die1_bot = dice[0].get_bottom()[1]
+            G = (2 * fy - H - die4_top + die1_bot) / 3
+            group.shift(UP * (G - fy - die1_bot))          # die1_bot → G - fy
+            block.shift(UP * ((fy - G) - block.get_top()[1]))  # block top → fy - G
         self.add(bg, block, group)
