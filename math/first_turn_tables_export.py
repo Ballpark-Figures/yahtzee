@@ -6,11 +6,13 @@ Three tables, one per roll stage of turn 1, each ranked by EXPECTED GAME TOTAL:
   roll 2  (stage B, after the first reroll, before the second reroll)
   roll 3  (stage C, the final roll, where you must place)  == scene 10's table
 
-For the first two tables each row is one of the 252 distinct dice hands you could
-be holding at that stage. Columns:
-    Dice | Probability | Expected turn points | Most likely box | Expected game total
-where Probability = P(holding this hand at this stage) under optimal play (for
-roll 1 that is just the raw initial-roll probability).
+For the first two tables each row is a distinct OPTIMAL KEEP decision (the dice
+you hold onto before the next reroll); the 252 hands are grouped by that keep.
+Columns:
+    Kept dice | Probability | Expected turn points | Most likely box | Expected game total
+where Probability = combined P over every hand whose optimal keep is this one
+(for roll 1 that sums the raw initial-roll probabilities). The downstream values
+depend ONLY on the kept dice, so they are constant across a keep group (asserted).
 
 For the final table each row is a distinct OPTIMAL placement (box + score),
 grouped exactly as scene 10 does — read straight from the committed scene-10
@@ -41,7 +43,7 @@ import pandas as pd
 
 from precomputed import ALL_DICE_STATES, dice_idx_to_values
 from reduced_game_state import ReducedGameState
-from state_explorer import get_state_row, stage_dice_probs
+from state_explorer import get_state_row, stage_dice_probs, keep_to_values
 from turn_kernel import REROLL_MATRIX, PAIR_TABLE, immediate_transition
 
 N_DICE = len(ALL_DICE_STATES)               # 252
@@ -96,27 +98,39 @@ def _box_pts_and_cat(dec_C):
     return box_pts, dec_C.astype(np.int64)
 
 
-def _mid_turn_table(stage, empty, payload, row, box_pts, cat_of):
-    """One row per dice hand at stage A/B, ranked by expected game total."""
+def _keep_group_table(stage, empty, payload, row, box_pts, cat_of):
+    """One row per distinct optimal KEEP at stage A/B (the 252 hands grouped by
+    the dice kept), ranked by expected game total. The kept dice fully determine
+    the future, so expected turn points / most likely box / expected game total
+    are constant across a keep group; Probability sums over the group's hands."""
     dec_A = payload["decisions_A"][row]
     dec_B = payload["decisions_B"][row]
+    dec = dec_A if stage == "A" else dec_B
     ev = payload["ev_A"][row] if stage == "A" else payload["ev_B"][row]
-    reach = stage_dice_probs(empty, stage)   # P(hold this hand at this stage)
+    reach = stage_dice_probs(empty, stage)   # P(hold each hand at this stage)
+
+    groups = {}                              # keep_idx -> [hand dice_idx, ...]
+    for d in range(N_DICE):
+        groups.setdefault(int(dec[d]), []).append(d)
 
     rows = []
-    for d in range(N_DICE):
-        nums, denom = _final_nums_from_hand(d, stage, dec_A, dec_B)
+    for keep_idx, hands in groups.items():
+        rep = hands[0]                       # any hand in the group (same future)
+        nums, denom = _final_nums_from_hand(rep, stage, dec_A, dec_B)
         probs = nums / denom
         exp_turn = float(probs @ box_pts)
         cat_prob = np.zeros(13, dtype=np.float64)
         np.add.at(cat_prob, cat_of, probs)
         best_cat = int(np.argmax(cat_prob))
+        ev_group = float(ev[rep])
+        assert max(abs(float(ev[h]) - ev_group) for h in hands) < 1e-4, keep_idx
+        kept = keep_to_values(keep_idx)
         rows.append({
-            "Dice": dice_str(d),
-            "Probability": round(float(reach[d]), 6),
+            "Kept dice": " ".join(str(int(v)) for v in kept) if kept else "(reroll all)",
+            "Probability": round(float(sum(reach[h] for h in hands)), 6),
             "Expected turn points": round(exp_turn, 2),
             "Most likely box": DISPLAY_NAMES[best_cat],
-            "Expected game total": round(float(ev[d]), 2),
+            "Expected game total": round(ev_group, 2),
         })
     df = pd.DataFrame(rows).sort_values(
         "Expected game total", ascending=False).reset_index(drop=True)
@@ -158,8 +172,8 @@ def main():
     box_pts, cat_of = _box_pts_and_cat(payload["decisions_C"][row])
 
     tables = {
-        "roll1": _mid_turn_table("A", empty, payload, row, box_pts, cat_of),
-        "reroll1": _mid_turn_table("B", empty, payload, row, box_pts, cat_of),
+        "roll1": _keep_group_table("A", empty, payload, row, box_pts, cat_of),
+        "reroll1": _keep_group_table("B", empty, payload, row, box_pts, cat_of),
         "reroll2_final": _final_table(empty, box_pts, cat_of),
     }
     for name, df in tables.items():
