@@ -154,6 +154,7 @@ def _keep_group_table(stage, empty, payload, row, box_pts, cat_of):
                 "Expected turn points": round(exp_turn, 2),
                 "Most likely box": DISPLAY_NAMES[best_cat],
                 "Expected game total": round(ev_group, 1),
+                "_ev_raw": ev_group,
                 "_made": False,
             })
     assert abs(raw_total - 1.0) < 1e-3, f"{stage} keep mass = {raw_total}"
@@ -167,11 +168,14 @@ def _keep_group_table(stage, empty, payload, row, box_pts, cat_of):
             "Expected turn points": round(m["exp_turn"], 2),
             "Most likely box": box,
             "Expected game total": round(m["ev"], 1),
+            "_ev_raw": m["ev"],
             "_made": True,
         })
 
+    # Rank on the RAW (unrounded) EV so near-ties that round to the same displayed
+    # value still order correctly.
     df = pd.DataFrame(rows).sort_values(
-        "Expected game total", ascending=False).reset_index(drop=True)
+        "_ev_raw", ascending=False).reset_index(drop=True).drop(columns="_ev_raw")
     df.insert(0, "Rank", np.arange(1, len(df) + 1))
     # Bold every cell (except Rank) of the completed (made-hand) rows via Markdown
     # (enable 'parse Markdown' in Datawrapper's Refine tab).
@@ -209,10 +213,12 @@ def _final_table(empty, box_pts, cat_of):
             "Dice": "-".join(str(int(v)) for v in r["dice"]),
             "Probability (%)": round(100.0 * prob, 1),
             "Expected game total": round(float(r["ev"]), 1),
+            "_ev_raw": float(r["ev"]),
         })
     assert abs(raw_total - 1.0) < 1e-3, f"final placement mass = {raw_total}"
+    # Rank on the RAW (unrounded) EV so near-ties still order correctly.
     df = pd.DataFrame(rows).sort_values(
-        "Expected game total", ascending=False).reset_index(drop=True)
+        "_ev_raw", ascending=False).reset_index(drop=True).drop(columns="_ev_raw")
     df.insert(0, "Rank", np.arange(1, len(df) + 1))
     return df
 
