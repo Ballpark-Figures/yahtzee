@@ -10,7 +10,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from manim import config as MCFG            # real frame is 16x9 (y-radius 4.5)
 from config import *
-from assets.dice import get_die, DIE_COLORS, DIE_BEIGE, SLOT_DX, ascend_and_flash
+from assets.dice import (get_die, DIE_COLORS, DIE_BEIGE, PIP_COLORS, SLOT_DX,
+                         ascend_and_flash)
 
 # Scene 2's large-straight staircase rises `step` per die over a SLOT_DX gap
 # (assets/dice.py `ascend_and_flash`), so its slope is ASCEND_STEP / SLOT_DX.
@@ -169,7 +170,7 @@ class Thumbnails(YahtzeeScene):
     def straight_half4_positions(self):
         self._half_thumb(4, labels="positions")
 
-    # ── l–n: the 252 dice-sets from scene 1 filling the frame, text centered ────
+    # ── l–q: the 252 dice-sets from scene 1 filling the frame, text centered ────
     # l : + centered number (no words)
     @thumbnail
     def field_plain(self):
@@ -185,10 +186,27 @@ class Thumbnails(YahtzeeScene):
     def field_positions(self):
         self._dice_field_thumb(labels="positions")
 
-    def _dice_field_thumb(self, labels):
+    # o–q : l–n but with the 6 value COLOURS on the die BODIES (black pips/border)
+    # o : number only
+    @thumbnail
+    def field_body_plain(self):
+        self._dice_field_thumb(labels=False, colored_body=True)
+
+    # p : All / number / Positions
+    @thumbnail
+    def field_body_labeled(self):
+        self._dice_field_thumb(labels=True, colored_body=True)
+
+    # q : number / Positions
+    @thumbnail
+    def field_body_positions(self):
+        self._dice_field_thumb(labels="positions", colored_body=True)
+
+    def _dice_field_thumb(self, labels, colored_body=False):
         """The 252 distinct 5-dice outcomes from scene 1 filling the frame, with the
         number block centered vertically; any dice-set that comes within KEEP_OUT of
-        the text is removed so the words sit in clear space."""
+        the text is removed so the words sit in clear space. `colored_body` puts the
+        6 value colours on the die BODIES (black pips/border) instead of on the pips."""
         BG_GRAD_LIGHT = 0.06
         BG_GRAD_DARK  = 0.05
         DIE_SIZE = 0.24        # scene 1's 252-quint die size
@@ -200,12 +218,17 @@ class Thumbnails(YahtzeeScene):
             interpolate_color(BG_COLOR, BLACK, BG_GRAD_DARK),
         )
 
-        # 252 sets of 5 pip-coloured dice, canonical order, 21×12 down the rows,
-        # fit to the frame — matches scene 1's 252 grid (flow_order="dr").
+        # 252 sets of 5 dice, canonical order, 21×12 down the rows, fit to the frame —
+        # matches scene 1's 252 grid (flow_order="dr"). Pips coloured by value, OR
+        # (colored_body) the value colour on the body with black pips.
+        def _die(v):
+            if colored_body:
+                return get_die(v, size=DIE_SIZE, body_color=PIP_COLORS[v])
+            return get_die(v, size=DIE_SIZE, pip_coloring=True)
+
         combos = list(combinations_with_replacement(range(1, 7), 5))   # 252, canonical
         groups = VGroup(*[
-            VGroup(*[get_die(v, size=DIE_SIZE, pip_coloring=True) for v in combo])
-            .arrange(RIGHT, buff=DIE_BUFF)
+            VGroup(*[_die(v) for v in combo]).arrange(RIGHT, buff=DIE_BUFF)
             for combo in combos
         ])
         groups.arrange_in_grid(rows=21, cols=12, buff=(DIE_BUFF * 4, DIE_BUFF * 4),
