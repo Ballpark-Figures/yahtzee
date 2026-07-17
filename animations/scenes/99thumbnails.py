@@ -303,52 +303,54 @@ class Thumbnails(YahtzeeScene):
         """Shared finisher for a frame-filling dice field (`groups` already arranged +
         fit; `rows` = sets per column). `treatment` decides how the number is made
         prominent over the field:
-          None    — REMOVE the sets it crowds (shrinking the number so the outer
-                    columns fully survive);
+          None    — REMOVE the sets it crowds;
           'dim'   — keep every set, fade the ones near the text to low opacity;
           'scrim' — keep every set, lay a translucent panel behind the text;
-          'halo'  — keep every set, give the text a thick bg-colour outline."""
+          'halo'  — keep every set, give the text a thick bg-colour outline.
+        For None and 'dim' the number is SHRUNK so its zone (text + margin) stops just
+        short of the outer columns — those full columns are never removed / dimmed."""
         KEEP_OUT = 0.3
+        DIM_MARGIN, DIM_OPACITY = 0.5, 0.22
         bg = vertical_gradient_panel(
             interpolate_color(BG_COLOR, WHITE, 0.06),
             interpolate_color(BG_COLOR, BLACK, 0.05),
         )
+        gl = list(groups)
 
-        if treatment is None:
+        def _num_width(margin):
             # flow_order='dr' fills column-major (`rows` per column): first `rows` =
-            # left column, last `rows` = right. Cap the number width so its keep-out
-            # stops just short of those, so the full outer columns appear.
-            gl = list(groups)
+            # left column, last `rows` = right. Cap the number width so text + margin
+            # stops just short of those, so the full outer columns are untouched.
             col_left_inner  = max(g.get_right()[0] for g in gl[:rows])
             col_right_inner = min(g.get_left()[0]  for g in gl[-rows:])
-            max_half = min(-col_left_inner, col_right_inner) - KEEP_OUT - 0.02
-            num_width = min(13.0, 2 * max_half)
-            block = self._number_block(0, labels, num_width=num_width)
+            return min(13.0, 2 * (min(-col_left_inner, col_right_inner) - margin - 0.02))
+
+        if treatment is None:
+            block = self._number_block(0, labels, num_width=_num_width(KEEP_OUT))
             block.move_to(ORIGIN)
             lines = list(block.submobjects) if isinstance(block, VGroup) else [block]
             kept = VGroup(*[g for g in groups if not _near_text(g, lines, KEEP_OUT)])
             self.add(bg, kept, block)
             return
 
-        # keep-all treatments: full-width number over the whole field
-        block = self._number_block(0, labels)
-        block.move_to(ORIGIN)
-        lines = list(block.submobjects) if isinstance(block, VGroup) else [block]
-
         if treatment == "dim":
-            DIM_MARGIN, DIM_OPACITY = 0.5, 0.22
-            # flow_order='dr' → first `rows` = left column, last `rows` = right column.
-            # NEVER dim those, so the full outer columns stay bright and frame the piece.
-            gl = list(groups)
-            n = len(gl)
-            for i, g in enumerate(gl):
-                if i < rows or i >= n - rows:
-                    continue
+            # number shrunk so its dim-zone never reaches the outer columns (they stay
+            # bright as a frame) — the text SIZE keeps them clear, not a special rule.
+            block = self._number_block(0, labels, num_width=_num_width(DIM_MARGIN))
+            block.move_to(ORIGIN)
+            lines = list(block.submobjects) if isinstance(block, VGroup) else [block]
+            for g in groups:
                 if _near_text(g, lines, DIM_MARGIN):
                     for die in g:                    # per-Die (asset's set_opacity)
                         die.set_opacity(DIM_OPACITY)
             self.add(bg, groups, block)
-        elif treatment == "scrim":
+            return
+
+        # scrim / halo: full-width number over the whole field
+        block = self._number_block(0, labels)
+        block.move_to(ORIGIN)
+
+        if treatment == "scrim":
             pad = 0.35
             scrim = RoundedRectangle(
                 width=block.width + 2 * pad, height=block.height + 2 * pad,
