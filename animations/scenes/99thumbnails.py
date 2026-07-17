@@ -73,67 +73,75 @@ class Thumbnails(YahtzeeScene):
     def setup_scene(self):
         pass
 
+    # NOTE a–e are the PLAIN thumbnails (number only); f–j are the SAME five WITH
+    # the "All … Positions" text. Each composition is a `_*_thumb(..., labels)`
+    # builder so the two forms never drift apart.
+
     # a : 259-trillion positions — scene 1's final number + colored-pip 1-2-3-4-5
     @thumbnail
     def positions(self):
-        # ---- anti-artifact tunables (mirror battleship's 00thumbnail) --------
-        BG_GRAD_LIGHT = 0.06   # how far the top of the bg leans toward WHITE
-        BG_GRAD_DARK  = 0.05   # how far the bottom of the bg leans toward BLACK
+        self._positions_thumb(labels=False)
 
-        # ---- the dice (12345, colored pips) ---------------------------------
-        DIE_SIZE_THUMB = 2.4    # big prop dice
-        DICE_BUFF      = 0.45
-        DICE_Y         = -1.75
-        DIE_BORDER_W   = 6.0    # thumbnail-only border thickness (default is 2.0)
-
-        # subtle gradient background over the flat cyan (anti-ringing)
-        bg = vertical_gradient_panel(
-            interpolate_color(BG_COLOR, WHITE, BG_GRAD_LIGHT),
-            interpolate_color(BG_COLOR, BLACK, BG_GRAD_DARK),
-        )
-
-        # 1-2-3-4-5 with per-value rainbow pips/border (pip_coloring convention)
-        dice = VGroup(*[
-            get_die(value=v, size=DIE_SIZE_THUMB, pip_coloring=True)
-            for v in range(1, 6)
-        ]).arrange(RIGHT, buff=DICE_BUFF)
-        dice.move_to([0, DICE_Y, 0])
-        for d in dice:                       # thicker border (keeps pip_coloring color)
-            d.body.set_stroke(width=DIE_BORDER_W)
-
-        # "All" / number / "Positions", centered above the dice
-        block = self._number_block(dice.get_top()[1])
-        self.add(bg, block, dice)
-
-    # b : same number, "large-straight" styling — colored BODIES (black pips)
-    #     stepped along a diagonal. THE ANIMATION's flash colours (scene 2's
-    #     large_straight: RED/ORANGE/YELLOW/GREEN/BLUE).
+    # b : "large-straight" styling — colored BODIES (black pips) stepped along a
+    #     diagonal, THE ANIMATION's flash colours (scene 2 large_straight).
     @thumbnail
     def straight(self):
-        self._straight_thumb([get_die(v, size=THUMB_DIE_SIZE, body_color=ANIM_COLORS[v - 1])
-                              for v in range(1, 6)])
+        self._straight_thumb(self._anim_dice(), labels=False)
 
-    # c : identical to b EXCEPT the palette — scene 03's straight DIE_COLORS
-    #     (softer hexes) instead of the pure animation colours.
+    # c : identical to b EXCEPT the palette — scene 03's straight DIE_COLORS.
     @thumbnail
     def straight_alt(self):
-        self._straight_thumb([get_die(v, size=THUMB_DIE_SIZE, body_color=DIE_COLORS[v - 1])
-                              for v in range(1, 6)])
+        self._straight_thumb(self._dc_dice(), labels=False)
 
-    # d : HALF-coloured — dice before the transition use b's animation colours,
-    #     dice after are default (beige); the transition die fades its own colour
-    #     -> beige across a line perpendicular to the line of dice. Here die 3.
+    # d : HALF-coloured straight, transition at die 3 (its colour -> beige).
     @thumbnail
     def straight_half(self):
-        self._half_thumb(3)
+        self._half_thumb(3, labels=False)
 
-    # e : same idea, transition one die LATER — die 3 stays fully yellow, die 4
-    #     is the gradient (green -> beige); die 5 default.
+    # e : half-coloured, transition one die LATER — die 3 fully yellow, die 4 the
+    #     gradient (green -> beige), die 5 default.
     @thumbnail
     def straight_half4(self):
-        self._half_thumb(4)
+        self._half_thumb(4, labels=False)
 
-    def _half_thumb(self, k):
+    # ── f–j: the same five, WITH the "All … Positions" text ────────────────────
+    # f : a + labels
+    @thumbnail
+    def positions_labeled(self):
+        self._positions_thumb(labels=True)
+
+    # g : b + labels
+    @thumbnail
+    def straight_labeled(self):
+        self._straight_thumb(self._anim_dice(), labels=True)
+
+    # h : c + labels
+    @thumbnail
+    def straight_alt_labeled(self):
+        self._straight_thumb(self._dc_dice(), labels=True)
+
+    # i : d + labels
+    @thumbnail
+    def straight_half_labeled(self):
+        self._half_thumb(3, labels=True)
+
+    # j : e + labels
+    @thumbnail
+    def straight_half4_labeled(self):
+        self._half_thumb(4, labels=True)
+
+    # ── shared builders ────────────────────────────────────────────────────────
+    def _anim_dice(self):
+        """1..5 with the scene-2 animation body colours (RED..BLUE)."""
+        return [get_die(v, size=THUMB_DIE_SIZE, body_color=ANIM_COLORS[v - 1])
+                for v in range(1, 6)]
+
+    def _dc_dice(self):
+        """1..5 with scene 03's DIE_COLORS body palette."""
+        return [get_die(v, size=THUMB_DIE_SIZE, body_color=DIE_COLORS[v - 1])
+                for v in range(1, 6)]
+
+    def _half_thumb(self, k, labels):
         """Half-coloured straight: dice 1..k-1 fully in their animation colour, die
         k the gradient (its own colour -> beige), dice k+1..5 default beige."""
         dice = []
@@ -144,7 +152,32 @@ class Thumbnails(YahtzeeScene):
                 dice.append(self._gradient_die(v, THUMB_DIE_SIZE, ANIM_COLORS[v - 1], DIE_BEIGE))
             else:
                 dice.append(get_die(v, size=THUMB_DIE_SIZE))             # default beige
-        self._straight_thumb(dice)
+        self._straight_thumb(dice, labels)
+
+    def _positions_thumb(self, labels):
+        """Subscene a's composition: colored-pip 1-2-3-4-5 in a row under the number
+        block. `labels` toggles the 'All'/'Positions' text."""
+        BG_GRAD_LIGHT = 0.06   # how far the top of the bg leans toward WHITE
+        BG_GRAD_DARK  = 0.05   # how far the bottom of the bg leans toward BLACK
+        DIE_SIZE_THUMB = 2.4    # big prop dice
+        DICE_BUFF      = 0.45
+        DICE_Y         = -1.75
+        DIE_BORDER_W   = 6.0    # thumbnail-only border thickness (default is 2.0)
+
+        bg = vertical_gradient_panel(
+            interpolate_color(BG_COLOR, WHITE, BG_GRAD_LIGHT),
+            interpolate_color(BG_COLOR, BLACK, BG_GRAD_DARK),
+        )
+        # 1-2-3-4-5 with per-value rainbow pips/border (pip_coloring convention)
+        dice = VGroup(*[
+            get_die(value=v, size=DIE_SIZE_THUMB, pip_coloring=True)
+            for v in range(1, 6)
+        ]).arrange(RIGHT, buff=DICE_BUFF)
+        dice.move_to([0, DICE_Y, 0])
+        for d in dice:                       # thicker border (keeps pip_coloring color)
+            d.body.set_stroke(width=DIE_BORDER_W)
+        block = self._number_block(dice.get_top()[1], labels)
+        self.add(bg, block, dice)
 
     def _gradient_die(self, value, size, c_from, c_to, *, band=1.0, n_strips=90):
         """A die whose interior goes `c_from` (dice-2 side) -> `c_to` (dice-4 side),
@@ -186,10 +219,11 @@ class Thumbnails(YahtzeeScene):
         d.add_to_back(backing)                    # beige backing behind the strips
         return d
 
-    def _number_block(self, dice_top_y):
-        """The label block shared by EVERY thumbnail: the big sourced number with
-        'All' above and 'Positions' below (smaller, centered). Returns the VGroup,
-        centered horizontally and vertically between the frame top and dice_top_y.
+    def _number_block(self, dice_top_y, labels):
+        """The number block shared by every thumbnail: the big sourced number, and
+        — when `labels` — 'All' above and 'Positions' below (smaller, centered).
+        Returns the mobject, centered horizontally and vertically between the frame
+        top and dice_top_y.
 
         The number 258,521,977,812,672 = scene 1's final reveal, the "~259 trillion
         possible positions" (01intro.py gt_final; Script.md row 01 col 2)."""
@@ -204,21 +238,24 @@ class Thumbnails(YahtzeeScene):
         number.scale_to_fit_width(NUM_WIDTH)
         number.set_stroke(BLACK, width=NUM_STROKE_W, opacity=1.0)
 
-        all_lbl, pos_lbl = (crisp_text(w, font_size=48, color=BLACK)
-                            for w in ("All", "Positions"))
-        for lbl in (all_lbl, pos_lbl):
-            lbl.scale_to_fit_height(number.height * LABEL_FRAC)
-            lbl.set_stroke(BLACK, width=LABEL_STROKE, opacity=1.0)
+        if labels:
+            all_lbl, pos_lbl = (crisp_text(w, font_size=48, color=BLACK)
+                                for w in ("All", "Positions"))
+            for lbl in (all_lbl, pos_lbl):
+                lbl.scale_to_fit_height(number.height * LABEL_FRAC)
+                lbl.set_stroke(BLACK, width=LABEL_STROKE, opacity=1.0)
+            block = VGroup(all_lbl, number, pos_lbl).arrange(DOWN, buff=LABEL_BUFF)
+        else:
+            block = number
 
-        block = VGroup(all_lbl, number, pos_lbl).arrange(DOWN, buff=LABEL_BUFF)
         block.move_to([0, (MCFG.frame_y_radius + dice_top_y) / 2, 0])
         return block
 
-    def _straight_thumb(self, dice):
-        """Shared builder for the diagonal large-straight thumbnails (b/c/d): the
-        frames differ ONLY in the per-die colouring passed in. Steps the dice along
-        scene 2's slope, thickens every border to match subscene a, and adds the bg
-        + the centered number."""
+    def _straight_thumb(self, dice, labels):
+        """Shared builder for the diagonal large-straight thumbnails: the frames
+        differ ONLY in the per-die colouring passed in (and `labels`). Steps the dice
+        along scene 2's slope, thickens every border to match subscene a, and adds
+        the bg + the number block."""
         # ---- anti-artifact tunables (mirror battleship's 00thumbnail) --------
         BG_GRAD_LIGHT = 0.06
         BG_GRAD_DARK  = 0.05
@@ -243,6 +280,5 @@ class Thumbnails(YahtzeeScene):
             d.body.set_stroke(width=DIE_BORDER_W)  # thicken border to match a
         group.move_to([0, DICE_CENTER_Y, 0])
 
-        # "All" / number / "Positions", centered above the dice
-        block = self._number_block(group.get_top()[1])
+        block = self._number_block(group.get_top()[1], labels)
         self.add(bg, block, group)
