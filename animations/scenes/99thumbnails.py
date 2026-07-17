@@ -1,5 +1,8 @@
 from pathlib import Path
+import math
 import sys
+
+import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
@@ -146,12 +149,41 @@ class Thumbnails(YahtzeeScene):
                 dice.append(self._gradient_die(v, THUMB_DIE_SIZE, ANIM_COLORS[2], DIE_BEIGE))
         self._straight_thumb(dice)
 
-    def _gradient_die(self, value, size, c_from, c_to):
-        """A die whose body fades `c_from` (die-2 side) -> `c_to` (die-4 side) — the
-        gradient runs along the dice-line direction, so its transition line is
-        perpendicular to the line of dice. Black pips + border, like a plain die."""
+    def _gradient_die(self, value, size, c_from, c_to, *, band=0.5, n_strips=90):
+        """A die whose interior goes `c_from` (dice-2 side) -> `c_to` (dice-4 side),
+        the transition CONCENTRATED in a narrow `band` (die units) around a line
+        perpendicular to the line of dice.
+
+        Built as colour strips (tilted to the dice-line angle) clipped to the die
+        shape with Intersection, placed BEHIND a transparent-fill body so the black
+        border + pips stay crisp on top. We clip strips rather than use manim's
+        plain gradient fill, which smears colour around the rounded-rect perimeter
+        (that put yellow in the bottom-right and stretched the blend over the whole
+        die)."""
+        c_from, c_to = ManimColor(c_from), ManimColor(c_to)   # DIE_BEIGE is a hex str
         d = get_die(value, size=size)
-        d.body.set_fill([c_from, c_to], opacity=1.0)
+        body = d.body
+        clip = body.copy().set_fill(WHITE, opacity=1.0).set_stroke(width=0)
+        backing = body.copy().set_fill(c_to, opacity=1.0).set_stroke(width=0)  # hides gaps
+        body.set_fill(opacity=0.0)               # transparent interior; keep the border
+        ctr = body.get_center()
+        theta = math.atan2(ASCEND_STEP, SLOT_DX)  # dice-line angle → perpendicular divide
+        u = np.array([math.cos(theta), math.sin(theta), 0.0])   # gradient axis
+        span = size                               # cover the die interior along u
+        strip_w = span / n_strips
+        overlay = VGroup()
+        for i in range(n_strips):
+            t = -span / 2 + (i + 0.5) * strip_w   # position along the gradient axis
+            a = min(1.0, max(0.0, (t + band / 2) / band))       # 0 = c_from .. 1 = c_to
+            col = interpolate_color(c_from, c_to, a)
+            strip = Rectangle(width=strip_w * 1.6, height=size * 1.6,
+                              stroke_width=0, fill_color=col, fill_opacity=1.0)
+            strip.rotate(theta).move_to(ctr + t * u)
+            piece = Intersection(strip, clip, fill_color=col, fill_opacity=1.0,
+                                 stroke_width=0)
+            overlay.add(piece)
+        d.add_to_back(overlay)                    # behind the (transparent) body + pips
+        d.add_to_back(backing)                    # beige backing behind the strips
         return d
 
     def _straight_thumb(self, dice):
