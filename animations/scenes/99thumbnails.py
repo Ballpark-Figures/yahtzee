@@ -337,7 +337,13 @@ class Thumbnails(YahtzeeScene):
 
         if treatment == "dim":
             DIM_MARGIN, DIM_OPACITY = 0.5, 0.22
-            for g in groups:
+            # flow_order='dr' → first `rows` = left column, last `rows` = right column.
+            # NEVER dim those, so the full outer columns stay bright and frame the piece.
+            gl = list(groups)
+            n = len(gl)
+            for i, g in enumerate(gl):
+                if i < rows or i >= n - rows:
+                    continue
                 if _near_text(g, lines, DIM_MARGIN):
                     for die in g:                    # per-Die (asset's set_opacity)
                         die.set_opacity(DIM_OPACITY)
