@@ -232,7 +232,7 @@ class Thumbnails(YahtzeeScene):
         NUM_STROKE_W  = 3.0
         LABEL_FRAC    = 0.58   # 'All'/'Positions' height ÷ the number's height
         LABEL_STROKE  = 1.8
-        LABEL_GAP     = 0.24   # gap from the DIGIT body to each label
+        LABEL_GAP     = 0.4    # gap from the DIGIT body to each label
 
         number = crisp_text(NUM_POSITIONS, font_size=48, color=BLACK)
         number.scale_to_fit_width(NUM_WIDTH)
