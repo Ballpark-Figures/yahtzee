@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from manim import config as MCFG            # real frame is 16x9 (y-radius 4.5)
 from config import *
-from assets.dice import get_die
+from assets.dice import get_die, DIE_COLORS
 
 
 def vertical_gradient_panel(top_color, bottom_color, width=16.0, height=9.0,
@@ -37,11 +37,13 @@ def vertical_gradient_panel(top_color, bottom_color, width=16.0, height=9.0,
 class Thumbnails(YahtzeeScene):
     """Scene 99 — YouTube thumbnails (static title cards, NOT animated).
 
-    One `@subscene` per thumbnail; each builds a STATIC composition and `add`s
-    it (no `self.play`). The cyan `BG_COLOR` is applied by `YahtzeeScene`. Style
-    modelled on battleship's `00thumbnail.py` (big bold black number up top + a
-    prop below, subtle gradient bg + bold digit stroke to survive YouTube's
-    downscale/JPEG pass) — but in the NEW brand FONT (Inter, via `crisp_text`).
+    One `@thumbnail` per thumbnail; each builds a STATIC composition and `add`s
+    it (no `self.play`). `@thumbnail` (not `@subscene`) makes each frame INDEPENDENT
+    — the framework renders it from a clean, empty frame with no carry-over from the
+    previous one — so keep the video's normal base (`YahtzeeScene`, which applies the
+    cyan `BG_COLOR`). Style modelled on battleship's `00thumbnail.py` (big bold black
+    number up top + a prop below, subtle gradient bg + bold digit stroke to survive
+    YouTube's downscale/JPEG pass) — but in the NEW brand FONT (Inter, via `crisp_text`).
 
     Grab the PNG per thumbnail with:
         render 99a                                 # 4K PNG (manim -s -qk), the upload asset
@@ -58,7 +60,7 @@ class Thumbnails(YahtzeeScene):
         pass
 
     # a : 259-trillion positions — scene 1's final number + colored-pip 1-2-3-4-5
-    @subscene
+    @thumbnail
     def positions(self):
         # ---- anti-artifact tunables (mirror battleship's 00thumbnail) --------
         BG_GRAD_LIGHT = 0.06   # how far the top of the bg leans toward WHITE
@@ -75,7 +77,7 @@ class Thumbnails(YahtzeeScene):
         DIE_SIZE_THUMB = 2.4    # big prop dice
         DICE_BUFF      = 0.45
         DICE_Y         = -1.75
-        DIE_BORDER_W   = 4.0    # thumbnail-only border thickness (default is 2.0)
+        DIE_BORDER_W   = 6.0    # thumbnail-only border thickness (default is 2.0)
 
         # subtle gradient background over the flat cyan (anti-ringing)
         bg = vertical_gradient_panel(
@@ -94,6 +96,50 @@ class Thumbnails(YahtzeeScene):
 
         # the number: big, bold, black, in the brand FONT (Inter). Center it
         # vertically between the top of the frame and the top of the dice.
+        number = crisp_text(NUM_POSITIONS, font_size=48, color=BLACK)
+        number.scale_to_fit_width(NUM_WIDTH)
+        num_y = (MCFG.frame_y_radius + dice.get_top()[1]) / 2
+        number.move_to([0, num_y, 0])
+        if NUM_STROKE_W > 0:
+            number.set_stroke(BLACK, width=NUM_STROKE_W, opacity=1.0)
+
+        self.add(bg, number, dice)
+
+    # b : same number, "large-straight" styling — colored BODIES (red->blue,
+    #     black pips) stepped along a diagonal, like scene 03's straight
+    @thumbnail
+    def straight(self):
+        # ---- anti-artifact tunables (mirror battleship's 00thumbnail) --------
+        BG_GRAD_LIGHT = 0.06
+        BG_GRAD_DARK  = 0.05
+        NUM_STROKE_W  = 3.0
+
+        # ---- the number (sourced, same as subscene a) -----------------------
+        NUM_POSITIONS = "258,521,977,812,672"
+        NUM_WIDTH = 13.0
+
+        # ---- the dice (12345, colored BODIES on a diagonal) -----------------
+        # Colored-die mode (body_color) => black pips + border, bodies red->blue
+        # per DIE_COLORS — the identity coloring of scene 03's large straight.
+        DIE_SIZE_THUMB = 1.7
+        DICE_DX        = 1.85    # rightward step per die
+        DICE_DY        = 1.15    # upward step per die (ascending 1->5 staircase)
+        DICE_CENTER_Y  = -1.3
+
+        bg = vertical_gradient_panel(
+            interpolate_color(BG_COLOR, WHITE, BG_GRAD_LIGHT),
+            interpolate_color(BG_COLOR, BLACK, BG_GRAD_DARK),
+        )
+
+        dice = VGroup(*[
+            get_die(v, size=DIE_SIZE_THUMB, body_color=DIE_COLORS[v - 1])
+            for v in range(1, 6)
+        ])
+        for i, d in enumerate(dice):             # step each die along the diagonal
+            d.move_to([i * DICE_DX, i * DICE_DY, 0])
+        dice.move_to([0, DICE_CENTER_Y, 0])
+
+        # number centered vertically between the frame top and the dice's top
         number = crisp_text(NUM_POSITIONS, font_size=48, color=BLACK)
         number.scale_to_fit_width(NUM_WIDTH)
         num_y = (MCFG.frame_y_radius + dice.get_top()[1]) / 2
