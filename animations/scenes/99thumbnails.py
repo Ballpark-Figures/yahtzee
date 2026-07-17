@@ -69,12 +69,13 @@ class Thumbnails(YahtzeeScene):
         # 258,521,977,812,672 = scene 1's final reveal, the "~259 trillion
         # possible positions" (01intro.py gt_final; Script.md row 01 col 2).
         NUM_POSITIONS = "258,521,977,812,672"
-        NUM_WIDTH = 14.5
+        NUM_WIDTH = 13.0
 
         # ---- the dice (12345, colored pips) ---------------------------------
         DIE_SIZE_THUMB = 2.4    # big prop dice
         DICE_BUFF      = 0.45
         DICE_Y         = -1.75
+        DIE_BORDER_W   = 4.0    # thumbnail-only border thickness (default is 2.0)
 
         # subtle gradient background over the flat cyan (anti-ringing)
         bg = vertical_gradient_panel(
@@ -88,6 +89,8 @@ class Thumbnails(YahtzeeScene):
             for v in range(1, 6)
         ]).arrange(RIGHT, buff=DICE_BUFF)
         dice.move_to([0, DICE_Y, 0])
+        for d in dice:                       # thicker border (keeps pip_coloring color)
+            d.body.set_stroke(width=DIE_BORDER_W)
 
         # the number: big, bold, black, in the brand FONT (Inter). Center it
         # vertically between the top of the frame and the top of the dice.
