@@ -43,9 +43,11 @@ class Thumbnails(YahtzeeScene):
     downscale/JPEG pass) — but in the NEW brand FONT (Inter, via `crisp_text`).
 
     Grab the PNG per thumbnail with:
-        render 99a --thumb                         # 4K PNG (manim -s -qk), the upload asset
-        render 99a --thumb --fast                  # quick low-res PNG to check layout
-    The PNG lands (and its path prints) under media/images/99thumbnails/.
+        render 99a                                 # 4K PNG (manim -s -qk), the upload asset
+        render 99a --fast                          # quick low-res PNG to check layout
+    Scene 99 auto-renders as a still image (no --thumb needed — the 99 slot is
+    reserved for thumbnails). The PNG lands (and its path prints) under
+    media/images/99thumbnails/.
 
     NB numbers on a thumbnail are still SOURCED, never invented (see the
     numbers-are-the-product rule).
