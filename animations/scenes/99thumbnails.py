@@ -276,6 +276,7 @@ class Thumbnails(YahtzeeScene):
         DICE_DX       = THUMB_DIE_SIZE + 0.45     # spacing = size + buff, like 99a
         DICE_DY       = DICE_DX * (ASCEND_STEP / SLOT_DX)   # upward step → scene-2 slope
         DICE_CENTER_Y = -1.5
+        LABEL_DROP    = 0.5     # words versions: nudge dice + text down together
 
         bg = vertical_gradient_panel(
             interpolate_color(BG_COLOR, WHITE, BG_GRAD_LIGHT),
@@ -289,4 +290,7 @@ class Thumbnails(YahtzeeScene):
         group.move_to([0, DICE_CENTER_Y, 0])
 
         block = self._number_block(group.get_top()[1], labels)
+        if labels:                               # drop dice + text down together
+            group.shift(DOWN * LABEL_DROP)
+            block.shift(DOWN * LABEL_DROP)
         self.add(bg, block, group)
