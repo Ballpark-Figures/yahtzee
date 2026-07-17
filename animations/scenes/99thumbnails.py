@@ -212,8 +212,17 @@ class Thumbnails(YahtzeeScene):
                                flow_order="dr")
         _fit_field(groups, rows=21)
 
+        # Shrink the number just enough that its keep-out never reaches the leftmost
+        # / rightmost dice columns, so those full columns survive. flow_order='dr'
+        # fills column-major (21 per column): first 21 = left column, last 21 = right.
+        gl = list(groups)
+        col_left_inner  = max(g.get_right()[0] for g in gl[:21])    # left col's right edge
+        col_right_inner = min(g.get_left()[0]  for g in gl[-21:])   # right col's left edge
+        max_half = min(-col_left_inner, col_right_inner) - KEEP_OUT - 0.02
+        num_width = min(13.0, 2 * max_half)
+
         # centered-vertically number block; drop the dice-sets it crowds
-        block = self._number_block(0, labels)
+        block = self._number_block(0, labels, num_width=num_width)
         block.move_to(ORIGIN)
         lines = list(block.submobjects) if isinstance(block, VGroup) else [block]
         kept = VGroup(*[g for g in groups if not _near_text(g, lines, KEEP_OUT)])
@@ -309,24 +318,24 @@ class Thumbnails(YahtzeeScene):
         d.add_to_back(backing)                    # beige backing behind the strips
         return d
 
-    def _number_block(self, dice_top_y, labels):
+    def _number_block(self, dice_top_y, labels, num_width=13.0):
         """The number block shared by every thumbnail: the big sourced number,
         optionally wrapped by 'All' above and/or 'Positions' below (smaller). Returns
         the mobject, centered horizontally and vertically between the frame top and
         dice_top_y. `labels` selects which words: False/None (none), True/'both'
-        (All + Positions), or 'positions' (only 'Positions').
+        (All + Positions), or 'positions' (only 'Positions'). `num_width` sets the
+        number's width (the dice-field thumbnails shrink it to clear the outer dice).
 
         The number 258,521,977,812,672 = scene 1's final reveal, the "~259 trillion
         possible positions" (01intro.py gt_final; Script.md row 01 col 2)."""
         NUM_POSITIONS = "258,521,977,812,672"
-        NUM_WIDTH     = 13.0
         NUM_STROKE_W  = 3.0
         LABEL_FRAC    = 0.58   # 'All'/'Positions' height ÷ the number's height
         LABEL_STROKE  = 1.8
         LABEL_GAP     = 0.4    # gap from the DIGIT body to each label
 
         number = crisp_text(NUM_POSITIONS, font_size=48, color=BLACK)
-        number.scale_to_fit_width(NUM_WIDTH)
+        number.scale_to_fit_width(num_width)
         number.set_stroke(BLACK, width=NUM_STROKE_W, opacity=1.0)
 
         show_all = labels in (True, "both")
