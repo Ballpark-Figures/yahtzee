@@ -6,12 +6,18 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from manim import config as MCFG            # real frame is 16x9 (y-radius 4.5)
 from config import *
-from assets.dice import get_die, DIE_COLORS, SLOT_DX, ascend_and_flash
+from assets.dice import get_die, DIE_COLORS, DIE_BEIGE, SLOT_DX, ascend_and_flash
 
 # Scene 2's large-straight staircase rises `step` per die over a SLOT_DX gap
 # (assets/dice.py `ascend_and_flash`), so its slope is ASCEND_STEP / SLOT_DX.
 # Read the step from the function's own default so the thumbnail can't drift.
 ASCEND_STEP = ascend_and_flash.__kwdefaults__["step"]
+
+# Diagonal-thumbnail die size (matches subscene a) and scene 2's large_straight
+# flash colours (scorecard.large_straight). ANIM_COLORS uses the raw palette on
+# purpose — these ARE the animation's colours (lint warns; intentional).
+THUMB_DIE_SIZE = 2.4
+ANIM_COLORS = [RED, ORANGE, YELLOW, GREEN, BLUE]
 
 
 def vertical_gradient_panel(top_color, bottom_color, width=16.0, height=9.0,
@@ -115,55 +121,79 @@ class Thumbnails(YahtzeeScene):
     #     large_straight: RED/ORANGE/YELLOW/GREEN/BLUE).
     @thumbnail
     def straight(self):
-        self._straight_thumb([RED, ORANGE, YELLOW, GREEN, BLUE])
+        self._straight_thumb([get_die(v, size=THUMB_DIE_SIZE, body_color=ANIM_COLORS[v - 1])
+                              for v in range(1, 6)])
 
     # c : identical to b EXCEPT the palette — scene 03's straight DIE_COLORS
     #     (softer hexes) instead of the pure animation colours.
     @thumbnail
     def straight_alt(self):
-        self._straight_thumb(list(DIE_COLORS))
+        self._straight_thumb([get_die(v, size=THUMB_DIE_SIZE, body_color=DIE_COLORS[v - 1])
+                              for v in range(1, 6)])
 
-    def _straight_thumb(self, body_colors):
-        """Shared builder for the diagonal large-straight thumbnails (b/c); the
-        two differ ONLY in `body_colors` (one die body colour per value 1..5)."""
+    # d : HALF-coloured — dice 1&2 use b's animation colours, 4&5 are default
+    #     (beige); die 3 TRANSITIONS yellow->beige across a line perpendicular to
+    #     the line of dice (gradient direction runs ALONG the dice line).
+    @thumbnail
+    def straight_half(self):
+        dice = []
+        for v in range(1, 6):
+            if v in (1, 2):
+                dice.append(get_die(v, size=THUMB_DIE_SIZE, body_color=ANIM_COLORS[v - 1]))
+            elif v in (4, 5):
+                dice.append(get_die(v, size=THUMB_DIE_SIZE))              # default beige
+            else:                                                        # v == 3: transition
+                dice.append(self._gradient_die(v, THUMB_DIE_SIZE, ANIM_COLORS[2], DIE_BEIGE))
+        self._straight_thumb(dice)
+
+    def _gradient_die(self, value, size, c_from, c_to):
+        """A die whose body fades `c_from` (die-2 side) -> `c_to` (die-4 side) — the
+        gradient runs along the dice-line direction, so its transition line is
+        perpendicular to the line of dice. Black pips + border, like a plain die."""
+        d = get_die(value, size=size)
+        d.body.set_fill([c_from, c_to], opacity=1.0)
+        return d
+
+    def _straight_thumb(self, dice):
+        """Shared builder for the diagonal large-straight thumbnails (b/c/d): the
+        frames differ ONLY in the per-die colouring passed in. Steps the dice along
+        scene 2's slope, thickens every border to match subscene a, and adds the bg
+        + the centered number."""
         # ---- anti-artifact tunables (mirror battleship's 00thumbnail) --------
         BG_GRAD_LIGHT = 0.06
         BG_GRAD_DARK  = 0.05
         NUM_STROKE_W  = 3.0
+        DIE_BORDER_W  = 6.0                       # match subscene a's border thickness
 
         # ---- the number (sourced, same as subscene a) -----------------------
         NUM_POSITIONS = "258,521,977,812,672"
         NUM_WIDTH = 13.0
 
-        # ---- the dice (12345, colored BODIES on a diagonal) -----------------
-        # Colored-die mode (body_color) => black pips + border. Size/spacing match
-        # subscene a (DIE_SIZE 2.4, buff 0.45). SLOPE matches scene 2's large-
-        # straight staircase: ascend_and_flash steps each die up by ASCEND_STEP
+        # ---- diagonal geometry ----------------------------------------------
+        # Size/spacing match subscene a (size 2.4, buff 0.45). SLOPE matches scene 2's
+        # large-straight staircase: ascend_and_flash steps each die up by ASCEND_STEP
         # over a SLOT_DX gap (assets/dice.py), so dy/dx = ASCEND_STEP / SLOT_DX.
-        DIE_SIZE_THUMB = 2.4
-        DICE_DX        = DIE_SIZE_THUMB + 0.45    # spacing = size + buff, like 99a
-        DICE_DY        = DICE_DX * (ASCEND_STEP / SLOT_DX)   # upward step → scene-2 slope
-        DICE_CENTER_Y  = -1.5
+        DICE_DX       = THUMB_DIE_SIZE + 0.45     # spacing = size + buff, like 99a
+        DICE_DY       = DICE_DX * (ASCEND_STEP / SLOT_DX)   # upward step → scene-2 slope
+        DICE_CENTER_Y = -1.5
 
         bg = vertical_gradient_panel(
             interpolate_color(BG_COLOR, WHITE, BG_GRAD_LIGHT),
             interpolate_color(BG_COLOR, BLACK, BG_GRAD_DARK),
         )
 
-        dice = VGroup(*[
-            get_die(v, size=DIE_SIZE_THUMB, body_color=body_colors[v - 1])
-            for v in range(1, 6)
-        ])
+        group = VGroup(*dice)
         for i, d in enumerate(dice):             # step each die along the diagonal
             d.move_to([i * DICE_DX, i * DICE_DY, 0])
-        dice.move_to([0, DICE_CENTER_Y, 0])
+            d.body.set_stroke(width=DIE_BORDER_W)  # thicken border to match a
+        group.move_to([0, DICE_CENTER_Y, 0])
 
         # number centered vertically between the frame top and the dice's top
         number = crisp_text(NUM_POSITIONS, font_size=48, color=BLACK)
         number.scale_to_fit_width(NUM_WIDTH)
-        num_y = (MCFG.frame_y_radius + dice.get_top()[1]) / 2
+        num_y = (MCFG.frame_y_radius + group.get_top()[1]) / 2
         number.move_to([0, num_y, 0])
         if NUM_STROKE_W > 0:
             number.set_stroke(BLACK, width=NUM_STROKE_W, opacity=1.0)
 
-        self.add(bg, number, dice)
+        self.add(bg, number, group)
