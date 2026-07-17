@@ -134,22 +134,33 @@ class Thumbnails(YahtzeeScene):
         self._straight_thumb([get_die(v, size=THUMB_DIE_SIZE, body_color=DIE_COLORS[v - 1])
                               for v in range(1, 6)])
 
-    # d : HALF-coloured — dice 1&2 use b's animation colours, 4&5 are default
-    #     (beige); die 3 TRANSITIONS yellow->beige across a line perpendicular to
-    #     the line of dice (gradient direction runs ALONG the dice line).
+    # d : HALF-coloured — dice before the transition use b's animation colours,
+    #     dice after are default (beige); the transition die fades its own colour
+    #     -> beige across a line perpendicular to the line of dice. Here die 3.
     @thumbnail
     def straight_half(self):
+        self._half_thumb(3)
+
+    # e : same idea, transition one die LATER — die 3 stays fully yellow, die 4
+    #     is the gradient (green -> beige); die 5 default.
+    @thumbnail
+    def straight_half4(self):
+        self._half_thumb(4)
+
+    def _half_thumb(self, k):
+        """Half-coloured straight: dice 1..k-1 fully in their animation colour, die
+        k the gradient (its own colour -> beige), dice k+1..5 default beige."""
         dice = []
         for v in range(1, 6):
-            if v in (1, 2):
+            if v < k:
                 dice.append(get_die(v, size=THUMB_DIE_SIZE, body_color=ANIM_COLORS[v - 1]))
-            elif v in (4, 5):
-                dice.append(get_die(v, size=THUMB_DIE_SIZE))              # default beige
-            else:                                                        # v == 3: transition
-                dice.append(self._gradient_die(v, THUMB_DIE_SIZE, ANIM_COLORS[2], DIE_BEIGE))
+            elif v == k:
+                dice.append(self._gradient_die(v, THUMB_DIE_SIZE, ANIM_COLORS[v - 1], DIE_BEIGE))
+            else:
+                dice.append(get_die(v, size=THUMB_DIE_SIZE))             # default beige
         self._straight_thumb(dice)
 
-    def _gradient_die(self, value, size, c_from, c_to, *, band=0.5, n_strips=90):
+    def _gradient_die(self, value, size, c_from, c_to, *, band=1.0, n_strips=90):
         """A die whose interior goes `c_from` (dice-2 side) -> `c_to` (dice-4 side),
         the transition CONCENTRATED in a narrow `band` (die units) around a line
         perpendicular to the line of dice.
