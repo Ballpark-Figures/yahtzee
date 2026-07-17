@@ -9,7 +9,7 @@ Three tables, one per roll stage of turn 1, each ranked by EXPECTED GAME TOTAL:
 For the first two tables each row is a distinct OPTIMAL KEEP decision (the dice
 you hold onto before the next reroll); the 252 hands are grouped by that keep.
 Columns:
-    Kept dice | Probability | Expected turn points | Most likely box | Expected game total
+    Kept dice | Probability (%) | Expected turn points | Most likely box | Expected game total
 where Probability = combined P over every hand whose optimal keep is this one
 (for roll 1 that sums the raw initial-roll probabilities). The downstream values
 depend ONLY on the kept dice, so they are constant across a keep group (asserted).
@@ -17,7 +17,7 @@ depend ONLY on the kept dice, so they are constant across a keep group (asserted
 For the final table each row is a distinct OPTIMAL placement (box + score),
 grouped exactly as scene 10 does — read straight from the committed scene-10
 cache so it is identical to what's on screen. Columns:
-    Dice (sample) | Probability | Box | Turn points | Expected game total
+    Dice (sample) | Probability (%) | Box | Turn points | Expected game total
 where Probability = P(the turn ENDS in this placement) under optimal play
 (the whole (box, score) group's mass, not the single sample hand).
 
@@ -127,7 +127,7 @@ def _keep_group_table(stage, empty, payload, row, box_pts, cat_of):
         kept = keep_to_values(keep_idx)
         rows.append({
             "Kept dice": " ".join(str(int(v)) for v in kept) if kept else "(reroll all)",
-            "Probability": round(float(sum(reach[h] for h in hands)), 6),
+            "Probability (%)": round(100.0 * float(sum(reach[h] for h in hands)), 3),
             "Expected turn points": round(exp_turn, 2),
             "Most likely box": DISPLAY_NAMES[best_cat],
             "Expected game total": round(ev_group, 2),
@@ -154,7 +154,7 @@ def _final_table(empty, box_pts, cat_of):
         prob = group_prob[(int(r["cat"]), int(r["points"]))]
         rows.append({
             "Dice": " ".join(str(int(v)) for v in r["dice"]),
-            "Probability": round(prob, 6),
+            "Probability (%)": round(100.0 * prob, 3),
             "Box": r["box"],
             "Turn points": r["points"],
             "Expected game total": round(float(r["ev"]), 2),
@@ -177,11 +177,11 @@ def main():
         "reroll2_final": _final_table(empty, box_pts, cat_of),
     }
     for name, df in tables.items():
-        total_p = float(df["Probability"].sum())
-        assert abs(total_p - 1.0) < 1e-3, f"{name} probabilities sum to {total_p}"
+        total_p = float(df["Probability (%)"].sum())
+        assert abs(total_p - 100.0) < 0.1, f"{name} probabilities sum to {total_p}"
         path = OUT_DIR / f"{name}.csv"
         df.to_csv(path, index=False)
-        print(f"wrote {path}  ({len(df)} rows, Probability sums to {total_p:.6f})")
+        print(f"wrote {path}  ({len(df)} rows, Probability sums to {total_p:.3f}%)")
         print(df.head(5).to_string(index=False))
         print()
 
