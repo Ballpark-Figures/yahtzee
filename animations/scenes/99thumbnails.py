@@ -230,9 +230,9 @@ class Thumbnails(YahtzeeScene):
         NUM_POSITIONS = "258,521,977,812,672"
         NUM_WIDTH     = 13.0
         NUM_STROKE_W  = 3.0
-        LABEL_FRAC    = 0.45   # 'All'/'Positions' height ÷ the number's height
-        LABEL_STROKE  = 1.5
-        LABEL_BUFF    = 0.22   # gap between the labels and the number
+        LABEL_FRAC    = 0.58   # 'All'/'Positions' height ÷ the number's height
+        LABEL_STROKE  = 1.8
+        LABEL_GAP     = 0.24   # gap from the DIGIT body to each label
 
         number = crisp_text(NUM_POSITIONS, font_size=48, color=BLACK)
         number.scale_to_fit_width(NUM_WIDTH)
@@ -244,7 +244,15 @@ class Thumbnails(YahtzeeScene):
             for lbl in (all_lbl, pos_lbl):
                 lbl.scale_to_fit_height(number.height * LABEL_FRAC)
                 lbl.set_stroke(BLACK, width=LABEL_STROKE, opacity=1.0)
-            block = VGroup(all_lbl, number, pos_lbl).arrange(DOWN, buff=LABEL_BUFF)
+            # Balance the labels around the DIGITS, not the bbox: the commas hang
+            # below the baseline, so measuring to the bbox bottom pushes 'Positions'
+            # further from the number than 'All'. Use the digit tops and the baseline
+            # (bottom of the first digit '2') so both gaps are equal.
+            digit_top = number.get_top()[1]
+            baseline  = number[0].get_bottom()[1]
+            all_lbl.next_to(np.array([0, digit_top, 0]), UP, buff=LABEL_GAP)
+            pos_lbl.next_to(np.array([0, baseline, 0]), DOWN, buff=LABEL_GAP)
+            block = VGroup(all_lbl, number, pos_lbl)
         else:
             block = number
 
