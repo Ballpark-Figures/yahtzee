@@ -14,6 +14,9 @@ media/
 *.wav
 *.mp3
 
+# DaVinci Resolve project backups (a .drp is never uploaded — deliverable is the .mov)
+*.drp
+
 # Manim snapshot cache (build artifact, 50+ MB pickles). Scoped to the
 # animations tree so it does NOT touch the kept solver .pkl files in math/data/.
 animations/**/cache/
