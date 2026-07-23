@@ -375,7 +375,7 @@ class Intro(YahtzeeScene):
         # one big die in the middle
         dice[0].scale(big / grid)
         self.play(FadeIn(dice[0]), run_time=1.0)
-        self.wait(6)
+        self.wait(6.5)
 
         # the six roll out into the grid, each starting at the big lone size and
         # shrinking to the grid size as it tosses to its slot.
