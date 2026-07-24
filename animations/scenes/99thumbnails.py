@@ -258,6 +258,11 @@ class Thumbnails(YahtzeeScene):
     def field_dim_positions(self):
         self._dice_field_thumb(labels="positions", body_palette=LIGHT_BODY, treatment="dim")
 
+    # za : like e (half4) but with NO text at all — dice centered vertically.
+    @thumbnail
+    def straight_half4_notext(self):
+        self._half_thumb(4, labels=False, number=False)
+
     def _dice_field_thumb(self, labels, body_palette=None, treatment=None):
         """The 252 distinct 5-dice outcomes from scene 1 filling the frame (21×12,
         flow_order='dr'). `body_palette` (a value→colour map) puts that colour on the
@@ -374,7 +379,7 @@ class Thumbnails(YahtzeeScene):
         return [get_die(v, size=THUMB_DIE_SIZE, body_color=DIE_COLORS[v - 1])
                 for v in range(1, 6)]
 
-    def _half_thumb(self, k, labels):
+    def _half_thumb(self, k, labels, number=True):
         """Half-coloured straight: dice 1..k-1 fully in their animation colour, die
         k the gradient (its own colour -> beige), dice k+1..5 default beige."""
         dice = []
@@ -385,7 +390,7 @@ class Thumbnails(YahtzeeScene):
                 dice.append(self._gradient_die(v, THUMB_DIE_SIZE, ANIM_COLORS[v - 1], DIE_BEIGE))
             else:
                 dice.append(get_die(v, size=THUMB_DIE_SIZE))             # default beige
-        self._straight_thumb(dice, labels)
+        self._straight_thumb(dice, labels, number=number)
 
     def _positions_thumb(self, labels):
         """Subscene a's composition: colored-pip 1-2-3-4-5 in a row under the number
@@ -497,11 +502,12 @@ class Thumbnails(YahtzeeScene):
         block.move_to([0, (MCFG.frame_y_radius + dice_top_y) / 2, 0])
         return block
 
-    def _straight_thumb(self, dice, labels):
+    def _straight_thumb(self, dice, labels, number=True):
         """Shared builder for the diagonal large-straight thumbnails: the frames
         differ ONLY in the per-die colouring passed in (and `labels`). Steps the dice
         along scene 2's slope, thickens every border to match subscene a, and adds
-        the bg + the number block."""
+        the bg + the number block. `number=False` drops the number/text entirely and
+        centers the dice vertically in the frame (the text-free variant)."""
         # ---- anti-artifact tunables (mirror battleship's 00thumbnail) --------
         BG_GRAD_LIGHT = 0.06
         BG_GRAD_DARK  = 0.05
@@ -524,6 +530,12 @@ class Thumbnails(YahtzeeScene):
         for i, d in enumerate(dice):             # step each die along the diagonal
             d.move_to([i * DICE_DX, i * DICE_DY, 0])
             d.body.set_stroke(width=DIE_BORDER_W)  # thicken border to match a
+
+        if not number:                           # text-free variant: dice centered
+            group.move_to(ORIGIN)
+            self.add(bg, group)
+            return
+
         group.move_to([0, DICE_CENTER_Y, 0])
 
         block = self._number_block(group.get_top()[1], labels)
