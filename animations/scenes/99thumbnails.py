@@ -10,8 +10,11 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from manim import config as MCFG            # real frame is 16x9 (y-radius 4.5)
 from config import *
+from bpkfigures.style import ACCENT_FILL, ACCENT_GOLD
+from bpkfigures.histogram import get_histogram, overlay_bars
 from assets.dice import (get_die, DIE_COLORS, DIE_BEIGE, PIP_COLORS, SLOT_DX,
                          ascend_and_flash)
+from assets import score_data as sd
 
 # Scene 2's large-straight staircase rises `step` per die over a SLOT_DX gap
 # (assets/dice.py `ascend_and_flash`), so its slope is ASCEND_STEP / SLOT_DX.
@@ -263,6 +266,12 @@ class Thumbnails(YahtzeeScene):
     def straight_half4_notext(self):
         self._half_thumb(4, labels=False, number=False)
 
+    # zb : scene 7l's histogram (base + gold "all regular bonuses" overlay) with NO
+    #      title/legend/axis labels, plus za's half4 dice shrunk into the top-right.
+    @thumbnail
+    def histogram_dice(self):
+        self._histogram_thumb()
+
     def _dice_field_thumb(self, labels, body_palette=None, treatment=None):
         """The 252 distinct 5-dice outcomes from scene 1 filling the frame (21×12,
         flow_order='dr'). `body_palette` (a value→colour map) puts that colour on the
@@ -379,9 +388,9 @@ class Thumbnails(YahtzeeScene):
         return [get_die(v, size=THUMB_DIE_SIZE, body_color=DIE_COLORS[v - 1])
                 for v in range(1, 6)]
 
-    def _half_thumb(self, k, labels, number=True):
-        """Half-coloured straight: dice 1..k-1 fully in their animation colour, die
-        k the gradient (its own colour -> beige), dice k+1..5 default beige."""
+    def _half_dice(self, k):
+        """The half-coloured straight's dice: 1..k-1 fully in their animation colour,
+        die k the gradient (its own colour -> beige), dice k+1..5 default beige."""
         dice = []
         for v in range(1, 6):
             if v < k:
@@ -390,7 +399,58 @@ class Thumbnails(YahtzeeScene):
                 dice.append(self._gradient_die(v, THUMB_DIE_SIZE, ANIM_COLORS[v - 1], DIE_BEIGE))
             else:
                 dice.append(get_die(v, size=THUMB_DIE_SIZE))             # default beige
-        self._straight_thumb(dice, labels, number=number)
+        return dice
+
+    def _half_thumb(self, k, labels, number=True):
+        self._straight_thumb(self._half_dice(k), labels, number=number)
+
+    def _stagger_diagonal(self, dice, border_w=6.0):
+        """Step ``dice`` up along scene 2's large-straight slope (dy/dx = ASCEND_STEP
+        / SLOT_DX) and thicken every border; return the VGroup positioned by its own
+        bbox (the caller places/scales it). Shared by _straight_thumb and the
+        histogram thumbnail's corner dice."""
+        DICE_DX = THUMB_DIE_SIZE + 0.45           # spacing = size + buff, like 99a
+        DICE_DY = DICE_DX * (ASCEND_STEP / SLOT_DX)   # upward step → scene-2 slope
+        group = VGroup(*dice)
+        for i, d in enumerate(dice):
+            d.move_to([i * DICE_DX, i * DICE_DY, 0])
+            d.body.set_stroke(width=border_w)
+        return group
+
+    def _histogram_thumb(self):
+        """Scene 7l's histogram — the base score-frequency distribution plus the gold
+        'all regular bonuses' full-grid overlay — stripped of its title, legend,
+        descriptive axis labels AND every tick NUMBER (bare axes kept). za's half4
+        dice-straight is shrunk into the upper-right (over the short right-tail bars,
+        where the legend used to sit), inset from the corner."""
+        PLOT_W, PLOT_H = 13.5, 6.5     # fill the frame (originals: 8.0 × 4.0)
+        PLOT_C         = [0, -0.3, 0]
+        DICE_W         = 7.0           # shrunk dice-straight width in the corner
+        DICE_MARGIN    = 1.0           # inset from the top-right frame corner
+
+        bg = vertical_gradient_panel(
+            interpolate_color(BG_COLOR, WHITE, 0.06),
+            interpolate_color(BG_COLOR, BLACK, 0.05),
+        )
+        plot = get_histogram(
+            None, counts=sd.score_distribution(), min_prob=1e-4,
+            center=PLOT_C, width=PLOT_W, height=PLOT_H,
+            bar_color=ACCENT_FILL, bar_ratio=1.05, x_tick_step=50,
+            show_y_axis=True,                 # bare axis lines stay …
+            y_axis_label=None, x_axis_label=None, title=None,   # … labels/title gone
+        )
+        plot.remove(plot.x_labels, plot.y_ticks)   # … and every tick NUMBER
+        overlay = overlay_bars(plot, sd.overlay_by_reduced(10), ACCENT_GOLD,
+                               full_grid=True)
+
+        dice = self._stagger_diagonal(self._half_dice(4))
+        factor = DICE_W / dice.width              # scale_to_fit_width, but keep the
+        dice.scale(factor)                        # factor so the border scales too
+        for d in dice:                            # (bare .scale leaves stroke width
+            d.body.set_stroke(width=6.0 * factor) # fixed → borders look too thick)
+        dice.move_to([MCFG.frame_x_radius - DICE_MARGIN,
+                      MCFG.frame_y_radius - DICE_MARGIN, 0], aligned_edge=UR)
+        self.add(bg, plot, overlay, dice)
 
     def _positions_thumb(self, labels):
         """Subscene a's composition: colored-pip 1-2-3-4-5 in a row under the number
@@ -514,11 +574,8 @@ class Thumbnails(YahtzeeScene):
         DIE_BORDER_W  = 6.0                       # match subscene a's border thickness
 
         # ---- diagonal geometry ----------------------------------------------
-        # Size/spacing match subscene a (size 2.4, buff 0.45). SLOPE matches scene 2's
-        # large-straight staircase: ascend_and_flash steps each die up by ASCEND_STEP
-        # over a SLOT_DX gap (assets/dice.py), so dy/dx = ASCEND_STEP / SLOT_DX.
-        DICE_DX       = THUMB_DIE_SIZE + 0.45     # spacing = size + buff, like 99a
-        DICE_DY       = DICE_DX * (ASCEND_STEP / SLOT_DX)   # upward step → scene-2 slope
+        # Size/spacing/slope match subscene a and scene 2's large-straight staircase
+        # (see _stagger_diagonal).
         DICE_CENTER_Y = -1.5
 
         bg = vertical_gradient_panel(
@@ -526,10 +583,7 @@ class Thumbnails(YahtzeeScene):
             interpolate_color(BG_COLOR, BLACK, BG_GRAD_DARK),
         )
 
-        group = VGroup(*dice)
-        for i, d in enumerate(dice):             # step each die along the diagonal
-            d.move_to([i * DICE_DX, i * DICE_DY, 0])
-            d.body.set_stroke(width=DIE_BORDER_W)  # thicken border to match a
+        group = self._stagger_diagonal(dice, DIE_BORDER_W)
 
         if not number:                           # text-free variant: dice centered
             group.move_to(ORIGIN)
