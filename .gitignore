@@ -60,3 +60,14 @@ animations/**/cache/
 
 # Ignore notebook checkpoints
 **/.ipynb_checkpoints/
+
+# CLAUDE.md import copies. CLAUDE.shared.md / CLAUDE.private.md are REAL COPIES of
+# bpkfigures/CLAUDE.md + dotclaude/CLAUDE.md, refreshed every session start by
+# dotclaude/hooks/refresh-claude-imports.py and pulled in by CLAUDE.md's @imports.
+# They must be real files INSIDE the repo: a CLAUDE.md @import will not resolve to
+# a target outside the project dir (not via ../, not via a symlink). They are
+# machine-local like the rest of the Claude config. CLAUDE.private.md is
+# private-repo content — keeping it ignored is what stops it being committed into
+# a video repo (yahtzee and battleship are PUBLIC).
+/CLAUDE.shared.md
+/CLAUDE.private.md

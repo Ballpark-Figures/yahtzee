@@ -1,23 +1,28 @@
 # Yahtzee video — specifics
 
 Yahtzee-only conventions. The shared cross-video rules (`bpkfigures/CLAUDE.md`)
-and private operational notes (`dotclaude/CLAUDE.md`) load via the two in-tree
-symlink imports below — see "Config loading" at the bottom for why it's done this
-way.
+and private operational notes (`dotclaude/CLAUDE.md`) load via the two imports
+below — see "Config loading" at the bottom for why it's done this way.
 
 @CLAUDE.shared.md
 @CLAUDE.private.md
 
-> **Import canary — check this first.** The two `@import`s above pull in the
-> shared and private rules through committed symlinks. If you cannot see the
-> tokens `SHARED-RULES-LOADED` and `PRIVATE-RULES-LOADED` in your context, those
-> imports **silently failed** and you are missing every shared and private
-> convention. Usual cause: the workspace was opened Windows-side over
-> `\\wsl$\`, where the WSL symlinks are unreadable 23-byte stubs. Recover by
-> reading `bpkfigures/CLAUDE.md` and `dotclaude/CLAUDE.md` directly, and tell the
-> user to reopen the workspace from a WSL shell
-> (`cd ~/projects/ballpark-figures && code <video>.code-workspace`) so the
-> bottom-left of VS Code reads `WSL: Ubuntu-22.04`.
+> **Import canary — check this first.** If you cannot see the tokens
+> `SHARED-RULES-LOADED` and `PRIVATE-RULES-LOADED` in your context, the imports
+> above **silently failed** and you are missing every shared and private
+> convention. The copies are machine-local and gitignored, so the usual cause is
+> a repo where they were never created — a fresh clone that has not had
+> `/sync-videos` run in it, so `.claude/settings.local.json` (and therefore the
+> refreshing hook) does not exist yet. Recover by reading `bpkfigures/CLAUDE.md`
+> and `dotclaude/CLAUDE.md` directly for this session, then regenerate the copies
+> with `python3 ../../dotclaude/hooks/refresh-claude-imports.py .` and tell the
+> user to run `/sync-videos`.
+>
+> Do **not** trust a hook that claims to inject the rules as context: a
+> SessionStart hook emitting the full ~121KB gets capped by the harness, saved to
+> a file, and replaced with a ~2KB preview — which contains
+> `SHARED-RULES-LOADED` and so reads as success while almost everything is
+> missing. The tokens only mean anything when they come from the imports.
 
 ---
 
@@ -180,19 +185,53 @@ way.
 
 ---
 
-## Config loading (resolved 2026-06-27)
+## Config loading (rewritten 2026-08-16 — symlinks are OUT, real copies are IN)
 
-Shared + private config reaches context through the two **in-tree symlink imports**
-at the top of this file: `CLAUDE.shared.md` → `../bpkfigures/CLAUDE.md` and
-`CLAUDE.private.md` → `../../dotclaude/CLAUDE.md`. This is deliberate — two harness
-gotchas to NOT relearn:
-- **Don't rely on working-dir auto-load.** The desktop/WSL harness injects only the
-  *primary* working dir's CLAUDE.md, not additional `--add-dir` folders — so
+Shared + private config reaches context through the two `@import`s at the top of
+this file. `CLAUDE.shared.md` and `CLAUDE.private.md` are **real files inside each
+repo** — gitignored copies of `bpkfigures/CLAUDE.md` and `dotclaude/CLAUDE.md`,
+refreshed at every session start by the SessionStart hook
+`dotclaude/hooks/refresh-claude-imports.py`. Three harness rules to NOT relearn:
+
+- **An `@import` will not resolve to a target outside the project directory — by
+  ANY route.** Not `@../file.md`, not a symlink whose target points out, not a
+  path into a declared additional working directory. This is the rule that
+  matters, and it supersedes the old "in-tree symlinks dodge it" reading.
+- **Don't rely on working-dir auto-load.** The harness injects only the *primary*
+  working dir's CLAUDE.md, not additional `--add-dir` folders — so
   `bpkfigures/CLAUDE.md` being a workspace folder is not enough.
-- **Don't use an out-of-tree `@../…` import.** That harness won't follow an import
-  whose path escapes the project root; the in-tree symlinks dodge it.
+- **Don't try to inject the rules from a hook.** A SessionStart hook returning the
+  full ~121KB as `additionalContext` gets capped: the harness saves it to a file
+  and injects a ~2KB preview instead. The preview happens to contain
+  `SHARED-RULES-LOADED`, so the canary reads GREEN while ~105KB of shared rules
+  and all of the private rules are absent. The hook may only *copy files* and emit
+  a one-line status.
 
-Verified end-to-end on both machines (laptop macOS + desktop WSL/2.1.195) via a cold
-"what goes into a new video's venv?" test — the private chain answered before any
-file read. The symlinks are portable (same relative layout on both machines). Full
-cross-machine debugging history is in git (handoff thread, log through ~`8cb1e83c`).
+**How this was measured (2026-08-16, WSL).** The previous scheme — committed
+symlinks `CLAUDE.shared.md` → `../bpkfigures/CLAUDE.md`, `CLAUDE.private.md` →
+`../../dotclaude/CLAUDE.md` — had silently stopped loading, and the recorded cause
+(`\wsl$\` mangling the symlinks) was wrong. Four probes imported from
+`wordle/CLAUDE.md`, all small enough to rule out any size cap, isolated it cleanly:
+
+| probe | target | loaded? |
+|---|---|---|
+| `CLAUDE.tinytest.md` | real file, in-project | **yes** |
+| `CLAUDE.insymtest.md` | symlink → in-project file | **yes** |
+| `CLAUDE.symtest.md` | symlink → `../_import_probe.md` (out) | no |
+| `@../_parent_probe.md` | plain `../` path (out), no symlink | no |
+
+Symlinks are followed fine; escaping the project directory is what fails. Both
+"out" probes were ~250 bytes, so size is not implicated. The workspace was opened
+Linux-side (`vscode-remote://wsl+…`) throughout, which is what disproves the
+`\wsl$\` story — that path was never involved.
+
+Do not re-verify by "checking whether the tokens are in context" alone: that is
+exactly the check the capped-hook false positive defeats. Confirm the two files
+are real, non-symlink, and non-empty in the repo as well.
+
+Superseded history: the scheme resolved 2026-06-27 (verified then on laptop macOS +
+desktop WSL/2.1.195 via a cold "what goes into a new video's venv?" test) used
+in-tree symlinks and did work at the time. Whether the harness tightened import
+resolution later or the original verification was confounded is not established —
+only that as of 2026-08-16 the symlink form does not load. Full cross-machine
+debugging history is in git (handoff thread, log through ~`8cb1e83c`).
