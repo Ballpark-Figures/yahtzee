@@ -1,7 +1,7 @@
 from bpkfigures.scene import *
 
-# This video predates the navy default (2026-10-25): it keeps the light blue.
-BG_COLOR = LIGHT_BLUE
+# This video predates the navy default (2026-10-25): it keeps the cyan.
+BG_COLOR = CYAN_BG
 
 CENTER_SC   = [0, 0, 0]
 LEFT_SC     = [-4.74, 0, 0]
